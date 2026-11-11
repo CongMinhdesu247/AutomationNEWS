@@ -1,0 +1,24 @@
+{
+  "name": "personal-automation-hub",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @hub/api --filter @hub/web --filter @hub/worker --filter @hub/scheduler dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run --exclude \"**/*.integration.test.ts\"",
+    "test:integration": "vitest run apps/api/src/settings.integration.test.ts apps/api/src/digests/digests.integration.test.ts apps/api/src/workflows/queue.integration.test.ts apps/api/src/workflows/reliability.integration.test.ts apps/api/src/telemetry/events.integration.test.ts",
+    "migrate": "pnpm --filter @hub/api migrate",
+    "dev:worker": "pnpm --filter @hub/worker dev",
+    "dev:scheduler": "pnpm --filter @hub/scheduler dev"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "5.1.0",
+    "@types/node": "26.6.6"
+  }
+}

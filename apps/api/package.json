@@ -1,0 +1,36 @@
+{
+  "name": "@hub/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "migrate": "tsx src/migrate-cli.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hub/contracts": "workspace:*",
+    "dotenv": "18.0.10",
+    "fastify": "5.12.8",
+    "html-to-text": "10.0.1",
+    "ipaddr.js": "2.5.0",
+    "pg": "8.23.1",
+    "rss-parser": "3.13.0",
+    "tsx": "4.23.15",
+    "zod": "4.6.7",
+    "@hub/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/html-to-text": "9.0.4",
+    "@types/pg": "8.23.1"
+  },
+  "exports": {
+    "./scheduler": "./src/workflows/schedule.ts",
+    "./runtime": "./src/workflows/runtime.ts",
+    "./db": "./src/db.ts",
+    "./env": "./src/env.ts",
+    "./worker-config": "./src/workflows/config.ts"
+  }
+}

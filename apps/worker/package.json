@@ -1,0 +1,16 @@
+{
+  "name": "@hub/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hub/api": "workspace:*",
+    "tsx": "4.23.15"
+  }
+}
