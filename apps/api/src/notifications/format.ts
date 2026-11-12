@@ -43,6 +43,16 @@ export function formatDigestNotification(digest: Digest, compact = false, tight 
   const sources = digest.sources;
   if (!sources) return "Bản tin đang được chuẩn bị. Vui lòng thử lại sau.";
   const blocks: string[] = [];
+  const money = (value: number | null) => value === null ? "chưa có" : value.toLocaleString("vi-VN",{maximumFractionDigits:2});
+  const asOf = (value: string) => new Date(value).toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"});
+  if(sources.gold && sources.gold.status!=="disabled") {
+    const data=sources.gold.data;
+    blocks.push(data ? ["🟡 Giá vàng SJC · đồng/lượng",...data.items.map(item=>(item.code==="sjc_bar"?"Miếng SJC":"Nhẫn SJC 9999")+": mua "+money(item.buy)+" · bán "+money(item.sell)),"Webgia tổng hợp · TP.HCM · "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Giá ngày trước":"")].join("\n") : "🟡 Chưa lấy được giá vàng SJC đã xác minh.");
+  }
+  if(sources.usd && sources.usd.status!=="disabled") {
+    const data=sources.usd.data;
+    blocks.push(data ? ["💵 USD/VND · Vietcombank · đồng/USD","Ngân hàng mua: tiền mặt "+money(data.buyCash)+" · chuyển khoản "+money(data.buyTransfer),"Ngân hàng bán: "+money(data.sell),"Nguồn công bố: "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Tỷ giá ngày trước":"")].join("\n") : "💵 Chưa lấy được tỷ giá USD/VND Vietcombank.");
+  }
   const weather = sources.weather.data;
   if (weather) {
     blocks.push(

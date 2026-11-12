@@ -11,4 +11,6 @@ it("keeps legacy DAGs unchanged and connects the enabled fuel branch before comp
   expect(air.nodes).toHaveLength(7);
   expect(air.edges).toContainEqual({ from: "fetch_air_quality", to: "compose_digest" });
   expect(digestWorkflow(25000, true, true).nodes).toHaveLength(8);
+  expect(digestWorkflow(25000,false,false,true,true).nodes).toHaveLength(8);
+  expect(digestWorkflow(25000,false,false,true,true).edges).toContainEqual({from:"fetch_usd",to:"compose_digest"});
 });

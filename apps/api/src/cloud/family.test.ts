@@ -93,6 +93,11 @@ it("validates separate topics, at least one content, half-hour times and distinc
   ).toBe(true);
 });
 it("uses local weekday boundaries, never sends early, catches late starts and respects pause", () => {
+  const mom=profile("mom",{weather:false,gold:true,usd:true,sendTime:"09:00"});
+  expect(profileDue(mom,at)).toBe(false);
+  expect(profileDue(mom,new Date("2026-11-12T02:00:00Z"))).toBe(true);
+  expect(profileSettings(mom)).toMatchObject({gold:{enabled:true},usd:{enabled:true},newsletter:{sendTime:"09:00"}});
+  expect(familyProfileSchema.safeParse(mom).success).toBe(true);
   expect(profileDue(profile(), at)).toBe(true);
   expect(profileDue(profile(), new Date(+at - 60000))).toBe(false);
   expect(profileDue(profile(), new Date(+at + 3 * 3600000))).toBe(true);

@@ -83,6 +83,8 @@ function digest(): Digest {
 }
 it("keeps sections separate and all five repo summaries within the UTF-8 push limit", () => {
   const value = digest();
+  value.sources!.gold={status:"success",fetchedAt:value.createdAt,errors:[],data:{source:"Webgia (tổng hợp giá SJC)",sourceUrl:"https://webgia.com/gia-vang/sjc/",sourceUpdatedAt:value.createdAt,previousDay:false,region:"Bảng SJC tại TP.HCM",unit:"VND/lượng",items:[{code:"sjc_bar",name:"Vàng miếng SJC 1 lượng",buy:136000000,sell:139000000},{code:"sjc_ring",name:"Nhẫn SJC 9999",buy:134800000,sell:138800000}]}};
+  value.sources!.usd={status:"success",fetchedAt:value.createdAt,errors:[],data:{source:"Vietcombank",sourceUrl:"https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx",sourceUpdatedAt:value.createdAt,previousDay:false,unit:"VND/USD",buyCash:25460,buyTransfer:25490,sell:25870}};
   value.sources!.airQuality = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
     location: "Hà Nội", forecastAt: value.createdAt, usAqi: 125, pm25: 41.4,
     category: "Không tốt cho nhóm nhạy cảm", sourceUrl: "https://open-meteo.com/en/docs/air-quality-api", attribution: "Dự báo Open-Meteo/CAMS",
@@ -102,6 +104,10 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("💨 Hà Nội · AQI Mỹ: 125");
   expect(message).toContain("PM2.5: 41,4 µg/m³");
   expect(message).toContain("Dự báo Open-Meteo/CAMS");
+  expect(message).toContain("Miếng SJC: mua 136.000.000 · bán 139.000.000");
+  expect(message).toContain("Nhẫn SJC 9999: mua 134.800.000 · bán 138.800.000");
+  expect(message).toContain("Ngân hàng bán: 25.870");
+  expect(message).toContain("CC BY 4.0");
   expect((message.match(/^• /gm) ?? [])).toHaveLength(3);
   expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
   for (let index = 1; index <= 5; index++)

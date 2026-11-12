@@ -59,7 +59,7 @@ export class DigestScheduler {
         settings.newsletter.enabled &&
         (settings.rss.some((feed) => feed.enabled) ||
           settings.weather.enabled ||
-          settings.github.enabled || settings.fuel?.enabled === true || settings.airQuality?.enabled === true);
+          settings.github.enabled || settings.fuel?.enabled === true || settings.airQuality?.enabled === true || settings.gold?.enabled === true || settings.usd?.enabled === true);
       const configuration = { ...settings.newsletter, active };
       // JSONB key order differs from JS insertion order; compare fields explicitly.
       const changed =

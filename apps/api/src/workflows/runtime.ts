@@ -8,6 +8,7 @@ import type {
 import { DigestStore } from "../digests/store.js";
 import type { ServiceOptions } from "../digests/service.js";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchGold, fetchUsd } from "../connectors/markets.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
@@ -62,6 +63,8 @@ export function composeDigest(input: DependencyInput, at: string) {
     github: value("fetch_github", emptyGithub()),
     ...(input.dependencies.fetch_fuel ? { fuel: value("fetch_fuel", null) } : {}),
     ...(input.dependencies.fetch_air_quality ? { airQuality: value("fetch_air_quality", null) } : {}),
+    ...(input.dependencies.fetch_gold ? { gold: value("fetch_gold", null) } : {}),
+    ...(input.dependencies.fetch_usd ? { usd: value("fetch_usd", null) } : {}),
   };
   const snapshots =
     (
@@ -127,6 +130,12 @@ export class DigestNodeExecutor {
     } else if (job.type === "fetch_air_quality") {
       enabled = config.airQuality?.enabled ?? false;
       empty = null;
+    } else if (job.type === "fetch_gold") {
+      enabled = config.gold?.enabled ?? false;
+      empty = null;
+    } else if (job.type === "fetch_usd") {
+      enabled = config.usd?.enabled ?? false;
+      empty = null;
     } else throw new Error("Unsupported node type.");
     if (!enabled)
       return {
@@ -154,6 +163,10 @@ export class DigestNodeExecutor {
     const operation =
       job.type === "fetch_rss"
         ? fetchRss(config.rss, context)
+        : job.type === "fetch_gold"
+          ? fetchGold(config.gold, context)
+        : job.type === "fetch_usd"
+          ? fetchUsd(config.usd, context)
         : job.type === "fetch_air_quality"
           ? fetchAirQuality(config.airQuality, context)
         : job.type === "fetch_fuel"

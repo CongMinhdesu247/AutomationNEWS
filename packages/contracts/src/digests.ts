@@ -75,11 +75,22 @@ export type GithubData = {
   }[];
 };
 export type DigestSources = {
+  gold?: SourceResult<GoldData | null>;
+  usd?: SourceResult<UsdData | null>;
   airQuality?: SourceResult<AirQualityData | null>;
   fuel?: SourceResult<FuelData | null>;
   rss: SourceResult<RssData>;
   weather: SourceResult<WeatherData | null>;
   github: SourceResult<GithubData>;
+};
+export type GoldData = {
+  source: string; sourceUrl: string; sourceUpdatedAt: string; previousDay: boolean;
+  region: string; unit: "VND/lượng";
+  items: { code: "sjc_bar" | "sjc_ring"; name: string; buy: number; sell: number }[];
+};
+export type UsdData = {
+  source: "Vietcombank"; sourceUrl: string; sourceUpdatedAt: string; previousDay: boolean;
+  unit: "VND/USD"; buyCash: number | null; buyTransfer: number | null; sell: number | null;
 };
 export type AirQualityData = {
   location: string;

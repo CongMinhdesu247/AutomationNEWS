@@ -43,6 +43,8 @@ const tags = z
   });
 export const settingsSchema = z
   .object({
+    gold: z.object({ enabled: z.boolean() }).strict().optional(),
+    usd: z.object({ enabled: z.boolean() }).strict().optional(),
     airQuality: z.object({ enabled: z.boolean(), location: z.string().trim().min(1).max(80).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional() }).strict().optional(),
     fuel: z.object({ enabled: z.boolean() }).strict().optional(),
     newsletter: z
@@ -171,6 +173,8 @@ export function validationIssues(error: z.ZodError): FieldIssue[] {
   }));
 }
 export const defaultSettings: Settings = {
+  gold: { enabled: false },
+  usd: { enabled: false },
   airQuality: { enabled: false },
   fuel: { enabled: false },
   newsletter: {

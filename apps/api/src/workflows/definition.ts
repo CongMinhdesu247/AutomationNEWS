@@ -1,6 +1,6 @@
 import { json, topologicalOrder, type Workflow } from "@hub/engine";
-export function digestWorkflow(timeoutMs = 25000, fuelEnabled = false, airQualityEnabled = false): Workflow {
-  const sources = ["rss", "weather", "github", ...(fuelEnabled ? ["fuel"] : []), ...(airQualityEnabled ? ["air_quality"] : [])];
+export function digestWorkflow(timeoutMs = 25000, fuelEnabled = false, airQualityEnabled = false, goldEnabled = false, usdEnabled = false): Workflow {
+  const sources = ["rss", "weather", "github", ...(fuelEnabled ? ["fuel"] : []), ...(airQualityEnabled ? ["air_quality"] : []), ...(goldEnabled ? ["gold"] : []), ...(usdEnabled ? ["usd"] : [])];
   const workflow: Workflow = {
     version: "digest.v1",
     concurrency: 3,

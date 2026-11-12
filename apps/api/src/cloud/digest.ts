@@ -7,6 +7,7 @@ import {
   type SourceResult,
 } from "@hub/contracts";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchGold, fetchUsd } from "../connectors/markets.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather, dateInZone } from "../connectors/weather.js";
@@ -23,7 +24,7 @@ export function parseCloudSettings(value: string): Settings {
   if (
     !settings.rss.some((feed) => feed.enabled) &&
     !settings.weather.enabled &&
-    !settings.github.enabled && !settings.fuel?.enabled && !settings.airQuality?.enabled
+    !settings.github.enabled && !settings.fuel?.enabled && !settings.airQuality?.enabled && !settings.gold?.enabled && !settings.usd?.enabled
   )
     throw new Error("Enable at least one cloud source.");
   if (new URL(settings.notifications.serverUrl).protocol !== "https:")
@@ -115,7 +116,7 @@ export async function runCloudDigest(options: CloudOptions) {
     translationCache:
       revision.state.translations ?? (revision.state.translations = {}),
   });
-  const [rss, weather, githubResult, fuel, airQuality] = await Promise.all([
+  const [rss, weather, githubResult, fuel, airQuality, gold, usd] = await Promise.all([
     collect(() => fetchRss(settings.rss, context)),
     collect(() =>
       fetchWeather(settings.weather, settings.newsletter.timezone, context),
@@ -131,8 +132,10 @@ export async function runCloudDigest(options: CloudOptions) {
     ),
     collect(() => fetchFuel(settings.fuel, { ...context, baseline: revision.state.fuelBaseline })),
     collect(() => fetchAirQuality(settings.airQuality, context)),
+    collect(() => fetchGold(settings.gold, context)),
+    collect(() => fetchUsd(settings.usd, context)),
   ]);
-  const sources: DigestSources = { rss, weather, github: githubResult, fuel, airQuality };
+  const sources: DigestSources = { rss, weather, github: githubResult, fuel, airQuality, gold, usd };
   options.onAirQuality?.({ status: airQuality.status });
   options.onFuel?.({ status: fuel.status, products: fuel.data?.items.length ?? 0 });
   const selectedRepos = [

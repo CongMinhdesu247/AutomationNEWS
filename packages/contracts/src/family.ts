@@ -48,6 +48,8 @@ export const familyProfileSchema = z
     airQuality: z.boolean(),
     fuel: z.boolean(),
     github: z.boolean(),
+    gold: z.boolean().optional(),
+    usd: z.boolean().optional(),
     topic: z
       .string()
       .trim()
@@ -69,7 +71,9 @@ export const familyProfileSchema = z
       !v.weather &&
       !v.airQuality &&
       !v.fuel &&
-      !v.github
+      !v.github &&
+      !v.gold &&
+      !v.usd
     )
       ctx.addIssue({
         code: "custom",
@@ -134,6 +138,8 @@ export function profileSettings(profile: FamilyProfile): Settings {
       longitude: city.longitude,
     },
     fuel: { enabled: profile.fuel },
+    gold: { enabled: profile.gold ?? false },
+    usd: { enabled: profile.usd ?? false },
     github: {
       enabled: profile.github,
       repositoryCount: 5,

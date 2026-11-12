@@ -151,6 +151,8 @@ export default function FamilyDashboard() {
       airQuality: false,
       fuel: false,
       github: false,
+      gold: false,
+      usd: false,
       topic: "hub_" + crypto.randomUUID().replaceAll("-", ""),
     };
     setDraft({ ...draft, profiles: [...draft.profiles, next] });
@@ -303,12 +305,14 @@ export default function FamilyDashboard() {
                         ["airQuality", "Chất lượng không khí"],
                         ["fuel", "Xăng E10 RON 95-III · vùng 1"],
                         ["github", "5 dự án GitHub · tiếng Việt"],
+                        ["gold", "Vàng miếng SJC & nhẫn SJC 9999"],
+                        ["usd", "USD/VND · Vietcombank"],
                       ] as const
                     ).map(([key, label]) => (
                       <label className="family-check" key={key}>
                         <input
                           type="checkbox"
-                          checked={profile[key]}
+                          checked={profile[key] ?? false}
                           onChange={(e) => change({ [key]: e.target.checked })}
                         />
                         {label}
@@ -316,6 +320,13 @@ export default function FamilyDashboard() {
                     ))}
                   </div>
                   <h3>Chủ đề tin tức</h3>
+                  {(profile.gold || profile.usd) && (
+                    <p className="muted">
+                      Vàng: bảng SJC tại TP.HCM do Webgia tổng hợp. USD:
+                      Vietcombank. Bản tin ghi rõ thời điểm nguồn công bố; giờ
+                      nhận không bảo đảm nguồn vừa cập nhật giá mới.
+                    </p>
+                  )}
                   <p className="muted">
                     Tổng cộng tối đa 3 tin trong thông báo, từ các chủ đề đã
                     chọn.
