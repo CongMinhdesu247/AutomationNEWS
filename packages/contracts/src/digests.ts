@@ -82,7 +82,7 @@ export type DigestSources = {
   github: SourceResult<GithubData>;
 };
 export type AirQualityData = {
-  location: "Hà Nội";
+  location: string;
   forecastAt: string;
   usAqi: number | null;
   pm25: number | null;

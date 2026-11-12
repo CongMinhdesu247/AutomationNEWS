@@ -1,5 +1,6 @@
 import RunDashboard from "./RunDashboard";
 import AutomationDashboard from "./AutomationDashboard";
+import FamilyDashboard from "./FamilyDashboard";
 import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import {
   settingsSchema,
@@ -177,6 +178,7 @@ export default function App() {
       ([id]) => view === "#" + id || view === "#/settings/" + id,
     )?.[0] ?? "newsletter";
   const inSettings =
+    !view.startsWith("#/family") &&
     !view.startsWith("#/digests") &&
     !view.startsWith("#/runs") &&
     !view.startsWith("#/automation");
@@ -266,7 +268,8 @@ export default function App() {
             <small>Bản tin của riêng bạn</small>
           </span>
         </a>
-        <nav aria-label="Điều hướng">
+        <nav className="family-navigation" aria-label="Điều hướng">
+          <a href="#/family" aria-current={view.startsWith("#/family")?"page":undefined}><Icon name="brief"/>Gia đình</a>
           <a
             href="#/digests"
             aria-current={view.startsWith("#/digests") ? "page" : undefined}
@@ -328,7 +331,7 @@ export default function App() {
             báo thật.
           </p>
         )}
-        {view.startsWith("#/automation") ? (
+        {view.startsWith("#/family") ? <FamilyDashboard/> : view.startsWith("#/automation") ? (
           <AutomationDashboard />
         ) : view.startsWith("#/runs") ? (
           <RunDashboard hash={view} />
@@ -340,6 +343,7 @@ export default function App() {
               <div>
                 <h1>Cài đặt bản tin</h1>
                 <p>Chọn nội dung bạn quan tâm và cách nhận thông báo.</p>
+                <p>Lịch và bản tin cloud cho từng người được quản lý trong <a href="#/family">Gia đình</a>. Cài đặt dưới đây dùng khi tạo bản tin trên máy.</p>
               </div>
             </div>
             <nav className="settings-tabs" aria-label="Nhóm cài đặt">

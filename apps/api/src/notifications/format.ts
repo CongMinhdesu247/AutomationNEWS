@@ -68,11 +68,11 @@ export function formatDigestNotification(digest: Digest) {
   if (air && air.status !== "disabled") {
     const data = air.data;
     blocks.push(data ? [
-      "💨 Hà Nội · AQI Mỹ: " + (data.usAqi ?? "?") + " · " + (data.category ?? "Chưa phân loại"),
+      "💨 " + clip(oneLine(data.location), 60) + " · AQI Mỹ: " + (data.usAqi ?? "?") + " · " + (data.category ?? "Chưa phân loại"),
       "PM2.5: " + (data.pm25?.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) ?? "?") + " µg/m³ · " + new Date(data.forecastAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }),
       "Dự báo Open-Meteo/CAMS · CC BY 4.0",
       ...(!weather ? ["https://open-meteo.com/"] : []),
-    ].join("\n") : "💨 Hà Nội · Chưa lấy được dự báo chất lượng không khí.");
+    ].join("\n") : "💨 Chưa lấy được dự báo chất lượng không khí.");
   }
 
   const fuel = sources.fuel;

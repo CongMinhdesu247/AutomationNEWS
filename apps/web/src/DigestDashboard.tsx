@@ -450,7 +450,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
             <>
               {digest.sources.airQuality && digest.sources.airQuality.status !== "disabled" && (
                 <section className="digest-section">
-                  <SourceHeader title="Chất lượng không khí Hà Nội" result={digest.sources.airQuality} />
+                  <SourceHeader title={"Chất lượng không khí " + (digest.sources.airQuality.data?.location ?? digest.settings.airQuality?.location ?? "Hà Nội")} result={digest.sources.airQuality} />
                   {digest.sources.airQuality.data ? <>
                     <div className="weather-facts">
                       <p>AQI theo thang Mỹ<strong>{digest.sources.airQuality.data.usAqi ?? "Chưa có"}</strong></p>

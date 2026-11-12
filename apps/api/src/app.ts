@@ -15,10 +15,13 @@ import {
   type ServiceOptions,
 } from "./digests/service.js";
 import { digestRoutes } from "./digests/routes.js";
+import { registerFamilyRoutes } from "./family/routes.js";
+import { githubFamilyAdmin, type FamilyCloudAdmin } from "./family/cloud-admin.js";
 export function buildApp(
   pool: Pool,
   options: ServiceOptions = {},
   sseOptions: SseOptions = {},
+  familyCloud: FamilyCloudAdmin = githubFamilyAdmin(process.env.HUB_CLOUD_REPOSITORY,process.env.HUB_CLOUD_ADMIN_TOKEN),
 ) {
   const app = Fastify({ logger: false, bodyLimit: 262144 });
   const failure = (code: string, message: string): ApiError => ({
@@ -108,6 +111,7 @@ export function buildApp(
     }
   });
   const store = new DigestStore(pool);
+  registerFamilyRoutes(app,pool,familyCloud);
   digestRoutes(
     app,
     store,

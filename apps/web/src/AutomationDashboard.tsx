@@ -135,9 +135,10 @@ export default function AutomationDashboard() {
         <div>
           <h2>Nhận bản tin khi PC tắt</h2>
           <p>
-            Lịch cloud chạy trên GitHub Actions. Giờ gửi và cấu hình cloud được
-            quản lý riêng với cài đặt trên máy.
+            Lịch cloud chạy trên GitHub Actions và kiểm tra hồ sơ gia đình mỗi 30 phút.
+            Quản lý giờ, ngày nhận và người nhận trong mục Gia đình.
           </p>
+          <p><a className="text-link" href="#/family">Quản lý lịch của gia đình</a></p>
           <a
             className="text-link"
             href={

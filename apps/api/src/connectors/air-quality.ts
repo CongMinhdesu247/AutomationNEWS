@@ -4,6 +4,12 @@ import { safeHttp, ensureOk, cleanError, ConnectorError, type HttpClient } from 
 
 // Fixed Hanoi city-centre location, independent of the user's weather setting.
 export const airQualityUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=21.0285&longitude=105.8542&current=us_aqi,pm2_5&domains=cams_global&timezone=Asia%2FHo_Chi_Minh&timeformat=unixtime&forecast_days=1";
+export function airQualityRequestUrl(config: Settings["airQuality"]) {
+  const url = new URL(airQualityUrl);
+  if (config?.latitude !== undefined) url.searchParams.set("latitude", String(config.latitude));
+  if (config?.longitude !== undefined) url.searchParams.set("longitude", String(config.longitude));
+  return url.toString();
+}
 const schema = z.object({
   current: z.object({
     time: z.number().int().positive(),
@@ -27,7 +33,7 @@ export async function fetchAirQuality(config: Settings["airQuality"], {
   const fetchedAt = now().toISOString();
   if (!config?.enabled) return { status: "disabled", fetchedAt, data: null, errors: [] };
   try {
-    const response = await http(airQualityUrl, { signal, maxBytes: 100000 });
+    const response = await http(airQualityRequestUrl(config), { signal, maxBytes: 100000 });
     ensureOk(response);
     const current = schema.parse(JSON.parse(response.body)).current;
     const timestamp = current.time * 1000;
@@ -41,7 +47,7 @@ export async function fetchAirQuality(config: Settings["airQuality"], {
     return {
       status: missing ? "partial" : "success", fetchedAt,
       data: {
-        location: "Hà Nội", forecastAt: new Date(timestamp).toISOString(), usAqi, pm25,
+        location: config.location ?? "Hà Nội", forecastAt: new Date(timestamp).toISOString(), usAqi, pm25,
         category: usAqi === null ? null : usAqiCategory(usAqi),
         sourceUrl: "https://open-meteo.com/en/docs/air-quality-api",
         attribution: "Dự báo Open-Meteo / CAMS Global (Copernicus), CC BY 4.0; không phải số đo tại trạm.",

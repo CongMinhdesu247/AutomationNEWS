@@ -1,36 +1,82 @@
 import { parseCloudSettings, runCloudDigest } from "./digest.js";
 import { GithubStateStore } from "./state.js";
+import { runCloudFamily } from "./family.js";
+import { safeHttp } from "../connectors/http.js";
 
 // Intentionally does NOT import env.ts, database code or the local scheduler.
 try {
   const config = process.env.HUB_SETTINGS_JSON;
+  const family = process.env.HUB_FAMILY_JSON;
   const token = process.env.GITHUB_TOKEN;
   const repository = process.env.GITHUB_REPOSITORY;
-  if (!config || !token || !repository)
+  if ((!config && !family) || !token || !repository)
     throw new Error("Missing cloud configuration.");
-  const rawSettings = JSON.parse(config);
-  const settings = parseCloudSettings(JSON.stringify({
-    ...rawSettings,
-    fuel: rawSettings.fuel ?? { enabled: process.env.HUB_FUEL_ENABLED === "true" },
-    airQuality: rawSettings.airQuality ?? { enabled: process.env.HUB_AIR_QUALITY_ENABLED === "true" },
-  }));
-  const result = await runCloudDigest({
-    settings,
-    state: new GithubStateStore(repository, token),
-    githubToken: token,
-    ntfyToken: process.env.NTFY_TOKEN,
-    dryRun: process.env.HUB_DRY_RUN === "true",
-    forceSend: process.env.HUB_FORCE_SEND === "true",
-    onSummaries: (counts) =>
-      console.log("Vietnamese repository summaries:", JSON.stringify(counts)),
-    onFuel: (result) => console.log("Fuel prices:", JSON.stringify(result)),
-    onAirQuality: (result) => console.log("Hanoi air quality:", JSON.stringify(result)),
-  });
-  console.log(
-    "Cloud digest:",
-    result.status,
-    "sourceStatus" in result ? result.sourceStatus : "",
-  );
+  if (family) {
+    const results = await runCloudFamily(JSON.parse(family), {
+      state: new GithubStateStore(repository, token),
+      http: safeHttp,
+      githubToken: token,
+      ntfyToken: process.env.NTFY_TOKEN,
+      dryRun: process.env.HUB_DRY_RUN === "true",
+      forceSend: process.env.HUB_FORCE_SEND === "true",
+      profileId: process.env.HUB_PROFILE_ID || undefined,
+    });
+    console.log(
+      "Family digest:",
+      JSON.stringify({
+        processed: results.length,
+        sent: results.filter((r) => r.status === "sent").length,
+        skipped: results.filter((r) => r.status === "already_attempted").length,
+      }),
+    );
+  } else {
+    const rawSettings = JSON.parse(config ?? "{}");
+    const settings = parseCloudSettings(
+      JSON.stringify({
+        ...rawSettings,
+        fuel: rawSettings.fuel ?? {
+          enabled: process.env.HUB_FUEL_ENABLED === "true",
+        },
+        airQuality: rawSettings.airQuality ?? {
+          enabled: process.env.HUB_AIR_QUALITY_ENABLED === "true",
+        },
+      }),
+    );
+    const localTime = new Intl.DateTimeFormat("en-GB", {
+      timeZone: settings.newsletter.timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date());
+    if (
+      localTime < settings.newsletter.sendTime &&
+      process.env.HUB_FORCE_SEND !== "true"
+    )
+      console.log("Cloud digest: not_due");
+    else {
+      const result = await runCloudDigest({
+        settings,
+        state: new GithubStateStore(repository, token),
+        githubToken: token,
+        ntfyToken: process.env.NTFY_TOKEN,
+        dryRun: process.env.HUB_DRY_RUN === "true",
+        forceSend: process.env.HUB_FORCE_SEND === "true",
+        onSummaries: (counts) =>
+          console.log(
+            "Vietnamese repository summaries:",
+            JSON.stringify(counts),
+          ),
+        onFuel: (result) => console.log("Fuel prices:", JSON.stringify(result)),
+        onAirQuality: (result) =>
+          console.log("Hanoi air quality:", JSON.stringify(result)),
+      });
+      console.log(
+        "Cloud digest:",
+        result.status,
+        "sourceStatus" in result ? result.sourceStatus : "",
+      );
+    }
+  }
 } catch {
   // Never print exceptions: upstream config/network errors could contain secrets.
   console.error(

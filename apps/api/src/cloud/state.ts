@@ -15,7 +15,7 @@ export const cloudStateSchema = z
     fuelBaseline: z.object({ at: z.iso.datetime(), prices: z.record(z.string().max(64), z.number().int().min(1000).max(100000)) }).strict().optional(),
     snapshots: z.array(snapshotSchema).max(5000),
     deliveries: z.record(
-      z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}(?::[a-f0-9]{16})?$/),
       z
         .object({
           status: z.enum(["reserved", "sent", "failed", "unknown"]),

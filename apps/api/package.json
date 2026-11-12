@@ -21,7 +21,8 @@
     "tsx": "4.23.15",
     "zod": "4.6.7",
     "@hub/engine": "workspace:*",
-    "franc-min": "6.2.0"
+    "franc-min": "6.2.0",
+    "libsodium-wrappers": "0.8.4"
   },
   "devDependencies": {
     "@types/html-to-text": "9.0.4",

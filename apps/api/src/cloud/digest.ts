@@ -43,6 +43,7 @@ export type CloudOptions = {
   ntfyToken?: string;
   dryRun?: boolean;
   forceSend?: boolean;
+  deliveryNamespace?: string;
   signal?: AbortSignal;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   onSummaries?: (counts: {
@@ -60,7 +61,9 @@ export async function runCloudDigest(options: CloudOptions) {
   if (!settings.newsletter.enabled) return { status: "disabled" as const };
   const revision = await options.state.load();
   const day = dateInZone(now(), settings.newsletter.timezone);
-  if (!options.dryRun && !options.forceSend && revision.state.deliveries[day])
+  if (options.deliveryNamespace && !/^[a-f0-9]{16}$/.test(options.deliveryNamespace)) throw new Error("Invalid delivery namespace");
+  const deliveryKey = day + (options.deliveryNamespace ? ":" + options.deliveryNamespace : "");
+  if (!options.dryRun && !options.forceSend && revision.state.deliveries[deliveryKey])
     return { status: "already_attempted" as const };
   const signal = options.signal ?? AbortSignal.timeout(150000);
   const http = options.http ?? safeHttp;
@@ -179,7 +182,7 @@ export async function runCloudDigest(options: CloudOptions) {
     })),
   );
   state.snapshots = state.snapshots.slice(-4000);
-  state.deliveries[day] = { status: "reserved", at: now().toISOString() };
+  state.deliveries[deliveryKey] = { status: "reserved", at: now().toISOString() };
   // Commit reservation before POST; state write failure must prevent the send.
   const sha = await options.state.save(state, revision.sha);
   const delivered = await sendNtfy(digest, settings.notifications, {
@@ -196,7 +199,7 @@ export async function runCloudDigest(options: CloudOptions) {
       : error?.code.startsWith("HTTP_")
         ? "failed"
         : "unknown";
-  state.deliveries[day] = { status: sendStatus, at: now().toISOString() };
+  state.deliveries[deliveryKey] = { status: sendStatus, at: now().toISOString() };
   if (sendStatus === "sent" && fuelPrices) state.fuelBaseline = fuelPrices;
   await options.state.save(state, sha);
   if (sendStatus !== "sent")

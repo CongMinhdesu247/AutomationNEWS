@@ -39,7 +39,10 @@ services:
       context: ..
       dockerfile: infra/Dockerfile
       target: api
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      HUB_CLOUD_REPOSITORY: ${HUB_CLOUD_REPOSITORY:-}
+      HUB_CLOUD_ADMIN_TOKEN: ${HUB_CLOUD_ADMIN_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy
