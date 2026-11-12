@@ -9,7 +9,7 @@ import type {
   RisingRepository,
 } from "@hub/contracts";
 import { Icon } from "./Icons";
-import { goldPricePerChi } from "@hub/contracts";
+import { goldPricePerChi, priceFreshness } from "@hub/contracts";
 const statusText: Record<string, string> = {
   success: "Thành công",
   partial: "Một phần",
@@ -449,57 +449,248 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           )}
           {digest.sources && (
             <>
-              {digest.sources.gold && digest.sources.gold.status !== "disabled" && <section className="digest-section">
-                <SourceHeader title="Vàng miếng SJC & nhẫn SJC 9999" result={digest.sources.gold}/>
-                {digest.sources.gold.data ? <>
-                  <p>{digest.sources.gold.data.region} · Đơn vị: đồng/chỉ</p>
-                  <ul className="digest-items">{digest.sources.gold.data.items.map(item=><li key={item.code}><strong>{item.code === "sjc_bar" ? "Vàng miếng SJC" : "Nhẫn SJC 9999"}</strong><div className="weather-facts"><p>Mua vào<strong>{goldPricePerChi(item.buy,digest.sources!.gold!.data!.unit).toLocaleString("vi-VN")}</strong></p><p>Bán ra<strong>{goldPricePerChi(item.sell,digest.sources!.gold!.data!.unit).toLocaleString("vi-VN")}</strong></p></div></li>)}</ul>
-                  <p>Nguồn cập nhật: {when(digest.sources.gold.data.sourceUpdatedAt)}{digest.sources.gold.data.previousDay?" · Giá ngày trước":""}</p>
-                  <a href={digest.sources.gold.data.sourceUrl} target="_blank" rel="noreferrer">{digest.sources.gold.data.source}</a>
-                  <p className="muted">Giá tham khảo theo bảng nguồn, không phải cam kết giá giao dịch tại cửa hàng.</p>
-                </> : <p>Chưa lấy được giá đã xác minh. Không sử dụng số 0 thay cho giá thiếu.</p>}
-              </section>}
-              {digest.sources.usd && digest.sources.usd.status !== "disabled" && <section className="digest-section">
-                <SourceHeader title="USD/VND · Vietcombank" result={digest.sources.usd}/>
-                {digest.sources.usd.data ? <>
-                  <p>Đơn vị: đồng cho 1 USD. Mua/bán được hiểu từ phía ngân hàng.</p>
-                  <div className="weather-facts"><p>Ngân hàng mua tiền mặt<strong>{digest.sources.usd.data.buyCash?.toLocaleString("vi-VN") ?? "Chưa có"}</strong></p><p>Ngân hàng mua chuyển khoản<strong>{digest.sources.usd.data.buyTransfer?.toLocaleString("vi-VN") ?? "Chưa có"}</strong></p><p>Ngân hàng bán<strong>{digest.sources.usd.data.sell?.toLocaleString("vi-VN") ?? "Chưa có"}</strong></p></div>
-                  <p>Nguồn công bố: {when(digest.sources.usd.data.sourceUpdatedAt)}{digest.sources.usd.data.previousDay?" · Tỷ giá ngày trước":""}</p>
-                  <a href="https://www.vietcombank.com.vn/KHCN/Cong-cu-tien-ich/Ty-gia" target="_blank" rel="noreferrer">Nguồn Vietcombank · tỷ giá tham khảo</a>
-                </> : <p>Chưa lấy được tỷ giá đã xác minh.</p>}
-              </section>}
-              {digest.sources.airQuality && digest.sources.airQuality.status !== "disabled" && (
-                <section className="digest-section">
-                  <SourceHeader title={"Chất lượng không khí " + (digest.sources.airQuality.data?.location ?? digest.settings.airQuality?.location ?? "Hà Nội")} result={digest.sources.airQuality} />
-                  {digest.sources.airQuality.data ? <>
-                    <div className="weather-facts">
-                      <p>AQI theo thang Mỹ<strong>{digest.sources.airQuality.data.usAqi ?? "Chưa có"}</strong></p>
-                      <p>Mức đánh giá<strong>{digest.sources.airQuality.data.category ?? "Chưa phân loại"}</strong></p>
-                      <p>PM2.5<strong>{digest.sources.airQuality.data.pm25?.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) ?? "Chưa có"}{digest.sources.airQuality.data.pm25 !== null ? " µg/m³" : ""}</strong></p>
-                    </div>
-                    <p>Thời điểm dự báo: {when(digest.sources.airQuality.data.forecastAt)}</p>
-                    <p className="attribution"><a href={digest.sources.airQuality.data.sourceUrl} target="_blank" rel="noreferrer">{digest.sources.airQuality.data.attribution}</a></p>
-                  </> : <p>Chưa lấy được dữ liệu mới. Các nội dung khác vẫn có trong bản tin.</p>}
-                </section>
-              )}
-              {digest.sources.fuel && digest.sources.fuel.status !== "disabled" && (
-                <section className="digest-section">
-                  <SourceHeader title="Giá xăng RON 95" result={digest.sources.fuel} />
-                  {digest.sources.fuel.data ? <>
-                    <p>{digest.sources.fuel.data.region} · Đơn vị: đồng/lít</p>
-                    <ul className="digest-items">
-                      {digest.sources.fuel.data.items.map((item) => <li key={item.code}>
-                        <strong>{item.name}</strong>
-                        <p>{item.price.toLocaleString("vi-VN")} đ/lít</p>
-                        <small>{item.change === null ? "Chưa có giá trước để so sánh" : item.change === 0 ? "Không đổi so với bản tin trước" : `${item.change > 0 ? "Tăng" : "Giảm"} ${Math.abs(item.change).toLocaleString("vi-VN")} đ/lít so với bản tin trước`}</small>
-                      </li>)}
-                    </ul>
-                    <p>Hiệu lực từ: {when(digest.sources.fuel.data.effectiveAt)}</p>
-                    {digest.sources.fuel.data.comparedAt && <p>So với dữ liệu lấy lúc: {when(digest.sources.fuel.data.comparedAt)}</p>}
-                    <a href={digest.sources.fuel.data.sourceUrl} target="_blank" rel="noreferrer">Nguồn: Petrolimex</a>
-                  </> : <p>Chưa lấy được bảng giá đã xác minh. Các nội dung khác vẫn có trong bản tin.</p>}
-                </section>
-              )}
+              {digest.sources.gold &&
+                digest.sources.gold.status !== "disabled" && (
+                  <section className="digest-section">
+                    <SourceHeader
+                      title="Vàng miếng SJC & nhẫn SJC 9999"
+                      result={digest.sources.gold}
+                    />
+                    {digest.sources.gold.data ? (
+                      <>
+                        <p>
+                          {digest.sources.gold.data.region} · Đơn vị: đồng/chỉ
+                        </p>
+                        <ul className="digest-items">
+                          {digest.sources.gold.data.items.map((item) => (
+                            <li key={item.code}>
+                              <strong>
+                                {item.code === "sjc_bar"
+                                  ? "Vàng miếng SJC"
+                                  : "Nhẫn SJC 9999"}
+                              </strong>
+                              <div className="weather-facts">
+                                <p>
+                                  Mua vào
+                                  <strong>
+                                    {goldPricePerChi(
+                                      item.buy,
+                                      digest.sources!.gold!.data!.unit,
+                                    ).toLocaleString("vi-VN")}
+                                  </strong>
+                                </p>
+                                <p>
+                                  Bán ra
+                                  <strong>
+                                    {goldPricePerChi(
+                                      item.sell,
+                                      digest.sources!.gold!.data!.unit,
+                                    ).toLocaleString("vi-VN")}
+                                  </strong>
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        <p>
+                          {priceFreshness(
+                            digest.sources.gold.data.sourceUpdatedAt,
+                          )}
+                        </p>
+                        <a
+                          href={digest.sources.gold.data.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {digest.sources.gold.data.source}
+                        </a>
+                        <p className="muted">
+                          Giá tham khảo theo bảng nguồn, không phải cam kết giá
+                          giao dịch tại cửa hàng.
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        Chưa lấy được giá đã xác minh. Không sử dụng số 0 thay
+                        cho giá thiếu.
+                      </p>
+                    )}
+                  </section>
+                )}
+              {digest.sources.usd &&
+                digest.sources.usd.status !== "disabled" && (
+                  <section className="digest-section">
+                    <SourceHeader
+                      title="USD/VND · Vietcombank"
+                      result={digest.sources.usd}
+                    />
+                    {digest.sources.usd.data ? (
+                      <>
+                        <p>
+                          Đơn vị: đồng cho 1 USD. Mua/bán được hiểu từ phía ngân
+                          hàng.
+                        </p>
+                        <div className="weather-facts">
+                          <p>
+                            Ngân hàng mua tiền mặt
+                            <strong>
+                              {digest.sources.usd.data.buyCash?.toLocaleString(
+                                "vi-VN",
+                              ) ?? "Chưa có"}
+                            </strong>
+                          </p>
+                          <p>
+                            Ngân hàng mua chuyển khoản
+                            <strong>
+                              {digest.sources.usd.data.buyTransfer?.toLocaleString(
+                                "vi-VN",
+                              ) ?? "Chưa có"}
+                            </strong>
+                          </p>
+                          <p>
+                            Ngân hàng bán
+                            <strong>
+                              {digest.sources.usd.data.sell?.toLocaleString(
+                                "vi-VN",
+                              ) ?? "Chưa có"}
+                            </strong>
+                          </p>
+                        </div>
+                        <p>
+                          {priceFreshness(
+                            digest.sources.usd.data.sourceUpdatedAt,
+                          )}
+                        </p>
+                        <a
+                          href="https://www.vietcombank.com.vn/KHCN/Cong-cu-tien-ich/Ty-gia"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Nguồn Vietcombank · tỷ giá tham khảo
+                        </a>
+                      </>
+                    ) : (
+                      <p>Chưa lấy được tỷ giá đã xác minh.</p>
+                    )}
+                  </section>
+                )}
+              {digest.sources.airQuality &&
+                digest.sources.airQuality.status !== "disabled" && (
+                  <section className="digest-section">
+                    <SourceHeader
+                      title={
+                        "Chất lượng không khí " +
+                        (digest.sources.airQuality.data?.location ??
+                          digest.settings.airQuality?.location ??
+                          "Hà Nội")
+                      }
+                      result={digest.sources.airQuality}
+                    />
+                    {digest.sources.airQuality.data ? (
+                      <>
+                        <div className="weather-facts">
+                          <p>
+                            AQI theo thang Mỹ
+                            <strong>
+                              {digest.sources.airQuality.data.usAqi ??
+                                "Chưa có"}
+                            </strong>
+                          </p>
+                          <p>
+                            Mức đánh giá
+                            <strong>
+                              {digest.sources.airQuality.data.category ??
+                                "Chưa phân loại"}
+                            </strong>
+                          </p>
+                          <p>
+                            PM2.5
+                            <strong>
+                              {digest.sources.airQuality.data.pm25?.toLocaleString(
+                                "vi-VN",
+                                { maximumFractionDigits: 1 },
+                              ) ?? "Chưa có"}
+                              {digest.sources.airQuality.data.pm25 !== null
+                                ? " µg/m³"
+                                : ""}
+                            </strong>
+                          </p>
+                        </div>
+                        <p>
+                          Thời điểm dự báo:{" "}
+                          {when(digest.sources.airQuality.data.forecastAt)}
+                        </p>
+                        <p className="attribution">
+                          <a
+                            href={digest.sources.airQuality.data.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {digest.sources.airQuality.data.attribution}
+                          </a>
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        Chưa lấy được dữ liệu mới. Các nội dung khác vẫn có
+                        trong bản tin.
+                      </p>
+                    )}
+                  </section>
+                )}
+              {digest.sources.fuel &&
+                digest.sources.fuel.status !== "disabled" && (
+                  <section className="digest-section">
+                    <SourceHeader
+                      title="Giá xăng RON 95"
+                      result={digest.sources.fuel}
+                    />
+                    {digest.sources.fuel.data ? (
+                      <>
+                        <p>
+                          {digest.sources.fuel.data.region} · Đơn vị: đồng/lít
+                        </p>
+                        <ul className="digest-items">
+                          {digest.sources.fuel.data.items.map((item) => (
+                            <li key={item.code}>
+                              <strong>{item.name}</strong>
+                              <p>{item.price.toLocaleString("vi-VN")} đ/lít</p>
+                              <small>
+                                {item.change === null
+                                  ? "Chưa có giá trước để so sánh"
+                                  : item.change === 0
+                                    ? "Không đổi so với bản tin trước"
+                                    : `${item.change > 0 ? "Tăng" : "Giảm"} ${Math.abs(item.change).toLocaleString("vi-VN")} đ/lít so với bản tin trước`}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                        <p>
+                          Hiệu lực từ:{" "}
+                          {when(digest.sources.fuel.data.effectiveAt)}
+                        </p>
+                        {digest.sources.fuel.data.comparedAt && (
+                          <p>
+                            So với dữ liệu lấy lúc:{" "}
+                            {when(digest.sources.fuel.data.comparedAt)}
+                          </p>
+                        )}
+                        <a
+                          href={digest.sources.fuel.data.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Nguồn: Petrolimex
+                        </a>
+                      </>
+                    ) : (
+                      <p>
+                        Chưa lấy được bảng giá đã xác minh. Các nội dung khác
+                        vẫn có trong bản tin.
+                      </p>
+                    )}
+                  </section>
+                )}
               <section className="digest-section">
                 <SourceHeader title="Tin tức" result={digest.sources.rss} />
                 {digest.sources.rss.data.items.length > 0 ? (

@@ -20,6 +20,7 @@ try {
       dryRun: process.env.HUB_DRY_RUN === "true",
       forceSend: process.env.HUB_FORCE_SEND === "true",
       profileId: process.env.HUB_PROFILE_ID || undefined,
+      reportBaseUrl: process.env.HUB_REPORT_BASE_URL || undefined,
     });
     console.log(
       "Family digest:",

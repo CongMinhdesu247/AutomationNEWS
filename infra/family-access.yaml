@@ -1,0 +1,15 @@
+# Combine with compose.yaml. Only profile-token APIs are reachable on this port.
+services:
+  api:
+    environment:
+      MEMBER_PUBLIC_URL: ${MEMBER_PUBLIC_URL:-}
+  member-web:
+    image: personal-automation-hub-web
+    ports:
+      - "${MEMBER_BIND_ADDRESS:-0.0.0.0}:${MEMBER_PORT:-8089}:80"
+    volumes:
+      - ./member-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

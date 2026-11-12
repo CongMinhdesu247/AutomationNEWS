@@ -2,6 +2,86 @@
   max-width: 1200px;
   margin: auto;
 }
+.family-delivery {
+  border-bottom: 1px solid #dce4ef;
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+.family-source-health {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.family-source-health li {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: #f4f7fb;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.family-source-health small {
+  color: #526780;
+}
+.family-tools {
+  margin: 24px 0;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.family-tools summary,
+.family-delivery summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.family-tools label,
+.member-portal label {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.family-tools input {
+  width: 100%;
+  min-width: 0;
+}
+.member-portal {
+  max-width: 760px;
+  margin: auto;
+  padding: 32px 20px;
+}
+.member-portal fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.member-portal .family-check {
+  display: flex;
+  align-items: center;
+}
+.member-portal .family-choices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.member-portal .family-choices .family-check {
+  margin: 0;
+  padding: 10px 4px;
+  min-height: 44px;
+}
+.member-portal button.primary {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+  width: 100%;
+}
+.member-portal h1 {
+  font-size: 32px;
+}
+.family-alerts {
+  margin: 24px 0;
+}
 .family-eyebrow {
   color: #2563eb;
   font-size: 11px;

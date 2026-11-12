@@ -40,19 +40,65 @@ export function notificationTitle(digest: Digest) {
 }
 
 /** Plain text for both local and cloud pushes; sections stay legible when expanded on iOS. */
-export function formatDigestNotification(digest: Digest, compact = false, tight = false): string {
+export function formatDigestNotification(
+  digest: Digest,
+  compact = false,
+  tight = false,
+  full = false,
+): string {
   const sources = digest.sources;
   if (!sources) return "Bản tin đang được chuẩn bị. Vui lòng thử lại sau.";
   const blocks: string[] = [];
-  const money = (value: number | null) => value === null ? "chưa có" : value.toLocaleString("vi-VN",{maximumFractionDigits:2});
-  const asOf = (value: string) => new Date(value).toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"});
-  if(sources.gold && sources.gold.status!=="disabled") {
-    const data=sources.gold.data;
-    blocks.push(data ? ["🟡 Giá vàng SJC · đồng/chỉ",...data.items.map(item=>(item.code==="sjc_bar"?"Miếng SJC":"Nhẫn SJC 9999")+": mua "+money(goldPricePerChi(item.buy,data.unit))+" · bán "+money(goldPricePerChi(item.sell,data.unit))),"Webgia tổng hợp · TP.HCM · "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Giá ngày trước":"")].join("\n") : "🟡 Chưa lấy được giá vàng SJC đã xác minh.");
+  const money = (value: number | null) =>
+    value === null
+      ? "chưa có"
+      : value.toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+  const asOf = (value: string) =>
+    new Date(value).toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+    });
+  if (sources.gold && sources.gold.status !== "disabled") {
+    const data = sources.gold.data;
+    blocks.push(
+      data
+        ? [
+            "🟡 Giá vàng SJC · đồng/chỉ",
+            ...data.items.map(
+              (item) =>
+                (item.code === "sjc_bar" ? "Miếng SJC" : "Nhẫn SJC 9999") +
+                ": mua " +
+                money(goldPricePerChi(item.buy, data.unit)) +
+                " · bán " +
+                money(goldPricePerChi(item.sell, data.unit)),
+            ),
+            "Webgia tổng hợp · TP.HCM · " +
+              asOf(data.sourceUpdatedAt) +
+              (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
+          ].join("\n")
+        : "🟡 Chưa lấy được giá vàng SJC đã xác minh.",
+    );
   }
-  if(sources.usd && sources.usd.status!=="disabled") {
-    const data=sources.usd.data;
-    blocks.push(data ? ["💵 USD/VND · Vietcombank · đồng/USD","Ngân hàng mua: tiền mặt "+money(data.buyCash)+" · chuyển khoản "+money(data.buyTransfer),"Ngân hàng bán: "+money(data.sell),"Nguồn công bố: "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Tỷ giá ngày trước":"")].join("\n") : "💵 Chưa lấy được tỷ giá USD/VND Vietcombank.");
+  if (sources.usd && sources.usd.status !== "disabled") {
+    const data = sources.usd.data;
+    blocks.push(
+      data
+        ? [
+            "💵 USD/VND · Vietcombank · đồng/USD",
+            "Ngân hàng mua: tiền mặt " +
+              money(data.buyCash) +
+              " · chuyển khoản " +
+              money(data.buyTransfer),
+            "Ngân hàng bán: " + money(data.sell),
+            "Nguồn công bố: " +
+              asOf(data.sourceUpdatedAt) +
+              (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
+          ].join("\n")
+        : "💵 Chưa lấy được tỷ giá USD/VND Vietcombank.",
+    );
   }
   const weather = sources.weather.data;
   if (weather) {
@@ -78,35 +124,101 @@ export function formatDigestNotification(digest: Digest, compact = false, tight 
   const air = sources.airQuality;
   if (air && air.status !== "disabled") {
     const data = air.data;
-    blocks.push(data ? [
-      "💨 " + clip(oneLine(data.location), 60) + " · AQI Mỹ: " + (data.usAqi ?? "?") + " · " + (data.category ?? "Chưa phân loại"),
-      "PM2.5: " + (data.pm25?.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) ?? "?") + " µg/m³ · " + new Date(data.forecastAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }),
-      "Dự báo Open-Meteo/CAMS · CC BY 4.0",
-      ...(!weather ? ["https://open-meteo.com/"] : []),
-    ].join("\n") : "💨 Chưa lấy được dự báo chất lượng không khí.");
+    blocks.push(
+      data
+        ? [
+            "💨 " +
+              clip(oneLine(data.location), 60) +
+              " · AQI Mỹ: " +
+              (data.usAqi ?? "?") +
+              " · " +
+              (data.category ?? "Chưa phân loại"),
+            "PM2.5: " +
+              (data.pm25?.toLocaleString("vi-VN", {
+                maximumFractionDigits: 1,
+              }) ?? "?") +
+              " µg/m³ · " +
+              new Date(data.forecastAt).toLocaleTimeString("vi-VN", {
+                timeZone: "Asia/Ho_Chi_Minh",
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            "Dự báo Open-Meteo/CAMS · CC BY 4.0",
+            ...(!weather ? ["https://open-meteo.com/"] : []),
+          ].join("\n")
+        : "💨 Chưa lấy được dự báo chất lượng không khí.",
+    );
   }
 
   const fuel = sources.fuel;
   if (fuel && fuel.status !== "disabled") {
-    const selected = fuel.data ? { ...fuel.data, items: fuel.data.items.filter((item) => /^Xăng\s+E10\s+RON\s*95\s*-\s*III$/i.test(item.name.trim())) } : null;
+    const selected = fuel.data
+      ? {
+          ...fuel.data,
+          items: fuel.data.items.filter((item) =>
+            /^Xăng\s+E10\s+RON\s*95\s*-\s*III$/i.test(item.name.trim()),
+          ),
+        }
+      : null;
     const data = selected?.items.length ? selected : null;
     const money = (value: number) => value.toLocaleString("vi-VN");
-    blocks.push(data ? [
-      "⛽ RON 95 · " + data.region,
-      ...data.items.map((item) => item.name + ": " + money(item.price) + " đ/lít" +
-        (item.change === null ? "" : item.change === 0 ? " · Không đổi" : " · " + (item.change > 0 ? "Tăng " : "Giảm ") + money(Math.abs(item.change)) + " đ")),
-      ...(!compact ? ["Hiệu lực: " + new Date(data.effectiveAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }),
-      data.comparedAt ? "So với bản tin " + new Date(data.comparedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Lần đầu theo dõi; chưa có giá để so sánh."] : []),
-      "Nguồn: Petrolimex",
-    ].join("\n") : "⛽ RON 95\nChưa lấy được giá đã xác minh từ Petrolimex.");
+    blocks.push(
+      data
+        ? [
+            "⛽ RON 95 · " + data.region,
+            ...data.items.map(
+              (item) =>
+                item.name +
+                ": " +
+                money(item.price) +
+                " đ/lít" +
+                (item.change === null
+                  ? ""
+                  : item.change === 0
+                    ? " · Không đổi"
+                    : " · " +
+                      (item.change > 0 ? "Tăng " : "Giảm ") +
+                      money(Math.abs(item.change)) +
+                      " đ"),
+            ),
+            ...(!compact
+              ? [
+                  "Hiệu lực: " +
+                    new Date(data.effectiveAt).toLocaleString("vi-VN", {
+                      timeZone: "Asia/Ho_Chi_Minh",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      day: "2-digit",
+                      month: "2-digit",
+                    }),
+                  data.comparedAt
+                    ? "So với bản tin " +
+                      new Date(data.comparedAt).toLocaleDateString("vi-VN", {
+                        timeZone: "Asia/Ho_Chi_Minh",
+                      })
+                    : "Lần đầu theo dõi; chưa có giá để so sánh.",
+                ]
+              : []),
+            "Nguồn: Petrolimex",
+          ].join("\n")
+        : "⛽ RON 95\nChưa lấy được giá đã xác minh từ Petrolimex.",
+    );
   }
 
   if (sources.rss.status !== "disabled") {
     const items = sources.rss.data.items.slice(0, 3);
     const lines = ["📰 Tin tức · " + items.length + " tin"];
     for (const item of items) {
-      const headline = "• " + clip(oneLine(item.title), compact ? (tight ? 60 : 75) : 105);
-      const link = !compact && Buffer.byteLength(item.url) <= 150 ? "\n" + item.url : "";
+      const headline =
+        "• " +
+        clip(
+          oneLine(item.title),
+          full ? 1000 : compact ? (tight ? 60 : 75) : 105,
+        );
+      const link =
+        !compact && (full || Buffer.byteLength(item.url) <= 150)
+          ? "\n" + item.url
+          : "";
       lines.push(headline + link);
     }
     if (!items.length)
@@ -131,23 +243,32 @@ export function formatDigestNotification(digest: Digest, compact = false, tight 
     const lines = ["🚀 GitHub · " + repositories.length + " dự án nổi bật"];
     repositories.forEach((repo, index) => {
       const rising = repo as Partial<RisingRepository>;
-      const growth = compact ? repo.stars.toLocaleString("vi-VN") + " ★" :
-        typeof rising.starChange === "number" &&
-        typeof rising.intervalHours === "number"
+      const growth = compact
+        ? repo.stars.toLocaleString("vi-VN") + " ★"
+        : typeof rising.starChange === "number" &&
+            typeof rising.intervalHours === "number"
           ? (rising.starChange > 0 ? "+" : "") +
             rising.starChange +
             " sao / " +
             rising.intervalHours.toFixed(1) +
             "h"
           : repo.stars.toLocaleString("vi-VN") + " sao · Mới đáng chú ý";
-      const url = !compact && Buffer.byteLength(repo.url) <= 160 ? "\n" + repo.url : "";
+      const url =
+        !compact && (full || Buffer.byteLength(repo.url) <= 160)
+          ? "\n" + repo.url
+          : "";
       lines.push(
         index +
           1 +
           ". " +
           clip(oneLine(repo.name), compact ? 60 : 85) +
           " — " +
-          clip(repositorySummary(repo), compact ? (tight ? 60 : 85) : 210) +
+          (full
+            ? oneLine(repo.summaryVi || repo.description || "Chưa có mô tả.")
+            : clip(
+                repositorySummary(repo),
+                compact ? (tight ? 60 : 85) : 210,
+              )) +
           "\n" +
           growth +
           url,
@@ -168,9 +289,12 @@ export function formatDigestNotification(digest: Digest, compact = false, tight 
   if (weather)
     blocks.push("Thời tiết: Open-Meteo · CC BY 4.0\nhttps://open-meteo.com/");
   const message = blocks.join("\n\n");
+  if (full) return message;
   // ntfy includes content in both FCM data and the APNS custom payload. Leave
   // headroom for those copies and metadata rather than using the 4 KiB HTTP limit.
-  if (Buffer.byteLength(message) > 1600 && !compact) return formatDigestNotification(digest, true);
-  if (Buffer.byteLength(message) > 1600 && !tight) return formatDigestNotification(digest, true, true);
+  if (Buffer.byteLength(message) > 1600 && !compact)
+    return formatDigestNotification(digest, true);
+  if (Buffer.byteLength(message) > 1600 && !tight)
+    return formatDigestNotification(digest, true, true);
   return clip(message, 1600);
 }

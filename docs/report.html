@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src https://raw.githubusercontent.com; base-uri 'none'; form-action 'none'"
+    />
+    <title>Bản tin cá nhân</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f3f6fa;
+        color: #152a43;
+        font-family: system-ui, sans-serif;
+        line-height: 1.7;
+      }
+      main {
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 30px;
+        background: white;
+        border: 1px solid #dce4ef;
+        border-radius: 16px;
+      }
+      h1 {
+        font-size: 28px;
+        margin: 0;
+      }
+      #status {
+        color: #526780;
+      }
+      #content {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font: inherit;
+      }
+      .eyebrow {
+        color: #2563eb;
+        letter-spacing: 0.12em;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .warning {
+        background: #fff6db;
+        padding: 14px;
+        border-radius: 8px;
+      }
+      footer {
+        color: #526780;
+        border-top: 1px solid #dce4ef;
+        padding-top: 20px;
+        margin-top: 30px;
+        font-size: 13px;
+      }
+      @media (max-width: 600px) {
+        main {
+          margin: 0;
+          padding: 24px 18px;
+          border: 0;
+          border-radius: 0;
+        }
+        h1 {
+          font-size: 25px;
+        }
+      }
+    </style>
+    <script src="report.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">BẢN TIN GIA ĐÌNH</p>
+      <h1>Bản tin đầy đủ</h1>
+      <p id="status" role="status">Đang mở bản tin…</p>
+      <p id="warning" class="warning" hidden></p>
+      <div id="content"></div>
+      <footer>
+        Liên kết này mở đúng một bản tin. Không chia sẻ công khai. Nội dung được
+        mã hóa trước khi lưu; khóa mở nằm trong liên kết. Giữ tối đa 16 bản gần
+        nhất trên cloud, dọn sau 14 ngày. Thời tiết và AQI là dự báo
+        Open-Meteo/CAMS · CC BY 4.0. Giá thị trường ghi theo thời điểm nguồn
+        công bố.
+      </footer>
+    </main>
+  </body>
+</html>

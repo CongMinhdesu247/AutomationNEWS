@@ -55,6 +55,8 @@ export async function sendNtfy(
     allowedOrigins = [],
     signal,
     message: customMessage,
+    clickUrl,
+    title,
   }: {
     http?: HttpClient;
     now?: () => Date;
@@ -63,6 +65,8 @@ export async function sendNtfy(
     allowedOrigins?: string[];
     signal: AbortSignal;
     message?: string;
+    clickUrl?: string;
+    title?: string;
   },
 ): Promise<SourceResult<null>> {
   if (!config.enabled)
@@ -73,7 +77,9 @@ export async function sendNtfy(
       errors: [],
     };
   try {
-    const click = dashboardLink(publicBaseUrl, digest.id);
+    const click = clickUrl
+      ? checkUrl(clickUrl).toString()
+      : dashboardLink(publicBaseUrl, digest.id);
     const url = checkUrl(config.serverUrl);
     url.search = "";
     url.hash = "";
@@ -88,7 +94,7 @@ export async function sendNtfy(
       },
       body: JSON.stringify({
         topic: config.topic,
-        title: notificationTitle(digest),
+        title: title ?? notificationTitle(digest),
         message: customMessage ?? formatDigestNotification(digest),
         ...(click ? { click } : {}),
       }),

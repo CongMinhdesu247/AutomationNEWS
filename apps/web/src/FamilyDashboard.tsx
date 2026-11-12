@@ -8,6 +8,8 @@ import {
   type FamilyProfile,
 } from "@hub/contracts";
 import "./family.css";
+import AlertPreferences from "./AlertPreferences";
+import { DeliveryPanel, FamilyBackup, MemberAccess } from "./FamilyTools";
 
 async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -258,6 +260,13 @@ export default function FamilyDashboard() {
             </aside>
             {profile && (
               <section className="family-editor" aria-label="Chỉnh sửa hồ sơ">
+                <DeliveryPanel
+                  profile={
+                    document.config.profiles.find(
+                      (p) => p.id === profile.id,
+                    ) ?? { ...profile, enabled: false }
+                  }
+                />
                 <fieldset disabled={busy}>
                   <div className="family-editor-heading">
                     <h2>{profile.name || "Hồ sơ mới"}</h2>
@@ -354,6 +363,10 @@ export default function FamilyDashboard() {
                       </label>
                     ))}
                   </div>
+                  <AlertPreferences
+                    value={profile.alerts}
+                    onChange={(alerts) => change({ alerts })}
+                  />
                   <h3>Lịch nhận</h3>
                   <div className="family-fields">
                     <label>
@@ -432,7 +445,7 @@ export default function FamilyDashboard() {
                       disabled={busy || dirty || !synced || !profile.topic}
                       onClick={() => void test()}
                     >
-                      Gửi thử riêng hồ sơ này
+                      Gửi lại / gửi thử riêng hồ sơ
                     </button>
                     {draft.profiles.length > 1 && (
                       <button
@@ -452,12 +465,28 @@ export default function FamilyDashboard() {
                     )}
                   </div>
                 </fieldset>
+                <p className="muted">
+                  Gửi lại sẽ tạo thêm thông báo dù hôm nay đã gửi thành công.
+                </p>
+                <MemberAccess id={profile.id} disabled={busy || dirty} />
               </section>
             )}
           </div>
+          <FamilyBackup
+            config={document.config}
+            disabled={busy || dirty}
+            onRestore={(config) => {
+              setDraft(config);
+              setSelected(config.profiles[0]!.id);
+              setDirty(true);
+              setNotice(
+                "Đã nạp sao lưu vào bản nháp. Kiểm tra trước khi lưu và đồng bộ.",
+              );
+            }}
+          />
           <p className="family-footnote">
-            Bạn là người quản lý trên máy này. Các thành viên chỉ cần ntfy; chưa
-            cần tạo tài khoản hoặc mật khẩu.
+            Bạn quản lý trên máy này. Thành viên nhận tin qua ntfy và có thể
+            dùng liên kết riêng để đổi lựa chọn khi máy chủ quản lý đang bật.
           </p>
         </>
       )}

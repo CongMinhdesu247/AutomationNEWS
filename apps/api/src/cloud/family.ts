@@ -68,21 +68,28 @@ export async function runCloudFamily(
       continue;
     }
     try {
-      const result = await runCloudDigest({
+      const namespace = createHash("sha256")
+        .update(profile.id)
+        .digest("hex")
+        .slice(0, 16);
+      const digestOptions = {
         ...options,
         http: sharedHttp,
         now,
         settings: profileSettings(
           selected ? { ...profile, enabled: true } : profile,
         ),
-        deliveryNamespace:
-          profile.id === "personal"
-            ? undefined
-            : createHash("sha256")
-                .update(profile.id)
-                .digest("hex")
-                .slice(0, 16),
-      });
+        deliveryNamespace: profile.id === "personal" ? undefined : namespace,
+        signalNamespace: namespace,
+        alerts: profile.alerts,
+      };
+      let result = await runCloudDigest(digestOptions);
+      if (
+        result.status === "already_attempted" &&
+        !selected &&
+        profile.alerts?.enabled
+      )
+        result = await runCloudDigest({ ...digestOptions, alertsOnly: true });
       results.push({ id: profile.id, status: result.status });
     } catch {
       errors.push(profile.id);

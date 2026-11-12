@@ -12,14 +12,76 @@ const snapshotSchema = z
 export const cloudStateSchema = z
   .object({
     version: z.literal(1),
-    fuelBaseline: z.object({ at: z.iso.datetime(), prices: z.record(z.string().max(64), z.number().int().min(1000).max(100000)) }).strict().optional(),
+    reports: z
+      .record(
+        z.uuid(),
+        z
+          .object({
+            at: z.iso.datetime(),
+            iv: z.string().regex(/^[\w-]{16}$/),
+            ciphertext: z
+              .string()
+              .max(55000)
+              .regex(/^[\w-]+$/),
+          })
+          .strict(),
+      )
+      .optional(),
+    signals: z
+      .record(
+        z.string().regex(/^[a-f0-9]{16}$/),
+        z
+          .object({
+            at: z.iso.datetime(),
+            notifiedAt: z.iso.datetime().optional(),
+            attemptedAt: z.iso.datetime().optional(),
+            values: z
+              .record(z.string().max(40), z.number().finite().nonnegative())
+              .refine((v) => Object.keys(v).length <= 10),
+          })
+          .strict(),
+      )
+      .optional(),
+    fuelBaseline: z
+      .object({
+        at: z.iso.datetime(),
+        prices: z.record(
+          z.string().max(64),
+          z.number().int().min(1000).max(100000),
+        ),
+      })
+      .strict()
+      .optional(),
     snapshots: z.array(snapshotSchema).max(5000),
     deliveries: z.record(
-      z.string().regex(/^\d{4}-\d{2}-\d{2}(?::[a-f0-9]{16})?$/),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}(?::[a-f0-9]{16})?(?::alert:[01])?$/),
       z
         .object({
           status: z.enum(["reserved", "sent", "failed", "unknown"]),
           at: z.iso.datetime(),
+          sourceStatus: z.enum(["success", "partial", "failed"]).optional(),
+          sources: z
+            .array(
+              z
+                .object({
+                  key: z.enum([
+                    "gold",
+                    "usd",
+                    "airQuality",
+                    "fuel",
+                    "rss",
+                    "weather",
+                    "github",
+                  ]),
+                  status: z.enum(["success", "partial", "failed", "disabled"]),
+                  updatedAt: z.iso.datetime().optional(),
+                  previousDay: z.boolean().optional(),
+                })
+                .strict(),
+            )
+            .max(7)
+            .optional(),
+          reportId: z.uuid().optional(),
         })
         .strict(),
     ),
@@ -81,7 +143,30 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   const cutoff = at.getTime() - 3 * 86400000;
   return {
     version: 1,
-    ...(state.fuelBaseline && Date.parse(state.fuelBaseline.at) <= +at && +at - Date.parse(state.fuelBaseline.at) <= 14 * 86400000 ? { fuelBaseline: state.fuelBaseline } : {}),
+    ...(state.reports
+      ? {
+          reports: Object.fromEntries(
+            Object.entries(state.reports)
+              .filter(([, v]) => +at - Date.parse(v.at) < 14 * 86400000)
+              .sort((a, b) => b[1].at.localeCompare(a[1].at))
+              .slice(0, 16),
+          ),
+        }
+      : {}),
+    ...(state.signals
+      ? {
+          signals: Object.fromEntries(
+            Object.entries(state.signals).filter(
+              ([, v]) => +at - Date.parse(v.at) < 14 * 86400000,
+            ),
+          ),
+        }
+      : {}),
+    ...(state.fuelBaseline &&
+    Date.parse(state.fuelBaseline.at) <= +at &&
+    +at - Date.parse(state.fuelBaseline.at) <= 14 * 86400000
+      ? { fuelBaseline: state.fuelBaseline }
+      : {}),
     ...(state.translations
       ? {
           translations: Object.fromEntries(
@@ -110,8 +195,8 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   };
 }
 
-// Only public repo IDs/star counts, translated public descriptions, fuel-price baseline and delivery state live here.
-// No settings, coordinates, topic, article content or credentials are persisted.
+// Public metrics, delivery metadata and encrypted report bodies only.
+// No plaintext settings, locations, topics, report keys or credentials are persisted.
 export class GithubStateStore implements CloudStateStore {
   private base: string;
   constructor(

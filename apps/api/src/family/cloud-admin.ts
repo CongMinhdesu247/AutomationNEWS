@@ -1,11 +1,13 @@
 import sodium from "libsodium-wrappers";
 import { z } from "zod";
 import { familyConfigSchema, type FamilyConfig } from "@hub/contracts";
+import { GithubStateStore, type CloudState } from "../cloud/state.js";
 
 export type FamilyCloudAdmin = {
   configured: boolean;
   sync(config: FamilyConfig): Promise<void>;
   test(profileId: string): Promise<void>;
+  state?(): Promise<CloudState>;
 };
 export function githubFamilyAdmin(
   repository?: string,
@@ -41,6 +43,11 @@ export function githubFamilyAdmin(
   };
   return {
     configured,
+    async state() {
+      if (!configured) throw new Error("Cloud unavailable");
+      return (await new GithubStateStore(repository!, token!, http).load())
+        .state;
+    },
     async sync(config) {
       const text = JSON.stringify(familyConfigSchema.parse(config));
       if (Buffer.byteLength(text) > 48000)

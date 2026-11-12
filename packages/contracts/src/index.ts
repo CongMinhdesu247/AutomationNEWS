@@ -190,6 +190,7 @@ export const defaultSettings: Settings = {
 
 export * from "./digests.js";
 export * from "./family.js";
+export * from "./family-tools.js";
 
 export * from "./runs.js";
 

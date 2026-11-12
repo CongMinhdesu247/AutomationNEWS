@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import {
@@ -8,6 +9,9 @@ import {
   validationIssues,
   type FamilyConfig,
   type FamilyDocument,
+  memberPreferencesSchema,
+  nextFamilySend,
+  type FamilyHealth,
 } from "@hub/contracts";
 import { RequestError } from "../digests/service.js";
 import type { FamilyCloudAdmin } from "./cloud-admin.js";
@@ -107,6 +111,214 @@ export function registerFamilyRoutes(
       syncing = false;
     }
   }
+  async function saveConfig(config: FamilyConfig, revision: number) {
+    if (syncing)
+      throw new RequestError(
+        409,
+        "SYNC_BUSY",
+        "Đang đồng bộ; vui lòng thử lại.",
+      );
+    const updated = await pool.query(
+      "UPDATE family_configuration SET config=$1::jsonb,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision",
+      [JSON.stringify(config), revision],
+    );
+    if (!updated.rowCount)
+      throw new RequestError(
+        409,
+        "REVISION_CONFLICT",
+        "Hồ sơ đã thay đổi. Tải lại trước khi lưu.",
+      );
+    await pool.query(
+      "DELETE FROM member_access WHERE NOT (profile_id = ANY($1::text[]))",
+      [config.profiles.map((p) => p.id)],
+    );
+    let syncError: string | undefined;
+    try {
+      await sync(config, updated.rows[0].revision);
+    } catch {
+      syncError =
+        "Đã lưu trên máy nhưng chưa đồng bộ cloud. Lịch cloud vẫn dùng cấu hình trước đó; bấm Đồng bộ lại.";
+    }
+    return { ...(await read()), ...(syncError ? { syncError } : {}) };
+  }
+  app.get("/api/family/status", async (): Promise<FamilyHealth> => {
+    const document = await read();
+    if (!cloud.state)
+      throw new RequestError(
+        503,
+        "CLOUD_UNAVAILABLE",
+        "Chưa đọc được trạng thái cloud.",
+      );
+    let state;
+    try {
+      state = await cloud.state();
+    } catch {
+      throw new RequestError(
+        502,
+        "CLOUD_UNAVAILABLE",
+        "Chưa đọc được trạng thái cloud. Thử tải lại sau.",
+      );
+    }
+    return {
+      checkedAt: new Date().toISOString(),
+      profiles: document.config.profiles.map((p) => {
+        const namespace = createHash("sha256")
+          .update(p.id)
+          .digest("hex")
+          .slice(0, 16);
+        return {
+          id: p.id,
+          nextAt: nextFamilySend(p),
+          deliveries: Object.entries(state.deliveries)
+            .filter(([key]) =>
+              p.id === "personal"
+                ? /^\d{4}-\d{2}-\d{2}$/.test(key) ||
+                  key.includes(":" + namespace + ":alert:")
+                : key.includes(":" + namespace),
+            )
+            .map(([key, value]) => ({ key, ...value }))
+            .sort((a, b) => b.at.localeCompare(a.at))
+            .slice(0, 10),
+        };
+      }),
+    };
+  });
+  app.post<{ Params: { id: string } }>(
+    "/api/family/:id/access",
+    { preHandler: adminRequest },
+    async (request) => {
+      if (!z.object({}).strict().safeParse(request.body).success)
+        throw new RequestError(
+          400,
+          "VALIDATION_ERROR",
+          "Yêu cầu không hợp lệ.",
+        );
+      const document = await read();
+      if (!document.config.profiles.some((p) => p.id === request.params.id))
+        throw new RequestError(
+          404,
+          "PROFILE_NOT_FOUND",
+          "Không tìm thấy hồ sơ.",
+        );
+      const token = randomBytes(32).toString("base64url"),
+        expiresAt = new Date(Date.now() + 90 * 86400000).toISOString();
+      await pool.query(
+        "INSERT INTO member_access(profile_id,token_hash,expires_at) VALUES($1,$2,$3) ON CONFLICT(profile_id) DO UPDATE SET token_hash=EXCLUDED.token_hash,expires_at=EXCLUDED.expires_at,created_at=now()",
+        [
+          request.params.id,
+          createHash("sha256").update(token).digest("hex"),
+          expiresAt,
+        ],
+      );
+      const base = process.env.MEMBER_PUBLIC_URL;
+      // In Docker the container IP is not usable by a phone; the dashboard asks for the PC's LAN address.
+      return {
+        path: "/#/member/" + token,
+        expiresAt,
+        ...(base ? { baseUrl: base } : {}),
+        localOnly: !base,
+      };
+    },
+  );
+  app.delete<{ Params: { id: string } }>(
+    "/api/family/:id/access",
+    { preHandler: adminRequest },
+    async (request) => {
+      if (!z.object({}).strict().safeParse(request.body).success)
+        throw new RequestError(
+          400,
+          "VALIDATION_ERROR",
+          "Yêu cầu không hợp lệ.",
+        );
+      await pool.query("DELETE FROM member_access WHERE profile_id=$1", [
+        request.params.id,
+      ]);
+      return { revoked: true };
+    },
+  );
+  async function member(request: FastifyRequest) {
+    const token = request.headers.authorization?.match(
+      /^Bearer ([A-Za-z0-9_-]{43})$/,
+    )?.[1];
+    if (!token)
+      throw new RequestError(
+        401,
+        "MEMBER_ACCESS",
+        "Liên kết không hợp lệ hoặc đã hết hạn.",
+      );
+    const access = (
+      await pool.query(
+        "SELECT profile_id FROM member_access WHERE token_hash=$1 AND expires_at>now()",
+        [createHash("sha256").update(token).digest("hex")],
+      )
+    ).rows[0];
+    if (!access)
+      throw new RequestError(
+        401,
+        "MEMBER_ACCESS",
+        "Liên kết không hợp lệ hoặc đã hết hạn.",
+      );
+    const document = await read(),
+      profile = document.config.profiles.find(
+        (p) => p.id === access.profile_id,
+      );
+    if (!profile)
+      throw new RequestError(
+        401,
+        "MEMBER_ACCESS",
+        "Liên kết không hợp lệ hoặc đã hết hạn.",
+      );
+    return { document, profile };
+  }
+  app.get("/api/member", async (request) => {
+    const { document, profile } = await member(request);
+    return {
+      name: profile.name,
+      preferences: memberPreferencesSchema.parse(
+        Object.fromEntries(
+          Object.entries(profile).filter(
+            ([key]) => key in memberPreferencesSchema.shape,
+          ),
+        ),
+      ),
+      revision: document.revision,
+      synced: document.revision === document.syncedRevision,
+    };
+  });
+  app.put("/api/member", async (request) => {
+    const { document, profile } = await member(request);
+    const parsed = z
+      .object({
+        preferences: memberPreferencesSchema,
+        revision: z.number().int().positive(),
+      })
+      .strict()
+      .safeParse(request.body);
+    if (!parsed.success)
+      throw new RequestError(
+        400,
+        "VALIDATION_ERROR",
+        "Kiểm tra chủ đề, ngày và giờ nhận.",
+      );
+    const config = familyConfigSchema.safeParse({
+      ...document.config,
+      profiles: document.config.profiles.map((p) =>
+        p.id === profile.id ? { ...p, ...parsed.data.preferences } : p,
+      ),
+    });
+    if (!config.success)
+      throw new RequestError(
+        400,
+        "VALIDATION_ERROR",
+        config.error.issues.map((i) => i.message).join(" "),
+      );
+    const result = await saveConfig(config.data, parsed.data.revision);
+    return {
+      revision: result.revision,
+      synced: result.revision === result.syncedRevision,
+      ...(result.syncError ? { syncError: result.syncError } : {}),
+    };
+  });
   app.get("/api/family", read);
   app.put("/api/family", { preHandler: adminRequest }, async (request) => {
     const parsed = z
@@ -123,31 +335,7 @@ export function registerFamilyRoutes(
         "Kiểm tra lại hồ sơ gia đình.",
         validationIssues(parsed.error),
       );
-    // Serialize edits and synchronization in this API process; SQL revision protects other instances.
-    if (syncing)
-      throw new RequestError(
-        409,
-        "SYNC_BUSY",
-        "Đang đồng bộ; dữ liệu nhập vẫn được giữ.",
-      );
-    const result = await pool.query(
-      "UPDATE family_configuration SET config=$1::jsonb,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision",
-      [JSON.stringify(parsed.data.config), parsed.data.revision],
-    );
-    if (!result.rowCount)
-      throw new RequestError(
-        409,
-        "REVISION_CONFLICT",
-        "Hồ sơ đã được sửa ở cửa sổ khác. Tải lại trước khi lưu.",
-      );
-    let syncError: string | undefined;
-    try {
-      await sync(parsed.data.config, result.rows[0].revision);
-    } catch {
-      syncError =
-        "Đã lưu trên máy nhưng chưa đồng bộ cloud. Lịch cloud vẫn dùng cấu hình trước đó; bấm Đồng bộ lại.";
-    }
-    return { ...(await read()), ...(syncError ? { syncError } : {}) };
+    return saveConfig(parsed.data.config, parsed.data.revision);
   });
   app.post(
     "/api/family/sync",

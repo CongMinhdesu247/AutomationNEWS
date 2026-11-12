@@ -50,6 +50,15 @@ export const familyProfileSchema = z
     github: z.boolean(),
     gold: z.boolean().optional(),
     usd: z.boolean().optional(),
+    alerts: z
+      .object({
+        enabled: z.boolean(),
+        goldChange: z.number().int().min(1000).max(10000000),
+        usdChange: z.number().int().min(1).max(10000),
+        aqiThreshold: z.number().int().min(50).max(500),
+      })
+      .strict()
+      .optional(),
     topic: z
       .string()
       .trim()
@@ -108,6 +117,23 @@ export const familyConfigSchema = z
     });
   });
 export type FamilyProfile = z.infer<typeof familyProfileSchema>;
+export const memberPreferencesSchema = z
+  .object({
+    enabled: familyProfileSchema.shape.enabled,
+    city: familyProfileSchema.shape.city,
+    newsTopics: familyProfileSchema.shape.newsTopics,
+    sendTime: familyProfileSchema.shape.sendTime,
+    days: familyProfileSchema.shape.days,
+    weather: familyProfileSchema.shape.weather,
+    airQuality: familyProfileSchema.shape.airQuality,
+    fuel: familyProfileSchema.shape.fuel,
+    github: familyProfileSchema.shape.github,
+    gold: familyProfileSchema.shape.gold,
+    usd: familyProfileSchema.shape.usd,
+    alerts: familyProfileSchema.shape.alerts,
+  })
+  .strict();
+export type MemberPreferences = z.infer<typeof memberPreferencesSchema>;
 export type FamilyConfig = z.infer<typeof familyConfigSchema>;
 export type FamilyDocument = {
   config: FamilyConfig;
