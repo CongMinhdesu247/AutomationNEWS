@@ -142,7 +142,7 @@ export class WorkflowQueue {
     if (
       !settings.rss.some((source) => source.enabled) &&
       !settings.weather.enabled &&
-      !settings.github.enabled && !settings.fuel?.enabled
+      !settings.github.enabled && !settings.fuel?.enabled && !settings.airQuality?.enabled
     )
       throw new RequestError(
         400,
@@ -150,7 +150,7 @@ export class WorkflowQueue {
         "Bật ít nhất một nguồn và lưu cấu hình trước khi tạo bản tin.",
       );
     const id = crypto.randomUUID();
-    const workflow = digestWorkflow(this.options.sourceTimeoutMs ?? 25000, settings.fuel?.enabled ?? false);
+    const workflow = digestWorkflow(this.options.sourceTimeoutMs ?? 25000, settings.fuel?.enabled ?? false, settings.airQuality?.enabled ?? false);
     await client.query(
       "INSERT INTO workflow_runs(id,idempotency_key,request_payload,workflow,settings_snapshot,status,scheduled_at,schedule_day) VALUES($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,$8)",
       [

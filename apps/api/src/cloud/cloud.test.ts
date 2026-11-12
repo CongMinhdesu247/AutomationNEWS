@@ -10,6 +10,7 @@ import {
 } from "./state.js";
 import type { HttpClient } from "../connectors/http.js";
 import { fuelPriceUrl, petrolimexHome } from "../connectors/fuel.js";
+import { airQualityUrl } from "../connectors/air-quality.js";
 
 const at = new Date("2026-11-12T00:00:00Z");
 const settings: Settings = {
@@ -112,6 +113,20 @@ function fixture({
 }
 
 describe("cloud execution without local PostgreSQL", () => {
+  it("supports Hanoi air-quality-only digests and still sends weather when the air source fails", async () => {
+    const f = fixture();
+    const airSettings: Settings = { ...structuredClone(defaultSettings), airQuality: { enabled: true }, notifications: settings.notifications };
+    let fail = false;
+    const http: HttpClient = (url, options) => url === airQualityUrl ? Promise.resolve({ status: fail ? 401 : 200, headers: {}, body: JSON.stringify({ current: { time: +at/1000, us_aqi: 125, pm2_5: 41.4 }, current_units: { pm2_5: "μg/m³" } }) }) : f.http(url,options);
+    const result = await runCloudDigest({ state: new MemoryState(), settings: airSettings, http, now: () => at });
+    expect(result).toEqual({ status: "sent", sourceStatus: "success" });
+    expect(f.sends[0]?.message).toContain("AQI Mỹ: 125");
+    fail = true;
+    const partial = await runCloudDigest({ state: new MemoryState(), settings: { ...settings, airQuality: { enabled: true } }, http, now: () => at });
+    expect(partial).toMatchObject({ status: "sent", sourceStatus: "partial" });
+    expect(f.sends[1]?.message).toContain("Chưa lấy được dự báo chất lượng không khí");
+    expect(f.sends[1]?.message).toContain("20–26");
+  });
   it("sends fuel-only digests and advances the public price baseline only after successful delivery", async () => {
     const state = new MemoryState();
     const onlyFuel: Settings = { ...structuredClone(defaultSettings), fuel: { enabled: true }, notifications: settings.notifications };

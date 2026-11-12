@@ -530,6 +530,12 @@ export default function App() {
                       checked={draft.fuel?.enabled ?? false}
                       onChange={(enabled) => change({ ...draft, fuel: { enabled } })}
                     />
+                    <Toggle
+                      label="Thêm chất lượng không khí Hà Nội"
+                      checked={draft.airQuality?.enabled ?? false}
+                      onChange={(enabled) => change({ ...draft, airQuality: { enabled } })}
+                    />
+                    <p className="muted">AQI theo thang Mỹ và PM2.5 tại trung tâm Hà Nội, từ mô hình dự báo Open-Meteo/CAMS; không phải số đo tại trạm.</p>
                     <p className="muted">Chỉ theo dõi Xăng E10 RON 95-III. Mức tăng/giảm được so với bản tin trước.</p>
                     <Toggle
                       label="Thêm thời tiết vào bản tin"

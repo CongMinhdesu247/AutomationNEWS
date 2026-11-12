@@ -83,6 +83,10 @@ function digest(): Digest {
 }
 it("keeps sections separate and all five repo summaries within the UTF-8 push limit", () => {
   const value = digest();
+  value.sources!.airQuality = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
+    location: "Hà Nội", forecastAt: value.createdAt, usAqi: 125, pm25: 41.4,
+    category: "Không tốt cho nhóm nhạy cảm", sourceUrl: "https://open-meteo.com/en/docs/air-quality-api", attribution: "Dự báo Open-Meteo/CAMS",
+  } };
   value.sources!.fuel = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
     region: "Petrolimex vùng 1", sourceUrl: "https://www.petrolimex.com.vn/", updatedAt: value.createdAt,
     effectiveAt: "2026-11-11T08:00:00Z", comparedAt: "2026-11-11T00:00:00Z",
@@ -95,6 +99,9 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("Xăng E10 RON 95-III: 19.840 đ/lít · Giảm 160 đ");
   expect(message).not.toContain("Xăng E10 RON 95-V");
   expect(message).toContain("📰 Tin tức · 3 tin");
+  expect(message).toContain("💨 Hà Nội · AQI Mỹ: 125");
+  expect(message).toContain("PM2.5: 41,4 µg/m³");
+  expect(message).toContain("Dự báo Open-Meteo/CAMS");
   expect((message.match(/^• /gm) ?? [])).toHaveLength(3);
   expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
   for (let index = 1; index <= 5; index++)

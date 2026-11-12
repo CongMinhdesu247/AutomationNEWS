@@ -7,6 +7,7 @@ import {
   type SourceResult,
 } from "@hub/contracts";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather, dateInZone } from "../connectors/weather.js";
 import { createGithubConnector } from "../connectors/github.js";
@@ -22,7 +23,7 @@ export function parseCloudSettings(value: string): Settings {
   if (
     !settings.rss.some((feed) => feed.enabled) &&
     !settings.weather.enabled &&
-    !settings.github.enabled && !settings.fuel?.enabled
+    !settings.github.enabled && !settings.fuel?.enabled && !settings.airQuality?.enabled
   )
     throw new Error("Enable at least one cloud source.");
   if (new URL(settings.notifications.serverUrl).protocol !== "https:")
@@ -50,6 +51,7 @@ export type CloudOptions = {
     unavailable: number;
   }) => void;
   onFuel?: (result: { status: string; products: number }) => void;
+  onAirQuality?: (result: { status: string }) => void;
 };
 
 export async function runCloudDigest(options: CloudOptions) {
@@ -110,7 +112,7 @@ export async function runCloudDigest(options: CloudOptions) {
     translationCache:
       revision.state.translations ?? (revision.state.translations = {}),
   });
-  const [rss, weather, githubResult, fuel] = await Promise.all([
+  const [rss, weather, githubResult, fuel, airQuality] = await Promise.all([
     collect(() => fetchRss(settings.rss, context)),
     collect(() =>
       fetchWeather(settings.weather, settings.newsletter.timezone, context),
@@ -125,8 +127,10 @@ export async function runCloudDigest(options: CloudOptions) {
       }),
     ),
     collect(() => fetchFuel(settings.fuel, { ...context, baseline: revision.state.fuelBaseline })),
+    collect(() => fetchAirQuality(settings.airQuality, context)),
   ]);
-  const sources: DigestSources = { rss, weather, github: githubResult, fuel };
+  const sources: DigestSources = { rss, weather, github: githubResult, fuel, airQuality };
+  options.onAirQuality?.({ status: airQuality.status });
   options.onFuel?.({ status: fuel.status, products: fuel.data?.items.length ?? 0 });
   const selectedRepos = [
     ...githubResult.data.rising,

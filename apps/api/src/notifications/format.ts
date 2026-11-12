@@ -64,6 +64,17 @@ export function formatDigestNotification(digest: Digest) {
   } else if (sources.weather.status !== "disabled")
     blocks.push("🌤 Thời tiết\nChưa lấy được dự báo hôm nay.");
 
+  const air = sources.airQuality;
+  if (air && air.status !== "disabled") {
+    const data = air.data;
+    blocks.push(data ? [
+      "💨 Hà Nội · AQI Mỹ: " + (data.usAqi ?? "?") + " · " + (data.category ?? "Chưa phân loại"),
+      "PM2.5: " + (data.pm25?.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) ?? "?") + " µg/m³ · " + new Date(data.forecastAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }),
+      "Dự báo Open-Meteo/CAMS · CC BY 4.0",
+      ...(!weather ? ["https://open-meteo.com/"] : []),
+    ].join("\n") : "💨 Hà Nội · Chưa lấy được dự báo chất lượng không khí.");
+  }
+
   const fuel = sources.fuel;
   if (fuel && fuel.status !== "disabled") {
     const selected = fuel.data ? { ...fuel.data, items: fuel.data.items.filter((item) => /^Xăng\s+E10\s+RON\s*95\s*-\s*III$/i.test(item.name.trim())) } : null;

@@ -7,4 +7,8 @@ it("keeps legacy DAGs unchanged and connects the enabled fuel branch before comp
   expect(workflow.nodes.find(node => node.id === "fetch_fuel")?.type).toBe("fetch_fuel");
   expect(workflow.edges).toContainEqual({from:"start",to:"fetch_fuel"});
   expect(workflow.edges).toContainEqual({from:"fetch_fuel",to:"compose_digest"});
+  const air = digestWorkflow(25000, false, true);
+  expect(air.nodes).toHaveLength(7);
+  expect(air.edges).toContainEqual({ from: "fetch_air_quality", to: "compose_digest" });
+  expect(digestWorkflow(25000, true, true).nodes).toHaveLength(8);
 });

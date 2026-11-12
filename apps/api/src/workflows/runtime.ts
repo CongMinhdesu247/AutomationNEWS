@@ -8,6 +8,7 @@ import type {
 import { DigestStore } from "../digests/store.js";
 import type { ServiceOptions } from "../digests/service.js";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
 import { createGithubConnector, emptyGithub } from "../connectors/github.js";
@@ -60,6 +61,7 @@ export function composeDigest(input: DependencyInput, at: string) {
     weather: value("fetch_weather", null),
     github: value("fetch_github", emptyGithub()),
     ...(input.dependencies.fetch_fuel ? { fuel: value("fetch_fuel", null) } : {}),
+    ...(input.dependencies.fetch_air_quality ? { airQuality: value("fetch_air_quality", null) } : {}),
   };
   const snapshots =
     (
@@ -122,6 +124,9 @@ export class DigestNodeExecutor {
     } else if (job.type === "fetch_fuel") {
       enabled = config.fuel?.enabled ?? false;
       empty = null;
+    } else if (job.type === "fetch_air_quality") {
+      enabled = config.airQuality?.enabled ?? false;
+      empty = null;
     } else throw new Error("Unsupported node type.");
     if (!enabled)
       return {
@@ -149,6 +154,8 @@ export class DigestNodeExecutor {
     const operation =
       job.type === "fetch_rss"
         ? fetchRss(config.rss, context)
+        : job.type === "fetch_air_quality"
+          ? fetchAirQuality(config.airQuality, context)
         : job.type === "fetch_fuel"
           ? collectFuel()
         : job.type === "fetch_weather"

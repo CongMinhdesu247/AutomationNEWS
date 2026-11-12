@@ -12,6 +12,7 @@ try {
   const settings = parseCloudSettings(JSON.stringify({
     ...rawSettings,
     fuel: rawSettings.fuel ?? { enabled: process.env.HUB_FUEL_ENABLED === "true" },
+    airQuality: rawSettings.airQuality ?? { enabled: process.env.HUB_AIR_QUALITY_ENABLED === "true" },
   }));
   const result = await runCloudDigest({
     settings,
@@ -23,6 +24,7 @@ try {
     onSummaries: (counts) =>
       console.log("Vietnamese repository summaries:", JSON.stringify(counts)),
     onFuel: (result) => console.log("Fuel prices:", JSON.stringify(result)),
+    onAirQuality: (result) => console.log("Hanoi air quality:", JSON.stringify(result)),
   });
   console.log(
     "Cloud digest:",

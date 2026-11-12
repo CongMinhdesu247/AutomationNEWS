@@ -448,6 +448,20 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           )}
           {digest.sources && (
             <>
+              {digest.sources.airQuality && digest.sources.airQuality.status !== "disabled" && (
+                <section className="digest-section">
+                  <SourceHeader title="Chất lượng không khí Hà Nội" result={digest.sources.airQuality} />
+                  {digest.sources.airQuality.data ? <>
+                    <div className="weather-facts">
+                      <p>AQI theo thang Mỹ<strong>{digest.sources.airQuality.data.usAqi ?? "Chưa có"}</strong></p>
+                      <p>Mức đánh giá<strong>{digest.sources.airQuality.data.category ?? "Chưa phân loại"}</strong></p>
+                      <p>PM2.5<strong>{digest.sources.airQuality.data.pm25?.toLocaleString("vi-VN", { maximumFractionDigits: 1 }) ?? "Chưa có"}{digest.sources.airQuality.data.pm25 !== null ? " µg/m³" : ""}</strong></p>
+                    </div>
+                    <p>Thời điểm dự báo: {when(digest.sources.airQuality.data.forecastAt)}</p>
+                    <p className="attribution"><a href={digest.sources.airQuality.data.sourceUrl} target="_blank" rel="noreferrer">{digest.sources.airQuality.data.attribution}</a></p>
+                  </> : <p>Chưa lấy được dữ liệu mới. Các nội dung khác vẫn có trong bản tin.</p>}
+                </section>
+              )}
               {digest.sources.fuel && digest.sources.fuel.status !== "disabled" && (
                 <section className="digest-section">
                   <SourceHeader title="Giá xăng RON 95" result={digest.sources.fuel} />

@@ -43,6 +43,7 @@ const tags = z
   });
 export const settingsSchema = z
   .object({
+    airQuality: z.object({ enabled: z.boolean() }).strict().optional(),
     fuel: z.object({ enabled: z.boolean() }).strict().optional(),
     newsletter: z
       .object({
@@ -170,6 +171,7 @@ export function validationIssues(error: z.ZodError): FieldIssue[] {
   }));
 }
 export const defaultSettings: Settings = {
+  airQuality: { enabled: false },
   fuel: { enabled: false },
   newsletter: {
     enabled: true,

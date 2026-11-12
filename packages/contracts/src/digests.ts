@@ -75,10 +75,20 @@ export type GithubData = {
   }[];
 };
 export type DigestSources = {
+  airQuality?: SourceResult<AirQualityData | null>;
   fuel?: SourceResult<FuelData | null>;
   rss: SourceResult<RssData>;
   weather: SourceResult<WeatherData | null>;
   github: SourceResult<GithubData>;
+};
+export type AirQualityData = {
+  location: "Hà Nội";
+  forecastAt: string;
+  usAqi: number | null;
+  pm25: number | null;
+  category: string | null;
+  sourceUrl: string;
+  attribution: string;
 };
 export type FuelData = {
   region: "Petrolimex vùng 1";
