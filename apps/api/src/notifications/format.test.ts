@@ -93,6 +93,9 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("🌤 Hà Nội: 13.5–20.9 °C\nMưa nhẹ\n☔");
   expect(message).toContain("\n\n📰 Tin tức");
   expect(message).toContain("Xăng E10 RON 95-III: 19.840 đ/lít · Giảm 160 đ");
+  expect(message).not.toContain("Xăng E10 RON 95-V");
+  expect(message).toContain("📰 Tin tức · 3 tin");
+  expect((message.match(/^• /gm) ?? [])).toHaveLength(3);
   expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
   for (let index = 1; index <= 5; index++)
     expect(message).toContain(

@@ -55,8 +55,8 @@ export async function fetchFuel(config: Settings["fuel"], {
     const [json, home] = await Promise.all([get(fuelPriceUrl()), get(petrolimexHome)]);
     const sourceUrl = priceAnnouncement(home);
     const effectiveAt = effectivePriceTime(await get(sourceUrl));
-    const rows = pricesSchema.parse(JSON.parse(json)).Objects.filter((row) => /\bRON\s*95\s*-\s*(?:III|V)\b/i.test(row.Title));
-    if (!rows.length) throw new ConnectorError("FUEL_MISSING_PRODUCT", "Nguồn chưa có giá RON 95.");
+    const rows = pricesSchema.parse(JSON.parse(json)).Objects.filter((row) => /^Xăng\s+E10\s+RON\s*95\s*-\s*III$/i.test(plainText(row.Title,100)));
+    if (!rows.length) throw new ConnectorError("FUEL_MISSING_PRODUCT", "Nguồn chưa có giá Xăng E10 RON 95-III.");
     if (+new Date(effectiveAt) > +now()) throw new ConnectorError("FUEL_NOT_EFFECTIVE", "Bảng giá mới chưa có hiệu lực; chưa hiển thị để tránh nhầm giá.");
     // Reject a mismatched/old widget instead of attaching the newest announcement's date to old prices.
     if (rows.some((row) => Math.abs(Date.parse(row.LastModified) - Date.parse(effectiveAt)) > 24*3600000 || Date.parse(row.LastModified) > +now()))

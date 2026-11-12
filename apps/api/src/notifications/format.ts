@@ -66,7 +66,8 @@ export function formatDigestNotification(digest: Digest) {
 
   const fuel = sources.fuel;
   if (fuel && fuel.status !== "disabled") {
-    const data = fuel.data;
+    const selected = fuel.data ? { ...fuel.data, items: fuel.data.items.filter((item) => /^Xăng\s+E10\s+RON\s*95\s*-\s*III$/i.test(item.name.trim())) } : null;
+    const data = selected?.items.length ? selected : null;
     const money = (value: number) => value.toLocaleString("vi-VN");
     blocks.push(data ? [
       "⛽ RON 95 · " + data.region,
@@ -79,13 +80,11 @@ export function formatDigestNotification(digest: Digest) {
   }
 
   if (sources.rss.status !== "disabled") {
-    const items = sources.rss.data.items;
+    const items = sources.rss.data.items.slice(0, 3);
     const lines = ["📰 Tin tức · " + items.length + " tin"];
-    for (const item of items.slice(0, 5)) {
+    for (const item of items) {
       const headline = "• " + clip(oneLine(item.title), 105);
       const link = Buffer.byteLength(item.url) <= 150 ? "\n" + item.url : "";
-      if (Buffer.byteLength([...lines, headline + link].join("\n\n")) > 760)
-        break;
       lines.push(headline + link);
     }
     if (!items.length)

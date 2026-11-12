@@ -19,15 +19,14 @@ function fixture({ products = rows, article = "Mức giá mới có hiệu lực
   };
 }
 const context = { now: () => at, signal: AbortSignal.timeout(10000) };
-it("selects only RON 95, preserves E10/product grades, reads zone 1, and compares the same products", async () => {
+it("selects only E10 RON 95-III, reads zone 1, and compares the same product", async () => {
   const result = await fetchFuel({ enabled: true }, { ...context, http: fixture(), baseline: { at: "2026-11-11T00:00:00Z", prices: { "95iii": 20000, "95v": 21840, "92": 18000 } } });
   expect(result.status).toBe("success");
   expect(result.data?.effectiveAt).toBe("2026-11-12T08:00:00.000Z");
   expect(result.data?.items).toEqual([
     { code: "95iii", name: "Xăng E10 RON 95-III", price: 19840, change: -160 },
-    { code: "95v", name: "Xăng E10 RON 95-V", price: 21840, change: 0 },
   ]);
-  expect(fuelBaseline(result)?.prices).toEqual({ "95iii": 19840, "95v": 21840 });
+  expect(fuelBaseline(result)?.prices).toEqual({ "95iii": 19840 });
 });
 it("does not claim a change on first collection or compare an expired baseline", async () => {
   for (const baseline of [undefined, { at: "2026-10-01T00:00:00Z", prices: { "95iii": 10000 } }]) {
@@ -48,6 +47,7 @@ it("fails honestly on layout, invalid price, no product, or HTTP errors without 
     [fixture({ home: '<a href="https://evil.example/ndi/thong-cao-bao-chi/petrolimex-dieu-chinh-gia-xang-dau-foo.html">Giá</a>' }), "FUEL_LAYOUT_CHANGED"],
     [fixture({ article: "Không có ngày" }), "FUEL_MISSING_DATE"],
     [fixture({ products: [rows[2]!] }), "FUEL_MISSING_PRODUCT"],
+    [fixture({ products: [rows[1]!] }), "FUEL_MISSING_PRODUCT"],
     [fixture({ products: [{ ...rows[0]!, Zone1Price: -1 }] }), "SOURCE_UNAVAILABLE"],
     [fixture({ status: 503 }), "HTTP_503"],
   ] as const) {
