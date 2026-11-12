@@ -7,6 +7,6 @@
 - Xác minh ngày hiệu lực từ thông cáo. Không hiển thị giá mới trước hiệu lực; không gán ngày thông cáo mới cho bảng giá cũ lệch quá 24 giờ. `LastModified` của widget được lưu riêng, không coi là giờ hiệu lực.
 - Cloud lưu giá của lần gửi thành công trước để so sánh theo đúng ID sản phẩm. Lần đầu, sản phẩm mới, hoặc baseline quá 14 ngày: không tự suy ra mức tăng/giảm. Chạy thử không thay đổi baseline. Local so với bản tin đã hoàn tất gần nhất có dữ liệu giá thành công.
 - Nhánh DAG `fetch_fuel` độc lập, dùng timeout/retry/DLQ hiện có. Không cần thay đổi schema PostgreSQL; kết quả nằm trong JSON bản tin.
-- Formatter chung cho local/cloud: phần giá đặt sau thời tiết, trước tin tức và GitHub. Thông báo có tối đa 3 tiêu đề RSS và giữ đủ 5 repo GitHub, giới hạn 3.900 byte UTF-8. Dashboard vẫn giữ danh sách RSS đầy đủ để đọc lại.
+- Formatter chung cho local/cloud: phần giá đặt sau thời tiết, trước tin tức và GitHub. Thông báo có tối đa 3 tiêu đề RSS và giữ đủ 5 repo GitHub, giới hạn 1.600 byte UTF-8. Dashboard vẫn giữ danh sách RSS đầy đủ để đọc lại.
 
 Kiểm tra: `pnpm exec vitest run apps/api/src/connectors/fuel.test.ts apps/api/src/cloud/cloud.test.ts apps/api/src/notifications/format.test.ts`; `pnpm typecheck`; `pnpm build`.

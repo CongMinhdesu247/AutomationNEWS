@@ -7,6 +7,6 @@
 - `airQuality.enabled` bật/tắt nguồn. Cấu hình cũ thiếu trường này vẫn hợp lệ và mặc định tắt local. Workflow bật `HUB_AIR_QUALITY_ENABLED=true` để làm dự phòng cho secret cũ; cấu hình rõ ràng trong secret được ưu tiên.
 - Nhánh DAG `fetch_air_quality` độc lập, chỉ thêm khi nguồn được bật; dùng timeout, retry và DLQ hiện có. Lỗi nguồn này không chặn các nguồn khác.
 - Kết quả lưu trong JSON bản tin, không cần migration mới. Cloud không lưu dữ liệu AQI vào nhánh public state. Attribution Open-Meteo/CAMS và CC BY 4.0 xuất hiện trong dashboard/thông báo.
-- Thông báo vẫn giữ tối đa 3 tin RSS, 1 loại Xăng E10 RON 95-III và 5 repo GitHub. Kiểm thử formatter xác minh đủ nội dung trong giới hạn 3.900 byte UTF-8.
+- Thông báo vẫn giữ tối đa 3 tin RSS, 1 loại Xăng E10 RON 95-III và 5 repo GitHub. Kiểm thử formatter xác minh đủ nội dung trong giới hạn 1.600 byte UTF-8.
 
 Kiểm tra: `pnpm test`, `pnpm build`. Kiểm thử riêng: `pnpm exec vitest run apps/api/src/connectors/air-quality.test.ts apps/api/src/cloud/cloud.test.ts apps/api/src/notifications/format.test.ts apps/api/src/workflows/definition.test.ts`.

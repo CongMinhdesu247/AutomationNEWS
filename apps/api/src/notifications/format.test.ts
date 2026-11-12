@@ -108,7 +108,7 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
     expect(message).toContain(
       index + ". owner/repo-" + index + " — Công cụ mã nguồn mở",
     );
-  expect(Buffer.byteLength(message)).toBeLessThanOrEqual(3900);
+  expect(Buffer.byteLength(message)).toBeLessThanOrEqual(1600);
   expect(message).not.toContain("�");
 });
 it("normalizes multiline descriptions, keeps authors' content and has an honest missing-description fallback", () => {
@@ -135,4 +135,15 @@ it("uses the Vietnamese summary in pushes while the original stays available in 
   expect(value.sources!.github.data.newNotable[0]!.description).toContain(
     "An English",
   );
+});
+it("leaves push-gateway headroom with long names without dropping the fifth repo or source attribution", () => {
+  const value = digest();
+  for (const repo of value.sources!.github.data.newNotable) repo.name = "owner/" + "long-repository-name-".repeat(12) + repo.id;
+  const text = formatDigestNotification(value);
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(1600);
+  expect((text.match(/^\d\. /gm) ?? [])).toHaveLength(5);
+  expect((text.match(/^• /gm) ?? [])).toHaveLength(3);
+  expect(text).toContain("Open-Meteo");
+  expect(text).toContain("CC BY 4.0");
+  expect(text).not.toContain("�");
 });

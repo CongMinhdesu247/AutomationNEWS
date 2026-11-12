@@ -32,3 +32,5 @@ API Docker nhận hai biến quản trị riêng, worker/scheduler không nhận
 Migration `007_family.sql` chỉ thêm bảng mới, không sửa/xóa lịch sử. Trước khi khởi động API mới: `docker compose --env-file .env -f infra/compose.yaml run --rm --no-deps api pnpm --filter @hub/api migrate`. Giữ lịch local tắt khi dùng cloud.
 
 Kiểm thử: `pnpm test`, `pnpm build`; DB integration `apps/api/src/family/family.integration.test.ts` dùng schema ngẫu nhiên trên `TEST_DATABASE_URL`. Các test kiểm tra lịch theo ngày, riêng người nhận, kế thừa ledger, retry sau kết quả gửi chưa rõ, mã hóa secret, conflict revision và trạng thái sync thất bại.
+
+Thông báo tự rút gọn dưới 1.600 byte UTF-8 để dành chỗ cho các bản sao dữ liệu trong FCM/APNS. Khi cần, bỏ link phụ và rút ngắn mô tả trong push; dashboard local vẫn có nội dung/link đầy đủ. Vẫn giữ tối đa 3 tiêu đề RSS và 5 repo.

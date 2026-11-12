@@ -1,8 +1,8 @@
 # Nhận bản tin khi PC tắt
 
-GitHub-hosted runner chạy bản tin mỗi sáng; không gọi dashboard localhost, không cần PostgreSQL hoặc Docker trên PC. iPhone nhận qua ntfy như trước. Dashboard cục bộ vẫn dành cho xem/test workflow trên máy, chưa đồng bộ lịch sử cloud vào dashboard.
+GitHub-hosted runner chạy bản tin theo lịch của từng hồ sơ; không gọi dashboard localhost, không cần PostgreSQL hoặc Docker trên PC. iPhone nhận qua ntfy như trước. Quản lý hồ sơ và đồng bộ cấu hình tại mục **Gia đình**; xem [hướng dẫn gia đình](family-profiles.md). Lịch sử cloud chưa được nhập về dashboard local.
 
-## Kích hoạt
+## Kích hoạt chế độ cũ (một người)
 
 1. Đưa workflow `.github/workflows/morning-digest.yml` và code cloud lên default branch của repository GitHub của bạn. Workflow chỉ chạy theo schedule/workflow_dispatch, không chạy khi push hoặc từ pull request.
 2. Bật nguồn RSS/thời tiết/GitHub và ntfy trong dashboard, lưu cấu hình. Chạy từ thư mục repository:
@@ -19,17 +19,17 @@ pnpm --filter @hub/api exec tsx src/cloud/export-local.ts
 5. Run workflow lần nữa với dry_run=false để nhận một thông báo thật. force_send=false chống gửi lại cùng ngày.
 6. Khi nhận được thông báo cloud, tắt **Bật bản tin** trong dashboard cục bộ và lưu để tránh scheduler PC gửi trùng. Không cập nhật secret cloud từ settings đã tắt này, nếu không cloud cũng bị tắt.
 
-Việc sửa dashboard sau đó không tự sửa GitHub Secret. Muốn thay nguồn/địa điểm, cập nhật HUB_SETTINGS_JSON và giữ newsletter.enabled=true cho cloud. Không cần bật PC vào giờ chạy sau khi đã kích hoạt.
+Trong chế độ cũ, sửa Cài đặt không tự sửa GitHub Secret. Với chế độ gia đình, **Lưu & đồng bộ** cập nhật secret `HUB_FAMILY_JSON` an toàn ngay từ dashboard; không cần sửa secret thủ công. Khi family secret có mặt, nó là cấu hình có hiệu lực thay cho cấu hình một người cũ.
 
 ## Lịch và chi phí
 
-Cron `0 0 * * *` là 07:00 Asia/Ho_Chi_Minh. Cron trong YAML quyết định giờ chạy cloud; trường sendTime trong settings chỉ là cấu hình cục bộ, không tự chỉnh YAML. Đổi cron khi cần. GitHub có thể chạy trễ hoặc bỏ job khi tải cao; không dùng như hệ thống báo thức chính xác. Public repo không hoạt động 60 ngày có thể bị tắt schedule; kiểm tra Actions và bật lại khi cần.
+Cron `0,30 * * * *` kiểm tra mỗi 30 phút. Bộ chạy lọc hồ sơ đã tới giờ, đúng ngày trong tuần, chưa được thử gửi hôm nay; lịch gửi theo giờ Việt Nam. Cấu hình cũ một người chỉ gửi từ `sendTime` trở đi. GitHub có thể chạy trễ hoặc bỏ job khi tải cao; không dùng như hệ thống báo thức chính xác. Public repo không hoạt động 60 ngày có thể bị tắt schedule; kiểm tra Actions và bật lại khi cần.
 
 Runner Ubuntu tiêu chuẩn của public repository miễn phí theo điều kiện hiện tại của GitHub. Workflow timeout 7 phút, không tạo artifact/cache trả phí, không thuê server/database. Private repository dùng quota của tài khoản; không tự bật chi tiêu hay runner trả phí.
 
 ## Dữ liệu và bảo đảm
 
-- Dùng lại connector RSS, Open-Meteo, GitHub và ntfy; ba nguồn chạy song song. Push có nội dung tin tức, dự báo và repository/link, giới hạn dưới 4096 byte. Không gắn link localhost.
+- Connector RSS, Open-Meteo, AQI, GitHub, xăng và ntfy dùng chung cho local/cloud. Push tối đa 1.600 byte UTF-8 để chừa chỗ cho dữ liệu FCM/APNS và metadata. Nếu cần rút gọn, vẫn giữ 3 tiêu đề RSS/5 repo, cắt ngắn tóm tắt và bỏ link phụ trong push; nội dung và link đầy đủ vẫn có trong dashboard local. Không gắn link localhost.
 - Read transient lỗi được thử thêm tối đa 2 lần, có jitter; không retry trước Retry-After/reset. Hint lớn hơn 20 giây được để thành lỗi nguồn để vẫn gửi bản tin một phần trong thời gian hữu hạn. POST ntfy không tự retry khi không rõ kết quả.
 - Branch orphan `hub-cloud-state` lưu ID repository/số sao/thời gian snapshot, giá RON 95 công khai của lần gửi thành công trước, trạng thái gửi theo ngày và cache bản dịch tiếng Việt của mô tả repository công khai (tối đa 150 mục/30 ngày). Không lưu tọa độ, topic, settings, bản tin hoặc token. Nhánh này công khai nếu repository công khai. Head giữ snapshot 3 ngày và tối đa 4000 mục, delivery/baseline giá xăng 14 ngày; Git history vẫn giữ phiên bản cũ.
 - Snapshot gần 24 giờ trong cửa sổ 20–28 giờ để tính tăng sao; ngày đầu hoặc lịch bị trễ quá cửa sổ dùng dự án mới đáng chú ý, không bịa tăng sao.

@@ -39,7 +39,7 @@ export function notificationTitle(digest: Digest) {
 }
 
 /** Plain text for both local and cloud pushes; sections stay legible when expanded on iOS. */
-export function formatDigestNotification(digest: Digest) {
+export function formatDigestNotification(digest: Digest, compact = false, tight = false): string {
   const sources = digest.sources;
   if (!sources) return "Bản tin đang được chuẩn bị. Vui lòng thử lại sau.";
   const blocks: string[] = [];
@@ -84,8 +84,8 @@ export function formatDigestNotification(digest: Digest) {
       "⛽ RON 95 · " + data.region,
       ...data.items.map((item) => item.name + ": " + money(item.price) + " đ/lít" +
         (item.change === null ? "" : item.change === 0 ? " · Không đổi" : " · " + (item.change > 0 ? "Tăng " : "Giảm ") + money(Math.abs(item.change)) + " đ")),
-      "Hiệu lực: " + new Date(data.effectiveAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }),
-      data.comparedAt ? "So với bản tin " + new Date(data.comparedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Lần đầu theo dõi; chưa có giá để so sánh.",
+      ...(!compact ? ["Hiệu lực: " + new Date(data.effectiveAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }),
+      data.comparedAt ? "So với bản tin " + new Date(data.comparedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Lần đầu theo dõi; chưa có giá để so sánh."] : []),
       "Nguồn: Petrolimex",
     ].join("\n") : "⛽ RON 95\nChưa lấy được giá đã xác minh từ Petrolimex.");
   }
@@ -94,8 +94,8 @@ export function formatDigestNotification(digest: Digest) {
     const items = sources.rss.data.items.slice(0, 3);
     const lines = ["📰 Tin tức · " + items.length + " tin"];
     for (const item of items) {
-      const headline = "• " + clip(oneLine(item.title), 105);
-      const link = Buffer.byteLength(item.url) <= 150 ? "\n" + item.url : "";
+      const headline = "• " + clip(oneLine(item.title), compact ? (tight ? 60 : 75) : 105);
+      const link = !compact && Buffer.byteLength(item.url) <= 150 ? "\n" + item.url : "";
       lines.push(headline + link);
     }
     if (!items.length)
@@ -120,7 +120,7 @@ export function formatDigestNotification(digest: Digest) {
     const lines = ["🚀 GitHub · " + repositories.length + " dự án nổi bật"];
     repositories.forEach((repo, index) => {
       const rising = repo as Partial<RisingRepository>;
-      const growth =
+      const growth = compact ? repo.stars.toLocaleString("vi-VN") + " ★" :
         typeof rising.starChange === "number" &&
         typeof rising.intervalHours === "number"
           ? (rising.starChange > 0 ? "+" : "") +
@@ -129,14 +129,14 @@ export function formatDigestNotification(digest: Digest) {
             rising.intervalHours.toFixed(1) +
             "h"
           : repo.stars.toLocaleString("vi-VN") + " sao · Mới đáng chú ý";
-      const url = Buffer.byteLength(repo.url) <= 160 ? "\n" + repo.url : "";
+      const url = !compact && Buffer.byteLength(repo.url) <= 160 ? "\n" + repo.url : "";
       lines.push(
         index +
           1 +
           ". " +
-          clip(oneLine(repo.name), 85) +
+          clip(oneLine(repo.name), compact ? 60 : 85) +
           " — " +
-          repositorySummary(repo) +
+          clip(repositorySummary(repo), compact ? (tight ? 60 : 85) : 210) +
           "\n" +
           growth +
           url,
@@ -148,7 +148,7 @@ export function formatDigestNotification(digest: Digest) {
           ? "Chưa lấy được dự án GitHub."
           : "Chưa có dự án phù hợp.",
       );
-    if (!sources.github.data.rising.length && repositories.length)
+    if (!compact && !sources.github.data.rising.length && repositories.length)
       lines.push("Dự án mới đáng chú ý; chưa đủ lịch sử để tính tăng sao.");
     blocks.push(lines.join("\n\n"));
   }
@@ -156,5 +156,10 @@ export function formatDigestNotification(digest: Digest) {
     blocks.push("ℹ️ Một số nguồn chưa có đủ dữ liệu.");
   if (weather)
     blocks.push("Thời tiết: Open-Meteo · CC BY 4.0\nhttps://open-meteo.com/");
-  return clip(blocks.join("\n\n"), 3900);
+  const message = blocks.join("\n\n");
+  // ntfy includes content in both FCM data and the APNS custom payload. Leave
+  // headroom for those copies and metadata rather than using the 4 KiB HTTP limit.
+  if (Buffer.byteLength(message) > 1600 && !compact) return formatDigestNotification(digest, true);
+  if (Buffer.byteLength(message) > 1600 && !tight) return formatDigestNotification(digest, true, true);
+  return clip(message, 1600);
 }
