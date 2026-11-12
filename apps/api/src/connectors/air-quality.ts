@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { AirQualityData, Settings, SourceResult } from "@hub/contracts";
 import { safeHttp, ensureOk, cleanError, ConnectorError, type HttpClient } from "./http.js";
 
-// Fixed Hanoi city-centre location, independent of the user's weather setting.
+// Hanoi city-centre default; family profiles override the location and coordinates.
 export const airQualityUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=21.0285&longitude=105.8542&current=us_aqi,pm2_5&domains=cams_global&timezone=Asia%2FHo_Chi_Minh&timeformat=unixtime&forecast_days=1";
 export function airQualityRequestUrl(config: Settings["airQuality"]) {
   const url = new URL(airQualityUrl);
@@ -38,11 +38,11 @@ export async function fetchAirQuality(config: Settings["airQuality"], {
     const current = schema.parse(JSON.parse(response.body)).current;
     const timestamp = current.time * 1000;
     if (timestamp > +now() + 10*60000 || +now() - timestamp > 3*3600000)
-      throw new ConnectorError("AIR_QUALITY_STALE", "Nguồn chưa có dự báo không khí đủ mới cho Hà Nội.");
+      throw new ConnectorError("AIR_QUALITY_STALE", "Nguồn chưa có dự báo không khí đủ mới cho địa điểm đã chọn.");
     const usAqi = current.us_aqi === null || current.us_aqi === undefined ? null : Math.round(current.us_aqi);
     const pm25 = current.pm2_5 ?? null;
     if (usAqi === null && pm25 === null)
-      throw new ConnectorError("AIR_QUALITY_MISSING", "Nguồn thiếu cả AQI và PM2.5 cho Hà Nội.");
+      throw new ConnectorError("AIR_QUALITY_MISSING", "Nguồn thiếu cả AQI và PM2.5 cho địa điểm đã chọn.");
     const missing = usAqi === null || pm25 === null;
     return {
       status: missing ? "partial" : "success", fetchedAt,
