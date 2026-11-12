@@ -2,6 +2,10 @@ import { isIP } from "node:net";
 import ipaddr from "ipaddr.js";
 import type { Settings, Digest, SourceResult } from "@hub/contracts";
 import {
+  formatDigestNotification,
+  notificationTitle,
+} from "../notifications/format.js";
+import {
   safeHttp,
   ensureOk,
   cleanError,
@@ -40,12 +44,6 @@ export function dashboardLink(
     return;
   }
 }
-const statusLabel = {
-  success: "thành công",
-  partial: "một phần",
-  failed: "thất bại",
-  running: "đang tạo",
-};
 export async function sendNtfy(
   digest: Digest,
   config: Settings["notifications"],
@@ -75,25 +73,6 @@ export async function sendNtfy(
       errors: [],
     };
   try {
-    const sources = digest.sources;
-    const weather = sources?.weather.data;
-    const message =
-      "Bản tin đã lưu: " +
-      (sources?.rss.data.items.length ?? 0) +
-      " tin; " +
-      (weather
-        ? (weather.minTemperature ?? "?") +
-          "–" +
-          (weather.maxTemperature ?? "?") +
-          " °C" +
-          (weather.umbrella ? " (nên mang ô)" : "")
-        : "chưa có thời tiết") +
-      "; " +
-      ((sources?.github.data.rising.length ?? 0) +
-        (sources?.github.data.newNotable.length ?? 0)) +
-      " repository. Trạng thái: " +
-      statusLabel[digest.status] +
-      ".";
     const click = dashboardLink(publicBaseUrl, digest.id);
     const url = checkUrl(config.serverUrl);
     url.search = "";
@@ -109,8 +88,8 @@ export async function sendNtfy(
       },
       body: JSON.stringify({
         topic: config.topic,
-        title: "Bản tin cá nhân",
-        message: customMessage ?? message,
+        title: notificationTitle(digest),
+        message: customMessage ?? formatDigestNotification(digest),
         ...(click ? { click } : {}),
       }),
       maxBytes: 65536,

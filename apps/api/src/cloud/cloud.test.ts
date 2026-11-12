@@ -215,7 +215,7 @@ describe("cloud execution without local PostgreSQL", () => {
     expect(
       await runCloudDigest({ state, settings, http: f.http, now: () => at }),
     ).toMatchObject({ status: "sent", sourceStatus: "partial" });
-    expect(f.sends[0]!.message).toContain("chưa lấy được dữ liệu");
+    expect(f.sends[0]!.message).toContain("Chưa lấy được dự báo");
   });
   it("retries transient reads but does not violate a long Retry-After", async () => {
     const state = new MemoryState();

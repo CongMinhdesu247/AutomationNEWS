@@ -364,11 +364,18 @@ it("ntfy sends only a short Vietnamese summary, credentials stay in headers and 
   };
   const digest = {
     id: crypto.randomUUID(),
+    createdAt: at.toISOString(),
+    settings: defaultSettings,
     status: "partial",
     sources: {
-      rss: { data: { items: [{}] } },
-      weather: { data: null },
-      github: { data: { rising: [], newNotable: [] } },
+      rss: {
+        status: "success",
+        data: {
+          items: [{ title: "Tin mới", url: "https://news.example/item" }],
+        },
+      },
+      weather: { status: "disabled", data: null },
+      github: { status: "disabled", data: { rising: [], newNotable: [] } },
     },
   } as never;
   const result = await sendNtfy(

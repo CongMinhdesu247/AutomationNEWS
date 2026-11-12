@@ -207,23 +207,27 @@ export default function RunDashboard({ hash }: { hash: string }) {
     <div className="runs-dashboard">
       <div className="page-heading">
         <div>
-          <p className="breadcrumb">Personal Automation Hub / Workflow</p>
-          <h1>{id ? "Tiến độ tạo bản tin" : "Các lần tạo bản tin"}</h1>
+          <h1>{id ? "Tiến độ tạo bản tin" : "Hoạt động"}</h1>
           <p>
-            Worker chạy nền. Có thể reload hoặc quay lại sau để xem kết quả.
+            {id
+              ? "Theo dõi từng bước khi bản tin được tạo."
+              : "Lịch sử xử lý bản tin trên máy này."}
           </p>
         </div>
-        <span className="phase-badge">Workflow · Thực thi nền</span>
       </div>
       <div className="digest-toolbar">
-        <a href="#/digests">Bản tin đã lưu / Tạo bản tin mới</a>
+        <a href="#/digests" className="text-link">
+          Bản tin
+        </a>
         {id && <a href="#/runs">Tất cả workflow</a>}
-        <button
-          onClick={() => setRevision((value) => value + 1)}
-          disabled={loading}
-        >
-          Tải lại tiến độ
-        </button>
+        {(!id || error || connection === "reconnecting") && (
+          <button
+            onClick={() => setRevision((value) => value + 1)}
+            disabled={loading}
+          >
+            Tải lại tiến độ
+          </button>
+        )}
       </div>
       {error && (
         <p className="status error" role="alert">
@@ -247,22 +251,19 @@ export default function RunDashboard({ hash }: { hash: string }) {
               {labels[run.status]}
             </strong>
             <span>{run.workflowVersion}</span>
-            <small>ID: {run.id}</small>
+            <details>
+              <summary>Thông tin lần chạy</summary>
+              <small>ID: {run.id}</small>
+            </details>
             <small>
               Tạo {date(run.createdAt)} · Bắt đầu {date(run.startedAt)} · Kết
               thúc {date(run.completedAt)}
             </small>
           </div>
-          {!terminal(run.status) && (
-            <p className="notice" role="status">
-              Sự kiện được lưu cùng trạng thái. Nếu worker dừng, job đang chạy
-              sẽ được nhận lại sau khi lease hết hạn.
-            </p>
-          )}
           {run.status === "completed" && (
             <p className="status success">
-              Workflow đã hoàn tất. Chất lượng dữ liệu nguồn có thể là thành
-              công, một phần hoặc thất bại.
+              Đã xử lý xong. Mở bản tin để xem nội dung và tình trạng từng
+              nguồn.
             </p>
           )}
           {run.error && <p className="status error">{run.error.message}</p>}
@@ -271,11 +272,11 @@ export default function RunDashboard({ hash }: { hash: string }) {
               Mở bản tin đã lưu
             </a>
           )}
-          <section className="run-timeline" aria-label="Timeline sự kiện">
-            <h2>Diễn biến workflow</h2>
+          <details className="run-timeline" aria-label="Timeline sự kiện">
+            <summary>Nhật ký xử lý trực tiếp</summary>
             <p className="muted">
-              Tối đa 100 sự kiện gần nhất. Toàn bộ lịch sử vẫn được giữ trong
-              PostgreSQL.
+              Tối đa 100 sự kiện gần nhất. Lịch sử trong PostgreSQL có thể được
+              dọn theo chính sách lưu trữ; trạng thái workflow vẫn được giữ.
             </p>
             {run.eventsTruncated && (
               <p className="muted">Đang hiển thị phần cuối lịch sử sự kiện.</p>
@@ -295,7 +296,11 @@ export default function RunDashboard({ hash }: { hash: string }) {
             >
               <ol>
                 {run.recentEvents.map((event) => (
-                  <li key={event.id} data-event-id={event.id}>
+                  <li
+                    key={event.id}
+                    data-event-id={event.id}
+                    data-event-at={event.timestamp}
+                  >
                     <time dateTime={event.timestamp}>
                       {date(event.timestamp)}
                     </time>
@@ -322,7 +327,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
                 <p>Chưa có sự kiện telemetry được lưu cho run này.</p>
               )}
             </div>
-          </section>
+          </details>
           <ol className="run-nodes">
             {[...run.nodes]
               .sort((a, b) => order.indexOf(a.nodeId) - order.indexOf(b.nodeId))
@@ -331,7 +336,6 @@ export default function RunDashboard({ hash }: { hash: string }) {
                   <div className="run-node-heading">
                     <div>
                       <strong>{titles[node.nodeId] ?? node.nodeId}</strong>
-                      <small>{node.nodeId}</small>
                     </div>
                     <span className={"result-badge " + node.status}>
                       {labels[node.status]}
@@ -340,19 +344,22 @@ export default function RunDashboard({ hash }: { hash: string }) {
                       {duration(node.startedAt, node.completedAt, elapsedNow)}
                     </span>
                   </div>
-                  <small>
-                    {node.attempts} attempt · {node.recoveries} lần phục hồi ·{" "}
-                    {node.retryCount} lần lên lịch thử lại
-                    {node.workerId ? " · Worker " + node.workerId : ""}
-                  </small>
-                  {node.status === "queued" &&
-                    node.retryCount > 0 &&
-                    node.availableAt && (
-                      <small>Được thử lại từ {date(node.availableAt)}</small>
+                  <details>
+                    <summary>Chi tiết thực thi</summary>
+                    <small>
+                      {node.attempts} attempt · {node.recoveries} lần phục hồi ·{" "}
+                      {node.retryCount} lần lên lịch thử lại
+                      {node.workerId ? " · Worker " + node.workerId : ""}
+                    </small>
+                    {node.status === "queued" &&
+                      node.retryCount > 0 &&
+                      node.availableAt && (
+                        <small>Được thử lại từ {date(node.availableAt)}</small>
+                      )}
+                    {node.leaseUntil && (
+                      <small>Lease đến {date(node.leaseUntil)}</small>
                     )}
-                  {node.leaseUntil && (
-                    <small>Lease đến {date(node.leaseUntil)}</small>
-                  )}
+                  </details>
                   {node.error && (
                     <p
                       className={
@@ -374,7 +381,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
               <li key={item.id}>
                 <a href={"#/runs/" + item.id}>
                   <strong>Workflow {date(item.createdAt)}</strong>
-                  <small>{item.id}</small>
+                  <small>{item.workflowVersion}</small>
                 </a>
                 <span className={"result-badge " + item.status}>
                   {labels[item.status]}
@@ -387,21 +394,23 @@ export default function RunDashboard({ hash }: { hash: string }) {
               Chưa có workflow. Vào bản tin đã lưu để tạo bản tin đầu tiên.
             </p>
           )}
-          <div className="pagination">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              Trang trước
-            </button>
-            <span>Trang {page}</span>
-            <button
-              disabled={!list.hasMore}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Trang sau
-            </button>
-          </div>
+          {(page > 1 || list.hasMore) && (
+            <div className="pagination">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((value) => value - 1)}
+              >
+                Trang trước
+              </button>
+              <span>Trang {page}</span>
+              <button
+                disabled={!list.hasMore}
+                onClick={() => setPage((value) => value + 1)}
+              >
+                Trang sau
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

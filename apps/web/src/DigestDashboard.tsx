@@ -8,6 +8,7 @@ import type {
   Repository,
   RisingRepository,
 } from "@hub/contracts";
+import { Icon } from "./Icons";
 const statusText: Record<string, string> = {
   success: "Thành công",
   partial: "Một phần",
@@ -82,7 +83,10 @@ function Repositories({
           <a href={repo.url} target="_blank" rel="noreferrer">
             {repo.name}
           </a>
-          <p>{repo.description ?? "Không có mô tả."}</p>
+          <p>
+            {repo.description?.trim() ||
+              "Tác giả chưa cung cấp mô tả cho dự án này."}
+          </p>
           <small>
             {repo.language ?? "Chưa xác định ngôn ngữ"} ·{" "}
             {repo.stars.toLocaleString("vi-VN")} sao tổng · Snapshot{" "}
@@ -116,6 +120,25 @@ export default function DigestDashboard({ hash }: { hash: string }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
+  const [latest, setLatest] = useState<Digest | null>(null);
+  const latestId = !id && page === 1 ? list?.items[0]?.id : undefined;
+  useEffect(() => {
+    if (!latestId) {
+      setLatest(null);
+      return;
+    }
+    const controller = new AbortController();
+    void request<Digest>("/api/digests/" + latestId, {
+      signal: controller.signal,
+    })
+      .then((value) => {
+        if (!controller.signal.aborted) setLatest(value);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLatest(null);
+      });
+    return () => controller.abort();
+  }, [latestId]);
   const busy = useRef(false);
   const sendBusy = useRef(false);
   useEffect(() => {
@@ -213,25 +236,39 @@ export default function DigestDashboard({ hash }: { hash: string }) {
     <div className="digests-dashboard">
       <div className="page-heading">
         <div>
-          <p className="breadcrumb">Personal Automation Hub / Bản tin</p>
-          <h1>{id ? "Bản tin của bạn" : "Một nơi cho buổi sáng của bạn."}</h1>
+          {id && (
+            <a className="back-link" href="#/digests">
+              ‹ Tất cả bản tin
+            </a>
+          )}
+          <h1>
+            {id ? "Bản tin của bạn" : "Buổi sáng, gọn trong một bản tin."}
+          </h1>
           <p>
-            Tạo theo cấu hình đã lưu. Xem lịch tự động tại Lịch & tác vụ lỗi.
+            {id
+              ? "Tin tức, thời tiết và những dự án đáng chú ý."
+              : "Đọc lại nội dung đã lưu hoặc tạo bản tin mới từ nguồn của bạn."}
           </p>
         </div>
-        <span className="phase-badge">Bản tin · Chạy nền</span>
-      </div>
-      <div className="digest-toolbar">
-        <a href="#newsletter" className="settings-link">
-          Chỉnh cấu hình nguồn
-        </a>
-        <button
-          className="primary-button"
-          disabled={creating}
-          onClick={() => void create()}
-        >
-          {creating ? "Đang tạo bản tin…" : "Tạo bản tin ngay"}
-        </button>
+        {id ? (
+          <button
+            className="primary-button"
+            disabled={sending || !digest || digest.status === "running"}
+            onClick={() => void send()}
+          >
+            <Icon name="send" size={17} />
+            {sending ? "Đang gửi…" : "Gửi đến điện thoại"}
+          </button>
+        ) : (
+          <button
+            className="primary-button"
+            disabled={creating}
+            onClick={() => void create()}
+          >
+            <span aria-hidden="true">+</span>{" "}
+            {creating ? "Đang tạo…" : "Tạo bản tin"}
+          </button>
+        )}
       </div>
       {notice && (
         <div className="status" role="status">
@@ -243,20 +280,92 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           {error}
         </div>
       )}
-      <div className="digest-toolbar">
-        {id && <a href="#/digests">Tất cả bản tin</a>}
-        <button
-          className="secondary-button"
-          disabled={loading}
-          onClick={() => setReload((v) => v + 1)}
-        >
-          Tải lại bản tin
-        </button>
-      </div>
+      {error && (
+        <div className="digest-toolbar">
+          <button
+            className="secondary-button"
+            disabled={loading}
+            onClick={() => setReload((v) => v + 1)}
+          >
+            Thử tải lại
+          </button>
+        </div>
+      )}
       {loading && <p role="status">Đang tải bản tin…</p>}
       {!id && !loading && list && (
         <>
-          <h2>Bản tin đã lưu</h2>
+          {latest?.sources && (
+            <section className="latest-brief">
+              <div className="brief-heading">
+                <div>
+                  <span className="section-kicker">Gần nhất trên máy</span>
+                  <h2>
+                    {new Date(latest.createdAt).toLocaleDateString("vi-VN", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </h2>
+                </div>
+                <a href={"#/digests/" + latest.id} className="text-link">
+                  Đọc bản tin <Icon name="arrow" size={17} />
+                </a>
+              </div>
+              <div className="brief-overview">
+                <div className="brief-weather">
+                  <Icon name="sun" size={34} />
+                  <p>{latest.sources.weather.data?.location || "Thời tiết"}</p>
+                  <strong>
+                    {latest.sources.weather.data
+                      ? `${latest.sources.weather.data.minTemperature ?? "—"}–${latest.sources.weather.data.maxTemperature ?? "—"}°`
+                      : "Chưa có dữ liệu"}
+                  </strong>
+                  <p>
+                    {latest.sources.weather.data?.description ||
+                      "Bật nguồn thời tiết trong cài đặt."}
+                  </p>
+                  {latest.sources.weather.data?.rainProbability != null && (
+                    <small>
+                      Khả năng mưa {latest.sources.weather.data.rainProbability}
+                      %
+                    </small>
+                  )}
+                </div>
+                <div className="brief-highlights">
+                  <h3>Dự án đáng chú ý</h3>
+                  <ul>
+                    {[
+                      ...latest.sources.github.data.rising,
+                      ...latest.sources.github.data.newNotable,
+                    ]
+                      .slice(0, 3)
+                      .map((repo) => (
+                        <li key={repo.id}>
+                          <strong>{repo.name}</strong>
+                          <p>
+                            {repo.description?.trim() ||
+                              "Tác giả chưa cung cấp mô tả."}
+                          </p>
+                        </li>
+                      ))}
+                  </ul>
+                  {latest.sources.github.data.rising.length +
+                    latest.sources.github.data.newNotable.length ===
+                    0 && (
+                    <p className="muted">
+                      Chưa có dự án GitHub trong bản tin này.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+          <div className="section-heading">
+            <h2>Lịch sử bản tin</h2>
+            <a href="#/settings/rss" className="text-link">
+              Quản lý nguồn
+            </a>
+          </div>
           {list.items.length === 0 ? (
             <div className="empty-state">
               <strong>Chưa có bản tin nào</strong>
@@ -270,7 +379,11 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                 <li key={item.id}>
                   <a href={"#/digests/" + item.id}>
                     <strong>Bản tin {when(item.createdAt)}</strong>
-                    <small>{item.id}</small>
+                    <small>
+                      {item.completedAt
+                        ? "Đã lưu đầy đủ nội dung"
+                        : "Đang thu thập nội dung"}
+                    </small>
                   </a>
                   <span className={"result-badge " + item.status}>
                     {statusText[item.status]}
@@ -279,18 +392,23 @@ export default function DigestDashboard({ hash }: { hash: string }) {
               ))}
             </ul>
           )}
-          <div className="pagination">
-            <button disabled={page === 1} onClick={() => setPage((v) => v - 1)}>
-              Trang trước
-            </button>
-            <span>Trang {page}</span>
-            <button
-              disabled={!list.hasMore}
-              onClick={() => setPage((v) => v + 1)}
-            >
-              Trang sau
-            </button>
-          </div>
+          {(page > 1 || list.hasMore) && (
+            <div className="pagination">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((v) => v - 1)}
+              >
+                Trang trước
+              </button>
+              <span>Trang {page}</span>
+              <button
+                disabled={!list.hasMore}
+                onClick={() => setPage((v) => v + 1)}
+              >
+                Trang sau
+              </button>
+            </div>
+          )}
         </>
       )}
       {digest && !loading && (
@@ -303,9 +421,14 @@ export default function DigestDashboard({ hash }: { hash: string }) {
               Tạo: {when(digest.createdAt)} · Hoàn tất:{" "}
               {when(digest.completedAt)}
             </span>
-            <small>
-              ID: {digest.id} · Múi giờ: {digest.settings.newsletter.timezone}
-            </small>
+            <details>
+              <summary>Thông tin bản tin</summary>
+              <small>
+                ID: {digest.id}
+                <br />
+                Múi giờ: {digest.settings.newsletter.timezone}
+              </small>
+            </details>
           </div>
           {digest.status === "running" && (
             <div className="notice">
@@ -336,13 +459,16 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                     <p>Không có bài hợp lệ trong 24 giờ gần nhất.</p>
                   )
                 )}
-                <small>
-                  Bỏ qua {digest.sources.rss.data.skippedInvalidDate} bài thiếu
-                  ngày hợp lệ và {digest.sources.rss.data.skippedInvalidItem}{" "}
-                  bài thiếu thông tin. Đọc được{" "}
-                  {digest.sources.rss.data.feedsSucceeded}/
-                  {digest.sources.rss.data.feedsTotal} nguồn.
-                </small>
+                <details>
+                  <summary>Thông tin nguồn tin</summary>
+                  <small>
+                    Bỏ qua {digest.sources.rss.data.skippedInvalidDate} bài
+                    thiếu ngày hợp lệ và{" "}
+                    {digest.sources.rss.data.skippedInvalidItem} bài thiếu thông
+                    tin. Đọc được {digest.sources.rss.data.feedsSucceeded}/
+                    {digest.sources.rss.data.feedsTotal} nguồn.
+                  </small>
+                </details>
               </section>
               <section className="digest-section">
                 <SourceHeader
@@ -418,40 +544,43 @@ export default function DigestDashboard({ hash }: { hash: string }) {
               </section>
               <section className="digest-section">
                 <SourceHeader title="GitHub" result={digest.sources.github} />
-                <p className="muted">
-                  Repository nổi bật trong tập theo dõi; không phải GitHub
-                  Trending chính thức.
-                </p>
                 {digest.sources.github.status !== "disabled" && (
                   <>
-                    <h3>Tăng sao theo snapshot</h3>
                     {digest.sources.github.data.rising.length ? (
-                      <Repositories
-                        items={digest.sources.github.data.rising}
-                        rising
-                      />
-                    ) : (
-                      <p>
-                        Chưa đủ lịch sử so sánh 20–28 giờ để tính tăng sao.
-                        Không gán mức tăng giả.
-                      </p>
-                    )}
-                    <h3>Dự án mới đáng chú ý</h3>
+                      <>
+                        <h3>Đang được quan tâm</h3>
+                        <Repositories
+                          items={digest.sources.github.data.rising}
+                          rising
+                        />
+                      </>
+                    ) : null}
                     {digest.sources.github.data.newNotable.length ? (
-                      <Repositories
-                        items={digest.sources.github.data.newNotable}
-                      />
+                      <>
+                        <h3>Dự án mới đáng chú ý</h3>
+                        <Repositories
+                          items={digest.sources.github.data.newNotable}
+                        />
+                      </>
                     ) : (
                       <p>
                         Không có dự án mới phù hợp chưa có baseline trong tập
                         kết quả.
                       </p>
                     )}
-                    <small>
-                      {digest.sources.github.data.candidates} ứng viên;{" "}
-                      {digest.sources.github.data.withoutBaseline} chưa có
-                      baseline hợp lệ. Danh sách có thể ít hơn số lượng yêu cầu.
-                    </small>
+                    <details>
+                      <summary>Phạm vi theo dõi</summary>
+                      <small>
+                        {digest.sources.github.data.candidates} ứng viên;{" "}
+                        {digest.sources.github.data.withoutBaseline} chưa có
+                        baseline hợp lệ. Danh sách có thể ít hơn số lượng yêu
+                        cầu.
+                      </small>
+                      <p>
+                        Danh sách trong tập theo dõi; không phải bảng GitHub
+                        Trending chính thức.
+                      </p>
+                    </details>
                     {digest.sources.github.data.rateLimits.length > 0 && (
                       <details>
                         <summary>Quota GitHub Search/REST</summary>
@@ -473,19 +602,10 @@ export default function DigestDashboard({ hash }: { hash: string }) {
               </section>
             </>
           )}
-          <section className="digest-section">
-            <h2>Gửi thông báo</h2>
-            <p className="muted">
-              Dùng server và topic ntfy đang được lưu trong cài đặt. Mỗi lần gửi
-              mới được ghi nhận riêng; không tự gửi sau khi tạo.
-            </p>
-            <button
-              className="primary-button"
-              disabled={sending || digest.status === "running"}
-              onClick={() => void send()}
-            >
-              {sending ? "Đang gửi…" : "Gửi qua ntfy"}
-            </button>
+          <details className="delivery-details">
+            <summary>
+              Lịch sử gửi đến điện thoại ({digest.notifications.length})
+            </summary>
             {digest.notifications.length === 0 ? (
               <p>Chưa có lần gửi nào.</p>
             ) : (
@@ -505,7 +625,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                 ))}
               </ul>
             )}
-          </section>
+          </details>
         </>
       )}
     </div>

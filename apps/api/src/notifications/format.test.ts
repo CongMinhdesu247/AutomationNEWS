@@ -1,0 +1,107 @@
+import { expect, it } from "vitest";
+import { defaultSettings, type Digest, type Repository } from "@hub/contracts";
+import { formatDigestNotification, notificationTitle } from "./format.js";
+
+function digest(): Digest {
+  return {
+    id: crypto.randomUUID(),
+    createdAt: "2026-11-12T00:00:00Z",
+    completedAt: "2026-11-12T00:01:00Z",
+    status: "success",
+    settings: structuredClone(defaultSettings),
+    notifications: [],
+    sources: {
+      rss: {
+        status: "success",
+        fetchedAt: "2026-11-12T00:00:00Z",
+        errors: [],
+        data: {
+          items: Array.from({ length: 5 }, (_, index) => ({
+            id: String(index),
+            title: "🔥 Tin lập trình ".repeat(50),
+            url: "https://news.example/" + "x".repeat(200),
+            source: "Fixture",
+            publishedAt: "2026-11-12T00:00:00Z",
+            description: "fixture",
+          })),
+          feedsSucceeded: 1,
+          feedsTotal: 1,
+          skippedInvalidDate: 0,
+          skippedInvalidItem: 0,
+        },
+      },
+      weather: {
+        status: "success",
+        fetchedAt: "2026-11-12T00:00:00Z",
+        errors: [],
+        data: {
+          date: "2026-11-12",
+          location: "Hà Nội",
+          timezone: "Asia/Ho_Chi_Minh",
+          minTemperature: 13.5,
+          maxTemperature: 20.9,
+          rainProbability: 80,
+          weatherCode: 61,
+          description: "Mưa nhẹ",
+          umbrella: true,
+          attribution: {
+            name: "Open-Meteo",
+            url: "https://open-meteo.com",
+            license: "CC BY 4.0",
+            licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+          },
+        },
+      },
+      github: {
+        status: "success",
+        fetchedAt: "2026-11-12T00:00:00Z",
+        errors: [],
+        data: {
+          rising: [],
+          newNotable: Array.from(
+            { length: 5 },
+            (_, index): Repository => ({
+              id: index + 1,
+              name: "owner/repo-" + (index + 1),
+              description:
+                "Công cụ mã nguồn mở giúp tự động hóa tác vụ. ".repeat(30),
+              language: "TypeScript",
+              url: "https://github.com/owner/repo-" + (index + 1),
+              stars: 100,
+              createdAt: "2026-11-01T00:00:00Z",
+              fetchedAt: "2026-11-12T00:00:00Z",
+            }),
+          ),
+          candidates: 5,
+          withoutBaseline: 5,
+          comparisonWindowHours: [20, 28],
+          rateLimits: [],
+        },
+      },
+    },
+  };
+}
+it("keeps sections separate and all five repo summaries within the UTF-8 push limit", () => {
+  const value = digest();
+  const message = formatDigestNotification(value);
+  expect(notificationTitle(value)).toBe("Bản tin sáng · 12/11");
+  expect(message).toContain("🌤 Hà Nội: 13.5–20.9 °C\nMưa nhẹ\n☔");
+  expect(message).toContain("\n\n📰 Tin tức");
+  expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
+  for (let index = 1; index <= 5; index++)
+    expect(message).toContain(
+      index + ". owner/repo-" + index + " — Công cụ mã nguồn mở",
+    );
+  expect(Buffer.byteLength(message)).toBeLessThanOrEqual(3900);
+  expect(message).not.toContain("�");
+});
+it("normalizes multiline descriptions, keeps authors' content and has an honest missing-description fallback", () => {
+  const value = digest();
+  value.sources!.github.data.newNotable[0]!.description =
+    "A tool\nfor\tdevelopers";
+  value.sources!.github.data.newNotable[1]!.description = null;
+  const text = formatDigestNotification(value);
+  expect(text).toContain("owner/repo-1 — A tool for developers");
+  expect(text).toContain("owner/repo-2 — Chưa có mô tả từ tác giả.");
+  expect(text).not.toContain("undefined");
+});

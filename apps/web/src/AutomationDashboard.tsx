@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SourceError } from "@hub/contracts";
+import { Icon } from "./Icons";
 
 type DeadLetter = {
   id: string;
@@ -106,19 +107,19 @@ export default function AutomationDashboard() {
     <div className="runs-dashboard">
       <div className="page-heading">
         <div>
-          <p className="breadcrumb">Personal Automation Hub / Tự động hóa</p>
-          <h1>Lịch & tác vụ lỗi</h1>
-          <p>Lịch sáng, kết quả gửi tự động và các node đã hết lượt thử.</p>
+          <h1>Lịch gửi bản tin</h1>
+          <p>Phân biệt lịch trên GitHub và lịch chạy trên máy của bạn.</p>
         </div>
-        <span className="phase-badge">Bước 4</span>
       </div>
       <div className="digest-toolbar">
-        <a href="#newsletter">Chỉnh giờ gửi và nguồn</a>
+        <a href="#/settings/newsletter" className="text-link">
+          Cài đặt lịch trên máy
+        </a>
         <button
           disabled={loading}
           onClick={() => setRevision((value) => value + 1)}
         >
-          Tải lại
+          Cập nhật trạng thái
         </button>
       </div>
       {error && (
@@ -127,34 +128,69 @@ export default function AutomationDashboard() {
         </p>
       )}
       {loading && <p role="status">Đang tải…</p>}
+      <section className="cloud-panel">
+        <div className="cloud-symbol">
+          <Icon name="calendar" size={26} />
+        </div>
+        <div>
+          <h2>Nhận bản tin khi PC tắt</h2>
+          <p>
+            Lịch cloud chạy trên GitHub Actions. Giờ gửi và cấu hình cloud được
+            quản lý riêng với cài đặt trên máy.
+          </p>
+          <a
+            className="text-link"
+            href={
+              import.meta.env.VITE_CLOUD_WORKFLOW_URL ||
+              "https://github.com/CongMinhdesu247/AutomationNEWS/actions/workflows/morning-digest.yml"
+            }
+            target="_blank"
+            rel="noreferrer"
+          >
+            Xem lịch và lần chạy trên GitHub <Icon name="arrow" size={17} />
+          </a>
+        </div>
+      </section>
       {schedule && (
         <section className="automation-section">
-          <h2>Lịch bản tin mỗi ngày</h2>
+          <div className="section-heading">
+            <h2>Lịch trên máy này</h2>
+            <span
+              className={
+                "result-badge " +
+                (schedule.configuration?.active ? "success" : "disabled")
+              }
+            >
+              {schedule.configuration?.active ? "Đang bật" : "Đang tắt"}
+            </span>
+          </div>
           <p>
             Lần kế tiếp: <strong>{when(schedule.nextRunAt)}</strong> (giờ trình
             duyệt).
           </p>
           <p>
-            Cấu hình scheduler đã đọc:{" "}
+            Giờ đã cấu hình:{" "}
             {schedule.configuration
               ? `${schedule.configuration.sendTime} · ${schedule.configuration.timezone} · ${schedule.configuration.active ? "Đang bật" : "Tắt hoặc chưa có nguồn"}`
               : "Chưa khởi tạo"}
             .
           </p>
-          <p>
-            Scheduler kiểm tra gần nhất: {when(schedule.lastCheckedAt)}.{" "}
-            {schedule.lastRunId && (
-              <a href={"#/runs/" + schedule.lastRunId}>
-                Xem run theo lịch gần nhất
-              </a>
-            )}
+          <details>
+            <summary>Trạng thái bộ lập lịch</summary>
+            <p>
+              Scheduler kiểm tra gần nhất: {when(schedule.lastCheckedAt)}.{" "}
+              {schedule.lastRunId && (
+                <a href={"#/runs/" + schedule.lastRunId}>
+                  Xem run theo lịch gần nhất
+                </a>
+              )}
+            </p>
+          </details>
+          <p className="help-note">
+            Lịch cục bộ cần PC hoạt động. Nếu đã dùng lịch cloud, giữ lịch này
+            tắt để tránh nhận trùng.
           </p>
-          <p className="notice">
-            Máy, worker và scheduler phải đang chạy. Bật bản tin và ít nhất một
-            nguồn để lên lịch; bật ntfy để tự gửi sau khi lưu. Đổi giờ hoặc múi
-            giờ sẽ áp dụng từ lượt kế tiếp. Trang này cập nhật khi bấm Tải lại.
-          </p>
-          <h3>20 lượt gửi tự động gần nhất</h3>
+          <h3>Lịch sử gửi từ máy</h3>
           {!schedule.deliveries.length && <p>Chưa có lượt gửi tự động.</p>}
           <ul className="digest-history">
             {schedule.deliveries.map((item) => (
@@ -177,8 +213,13 @@ export default function AutomationDashboard() {
           </p>
         </section>
       )}
-      <section className="automation-section">
-        <h2>Dead-Letter Queue</h2>
+      <details className="automation-section advanced-section">
+        <summary>
+          Tác vụ cần xử lý
+          {letters
+            ? " (" + letters.items.length + (letters.hasMore ? "+" : "") + ")"
+            : ""}
+        </summary>
         <p>
           Chạy lại tạo toàn bộ workflow mới bằng cấu hình snapshot cũ, giữ
           nguyên bản tin và lịch sử cũ. Run này không tự gửi ntfy. Bấm lặp lại
@@ -215,24 +256,26 @@ export default function AutomationDashboard() {
               ))}
             </ul>
             {!letters.items.length && <p>Chưa có tác vụ lỗi.</p>}
-            <div className="pagination">
-              <button
-                disabled={page === 1 || busy !== null}
-                onClick={() => setPage((value) => value - 1)}
-              >
-                Trang trước
-              </button>
-              <span>Trang {page}</span>
-              <button
-                disabled={!letters.hasMore || busy !== null}
-                onClick={() => setPage((value) => value + 1)}
-              >
-                Trang sau
-              </button>
-            </div>
+            {(page > 1 || letters.hasMore) && (
+              <div className="pagination">
+                <button
+                  disabled={page === 1 || busy !== null}
+                  onClick={() => setPage((value) => value - 1)}
+                >
+                  Trang trước
+                </button>
+                <span>Trang {page}</span>
+                <button
+                  disabled={!letters.hasMore || busy !== null}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Trang sau
+                </button>
+              </div>
+            )}
           </>
         )}
-      </section>
+      </details>
     </div>
   );
 }

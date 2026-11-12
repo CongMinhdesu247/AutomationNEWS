@@ -10,6 +10,7 @@ import {
 } from "@hub/contracts";
 
 import DigestDashboard from "./DigestDashboard";
+import { Icon } from "./Icons";
 
 type Draft = Omit<Settings, "weather" | "github"> & {
   weather: Omit<Settings["weather"], "latitude" | "longitude"> & {
@@ -170,6 +171,15 @@ export default function App() {
     "loading" | "idle" | "saving" | "success" | "error"
   >("loading");
   const [attempt, setAttempt] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const settingsTab =
+    groups.find(
+      ([id]) => view === "#" + id || view === "#/settings/" + id,
+    )?.[0] ?? "newsletter";
+  const inSettings =
+    !view.startsWith("#/digests") &&
+    !view.startsWith("#/runs") &&
+    !view.startsWith("#/automation");
   useEffect(() => {
     const controller = new AbortController();
     setState("loading");
@@ -191,6 +201,7 @@ export default function App() {
     return () => controller.abort();
   }, [attempt]);
   function change(next: Draft) {
+    setDirty(true);
     setDraft(next);
     setMessage("");
     setIssues([]);
@@ -205,7 +216,12 @@ export default function App() {
       setIssues(errors);
       setState("error");
       setMessage("Vui lòng kiểm tra các trường được đánh dấu.");
-      document.getElementById(errors[0]?.path.join(".") ?? "")?.focus();
+      window.location.hash =
+        "/settings/" + String(errors[0]?.path[0] ?? "newsletter");
+      setTimeout(
+        () => document.getElementById(errors[0]?.path.join(".") ?? "")?.focus(),
+        50,
+      );
       return;
     }
     setState("saving");
@@ -221,8 +237,9 @@ export default function App() {
         }),
       );
       setDraft(toDraft(saved));
+      setDirty(false);
       setState("success");
-      setMessage("Đã lưu cấu hình vào PostgreSQL.");
+      setMessage("Đã lưu thay đổi trên máy này.");
     } catch (error) {
       const apiError = error as Partial<ApiError> | null;
       setIssues(apiError?.error?.issues ?? []);
@@ -236,33 +253,81 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a href="#main" className="brand">
+        <a
+          href="#/digests"
+          className="brand"
+          aria-label="Automation Hub — Bản tin"
+        >
           <span className="brand-mark" aria-hidden="true">
-            h
+            <Icon name="sun" size={25} />
           </span>
           <span>
-            Personal
-            <br />
-            <strong>Automation Hub</strong>
+            <strong>Morning Hub</strong>
+            <small>Bản tin của riêng bạn</small>
           </span>
         </a>
-        <p className="nav-label">Không gian cá nhân</p>
         <nav aria-label="Điều hướng">
-          <a href="#/automation">Lịch & tác vụ lỗi</a>
-          <a href="#/runs">Tiến độ workflow</a>
-          <a href="#/digests">Bản tin đã lưu</a>
-          {groups.map(([id, label]) => (
-            <a key={id} href={"#" + id}>
-              {label}
-            </a>
-          ))}
+          <a
+            href="#/digests"
+            aria-current={view.startsWith("#/digests") ? "page" : undefined}
+          >
+            <Icon name="brief" />
+            Bản tin
+          </a>
+          <a
+            href="#/automation"
+            aria-current={view.startsWith("#/automation") ? "page" : undefined}
+          >
+            <Icon name="calendar" />
+            Lịch gửi
+          </a>
+          <a
+            href="#/runs"
+            aria-current={view.startsWith("#/runs") ? "page" : undefined}
+          >
+            <Icon name="activity" />
+            Hoạt động
+          </a>
+          <a
+            href="#/settings/newsletter"
+            aria-current={inSettings ? "page" : undefined}
+          >
+            <Icon name="settings" />
+            Cài đặt
+          </a>
         </nav>
         <div className="sidebar-note">
           <span className="local-dot" />
-          Chỉ chạy cục bộ<p>Nền tảng cho bản tin mỗi sáng của bạn.</p>
+          Không gian cá nhân
+          <p>
+            Dashboard trên máy.
+            <br />
+            Thông báo qua ntfy.
+          </p>
         </div>
       </aside>
       <main id="main">
+        <div className="workspace-header">
+          <span>Không gian cá nhân</span>
+          <span className="workspace-location">
+            <span className="local-dot" />
+            Dashboard cục bộ
+          </span>
+        </div>
+        {import.meta.env.VITE_DEMO_MODE === "true" && (
+          <p
+            className="status"
+            style={{
+              background: "#fff3cd",
+              color: "#664d03",
+              border: "1px solid #d9ab35",
+            }}
+            role="note"
+          >
+            DEMO FIXTURE · Dữ liệu mô phỏng. Không gọi API ngoài hoặc gửi thông
+            báo thật.
+          </p>
+        )}
         {view.startsWith("#/automation") ? (
           <AutomationDashboard />
         ) : view.startsWith("#/runs") ? (
@@ -273,19 +338,21 @@ export default function App() {
           <>
             <div className="page-heading">
               <div>
-                <p className="breadcrumb">Personal Automation Hub / Cài đặt</p>
-                <h1>Một buổi sáng, theo cách của bạn.</h1>
-                <p>Chọn nội dung và cách nhận bản tin trong cùng một nơi.</p>
+                <h1>Cài đặt bản tin</h1>
+                <p>Chọn nội dung bạn quan tâm và cách nhận thông báo.</p>
               </div>
-              <span className="phase-badge">Cấu hình nguồn</span>
             </div>
-            <div className="notice">
-              <strong>Lưu cấu hình trước khi tạo bản tin.</strong>
-              <p>
-                Scheduler dùng cấu hình đã lưu để tạo bản tin mỗi ngày. Bật ntfy
-                để gửi tự động sau khi bản tin hoàn tất.
-              </p>
-            </div>
+            <nav className="settings-tabs" aria-label="Nhóm cài đặt">
+              {groups.map(([id, label]) => (
+                <a
+                  href={"#/settings/" + id}
+                  key={id}
+                  aria-current={settingsTab === id ? "page" : undefined}
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
             <div
               role="status"
               aria-live="polite"
@@ -301,15 +368,20 @@ export default function App() {
               </button>
             )}
             {draft && (
-              <form onSubmit={save} noValidate>
+              <form
+                className="settings-form"
+                data-tab={settingsTab}
+                onSubmit={save}
+                noValidate
+              >
                 <fieldset disabled={state === "saving"}>
                   <Section
                     id="newsletter"
-                    title="Bản tin"
-                    description="Lịch mỗi ngày theo múi giờ đã chọn. Máy và scheduler cần đang chạy; có thể tạo thêm bản tin thủ công."
+                    title="Lịch trên máy"
+                    description="Áp dụng cho scheduler cục bộ. Lịch cloud chạy trên GitHub được quản lý riêng."
                   >
                     <Toggle
-                      label="Bật bản tin"
+                      label="Bật lịch gửi trên máy"
                       checked={draft.newsletter.enabled}
                       onChange={(enabled) =>
                         change({
@@ -450,7 +522,7 @@ export default function App() {
                   <Section
                     id="weather"
                     title="Thời tiết"
-                    description="Nhập tọa độ địa điểm. Chưa hỗ trợ tìm địa điểm tự động."
+                    description="Dự báo hôm nay tại địa điểm bạn chọn."
                   >
                     <Toggle
                       label="Thêm thời tiết vào bản tin"
@@ -569,7 +641,7 @@ export default function App() {
                   <Section
                     id="notifications"
                     title="Thông báo"
-                    description="Chuẩn bị kênh nhận thông báo qua ntfy."
+                    description="Nhận bản tin trên điện thoại qua ứng dụng ntfy."
                   >
                     <Toggle
                       label="Bật gửi qua ntfy"
@@ -613,8 +685,8 @@ export default function App() {
                       />
                     </div>
                     <p className="help-note">
-                      Nếu cần token, cấu hình NTFY_TOKEN ở backend. Token không
-                      được lưu trong cài đặt hoặc gửi về trình duyệt.
+                      Server và topic phải trùng với kênh bạn đã đăng ký trong
+                      ntfy.
                     </p>
                   </Section>
                 </fieldset>
@@ -626,14 +698,16 @@ export default function App() {
                         ? message
                         : state === "error"
                           ? "Chưa lưu. Kiểm tra thông báo lỗi."
-                          : "Lưu đồng thời tất cả nhóm cài đặt."}
+                          : dirty
+                            ? "Bạn có thay đổi chưa lưu."
+                            : "Chưa có thay đổi mới."}
                   </p>
                   <button
                     className="primary-button"
                     type="submit"
-                    disabled={state === "saving"}
+                    disabled={state === "saving" || !dirty}
                   >
-                    {state === "saving" ? "Đang lưu…" : "Lưu cấu hình"}
+                    {state === "saving" ? "Đang lưu…" : "Lưu thay đổi"}
                   </button>
                 </div>
                 {issues.length > 0 && (
@@ -642,7 +716,18 @@ export default function App() {
                     <ul>
                       {issues.map((issue, index) => (
                         <li key={index}>
-                          <a href={"#" + issue.path.join(".")}>
+                          <a
+                            href={"#/settings/" + String(issue.path[0])}
+                            onClick={() =>
+                              setTimeout(
+                                () =>
+                                  document
+                                    .getElementById(issue.path.join("."))
+                                    ?.focus(),
+                                50,
+                              )
+                            }
+                          >
                             {issue.path.join(".")} — {issue.message}
                           </a>
                         </li>
@@ -655,8 +740,8 @@ export default function App() {
           </>
         )}
         <footer>
-          Personal Automation Hub{" "}
-          <span>Được thiết kế cho một người dùng, chạy trên máy của bạn.</span>
+          <span>Morning Hub</span>
+          <span>Tin tức · Thời tiết · GitHub</span>
         </footer>
       </main>
     </div>
