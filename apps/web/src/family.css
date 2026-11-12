@@ -76,6 +76,10 @@
   border-color: #2563eb;
   width: 100%;
 }
+.member-portal button.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  color: #fff;
+}
 .member-portal h1 {
   font-size: 32px;
 }
