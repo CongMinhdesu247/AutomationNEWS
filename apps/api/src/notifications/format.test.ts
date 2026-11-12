@@ -104,8 +104,9 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("💨 Hà Nội · AQI Mỹ: 125");
   expect(message).toContain("PM2.5: 41,4 µg/m³");
   expect(message).toContain("Dự báo Open-Meteo/CAMS");
-  expect(message).toContain("Miếng SJC: mua 136.000.000 · bán 139.000.000");
-  expect(message).toContain("Nhẫn SJC 9999: mua 134.800.000 · bán 138.800.000");
+  expect(message).toContain("Giá vàng SJC · đồng/chỉ");
+  expect(message).toContain("Miếng SJC: mua 13.600.000 · bán 13.900.000");
+  expect(message).toContain("Nhẫn SJC 9999: mua 13.480.000 · bán 13.880.000");
   expect(message).toContain("Ngân hàng bán: 25.870");
   expect(message).toContain("CC BY 4.0");
   expect((message.match(/^• /gm) ?? [])).toHaveLength(3);

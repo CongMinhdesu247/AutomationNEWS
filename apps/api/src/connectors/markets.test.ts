@@ -10,14 +10,14 @@ import {
 import type { HttpClient } from "./http.js";
 import { marketAt, goldHtml, usdJson } from "./test-support/market-fixtures.js";
 const context = { now: () => marketAt, signal: AbortSignal.timeout(10000) };
-it("converts the explicitly declared dong/chi gold quotes to dong/luong and keeps exact SJC product/region", () => {
+it("keeps the explicitly declared dong/chi gold quotes and exact SJC product/region", () => {
   const result = parseGold(goldHtml, marketAt);
-  expect(result.unit).toBe("VND/lượng");
+  expect(result.unit).toBe("VND/chỉ");
   expect(result.source).toContain("tổng hợp");
   expect(result.region).toContain("TP.HCM");
   expect(result.items.map((i) => [i.code, i.buy, i.sell])).toEqual([
-    ["sjc_bar", 136000000, 139000000],
-    ["sjc_ring", 134800000, 138800000],
+    ["sjc_bar", 13600000, 13900000],
+    ["sjc_ring", 13480000, 13880000],
   ]);
   expect(result.sourceUpdatedAt).toBe("2026-11-12T01:45:03.000Z");
   expect(result.previousDay).toBe(false);

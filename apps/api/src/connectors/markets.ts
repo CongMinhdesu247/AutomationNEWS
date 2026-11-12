@@ -129,13 +129,13 @@ export function parseGold(html: string, now: Date): GoldData {
           : null;
     if (!code || items.some((item) => item.code === code)) continue;
     if (!cells.slice(1).every((v) => /^\d{1,3}(?:\.\d{3})+$/.test(v))) continue;
-    const buy = Number(cells[1]!.replaceAll(".", "")) * 10,
-      sell = Number(cells[2]!.replaceAll(".", "")) * 10;
+    const buy = Number(cells[1]!.replaceAll(".", "")),
+      sell = Number(cells[2]!.replaceAll(".", ""));
     if (
       !Number.isSafeInteger(buy) ||
       !Number.isSafeInteger(sell) ||
-      buy < 1000000 ||
-      sell > 2000000000 ||
+      buy < 100000 ||
+      sell > 200000000 ||
       buy > sell
     )
       continue;
@@ -143,7 +143,7 @@ export function parseGold(html: string, now: Date): GoldData {
       code,
       name:
         code === "sjc_bar"
-          ? "Vàng miếng SJC 1 lượng"
+          ? "Vàng miếng SJC"
           : "Nhẫn SJC 9999 (1, 2, 5 chỉ)",
       buy,
       sell,
@@ -160,7 +160,7 @@ export function parseGold(html: string, now: Date): GoldData {
     sourceUpdatedAt,
     previousDay,
     region: "Bảng SJC tại TP.HCM",
-    unit: "VND/lượng",
+    unit: "VND/chỉ",
     items,
   };
 }

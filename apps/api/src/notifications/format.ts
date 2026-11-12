@@ -1,4 +1,5 @@
 import type { Digest, Repository, RisingRepository } from "@hub/contracts";
+import { goldPricePerChi } from "@hub/contracts";
 
 function clip(value: string, maxBytes: number) {
   if (Buffer.byteLength(value) <= maxBytes) return value;
@@ -47,7 +48,7 @@ export function formatDigestNotification(digest: Digest, compact = false, tight 
   const asOf = (value: string) => new Date(value).toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit"});
   if(sources.gold && sources.gold.status!=="disabled") {
     const data=sources.gold.data;
-    blocks.push(data ? ["🟡 Giá vàng SJC · đồng/lượng",...data.items.map(item=>(item.code==="sjc_bar"?"Miếng SJC":"Nhẫn SJC 9999")+": mua "+money(item.buy)+" · bán "+money(item.sell)),"Webgia tổng hợp · TP.HCM · "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Giá ngày trước":"")].join("\n") : "🟡 Chưa lấy được giá vàng SJC đã xác minh.");
+    blocks.push(data ? ["🟡 Giá vàng SJC · đồng/chỉ",...data.items.map(item=>(item.code==="sjc_bar"?"Miếng SJC":"Nhẫn SJC 9999")+": mua "+money(goldPricePerChi(item.buy,data.unit))+" · bán "+money(goldPricePerChi(item.sell,data.unit))),"Webgia tổng hợp · TP.HCM · "+asOf(data.sourceUpdatedAt)+(data.previousDay?" · Giá ngày trước":"")].join("\n") : "🟡 Chưa lấy được giá vàng SJC đã xác minh.");
   }
   if(sources.usd && sources.usd.status!=="disabled") {
     const data=sources.usd.data;

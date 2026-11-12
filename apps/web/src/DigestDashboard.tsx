@@ -9,6 +9,7 @@ import type {
   RisingRepository,
 } from "@hub/contracts";
 import { Icon } from "./Icons";
+import { goldPricePerChi } from "@hub/contracts";
 const statusText: Record<string, string> = {
   success: "Thành công",
   partial: "Một phần",
@@ -451,8 +452,8 @@ export default function DigestDashboard({ hash }: { hash: string }) {
               {digest.sources.gold && digest.sources.gold.status !== "disabled" && <section className="digest-section">
                 <SourceHeader title="Vàng miếng SJC & nhẫn SJC 9999" result={digest.sources.gold}/>
                 {digest.sources.gold.data ? <>
-                  <p>{digest.sources.gold.data.region} · Đơn vị: đồng/lượng</p>
-                  <ul className="digest-items">{digest.sources.gold.data.items.map(item=><li key={item.code}><strong>{item.name}</strong><div className="weather-facts"><p>Mua vào<strong>{item.buy.toLocaleString("vi-VN")}</strong></p><p>Bán ra<strong>{item.sell.toLocaleString("vi-VN")}</strong></p></div></li>)}</ul>
+                  <p>{digest.sources.gold.data.region} · Đơn vị: đồng/chỉ</p>
+                  <ul className="digest-items">{digest.sources.gold.data.items.map(item=><li key={item.code}><strong>{item.code === "sjc_bar" ? "Vàng miếng SJC" : "Nhẫn SJC 9999"}</strong><div className="weather-facts"><p>Mua vào<strong>{goldPricePerChi(item.buy,digest.sources!.gold!.data!.unit).toLocaleString("vi-VN")}</strong></p><p>Bán ra<strong>{goldPricePerChi(item.sell,digest.sources!.gold!.data!.unit).toLocaleString("vi-VN")}</strong></p></div></li>)}</ul>
                   <p>Nguồn cập nhật: {when(digest.sources.gold.data.sourceUpdatedAt)}{digest.sources.gold.data.previousDay?" · Giá ngày trước":""}</p>
                   <a href={digest.sources.gold.data.sourceUrl} target="_blank" rel="noreferrer">{digest.sources.gold.data.source}</a>
                   <p className="muted">Giá tham khảo theo bảng nguồn, không phải cam kết giá giao dịch tại cửa hàng.</p>
