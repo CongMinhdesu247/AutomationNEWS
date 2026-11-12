@@ -522,9 +522,15 @@ export default function App() {
                   </Section>
                   <Section
                     id="weather"
-                    title="Thời tiết"
-                    description="Dự báo hôm nay tại địa điểm bạn chọn."
+                    title="Thời tiết & giá xăng"
+                    description="Dự báo tại địa điểm bạn chọn và giá RON 95 của Petrolimex vùng 1."
                   >
+                    <Toggle
+                      label="Thêm giá RON 95 vào bản tin sáng"
+                      checked={draft.fuel?.enabled ?? false}
+                      onChange={(enabled) => change({ ...draft, fuel: { enabled } })}
+                    />
+                    <p className="muted">Giữ nguyên tên sản phẩm theo nguồn, gồm các dòng E10 RON 95 nếu đang được niêm yết. Mức tăng/giảm được so với bản tin trước.</p>
                     <Toggle
                       label="Thêm thời tiết vào bản tin"
                       checked={draft.weather.enabled}

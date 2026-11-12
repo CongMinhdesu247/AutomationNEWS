@@ -64,6 +64,20 @@ export function formatDigestNotification(digest: Digest) {
   } else if (sources.weather.status !== "disabled")
     blocks.push("🌤 Thời tiết\nChưa lấy được dự báo hôm nay.");
 
+  const fuel = sources.fuel;
+  if (fuel && fuel.status !== "disabled") {
+    const data = fuel.data;
+    const money = (value: number) => value.toLocaleString("vi-VN");
+    blocks.push(data ? [
+      "⛽ RON 95 · " + data.region,
+      ...data.items.map((item) => item.name + ": " + money(item.price) + " đ/lít" +
+        (item.change === null ? "" : item.change === 0 ? " · Không đổi" : " · " + (item.change > 0 ? "Tăng " : "Giảm ") + money(Math.abs(item.change)) + " đ")),
+      "Hiệu lực: " + new Date(data.effectiveAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }),
+      data.comparedAt ? "So với bản tin " + new Date(data.comparedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Lần đầu theo dõi; chưa có giá để so sánh.",
+      "Nguồn: Petrolimex",
+    ].join("\n") : "⛽ RON 95\nChưa lấy được giá đã xác minh từ Petrolimex.");
+  }
+
   if (sources.rss.status !== "disabled") {
     const items = sources.rss.data.items;
     const lines = ["📰 Tin tức · " + items.length + " tin"];

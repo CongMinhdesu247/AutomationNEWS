@@ -9,6 +9,7 @@ import {
   type CloudStateStore,
 } from "./state.js";
 import type { HttpClient } from "../connectors/http.js";
+import { fuelPriceUrl, petrolimexHome } from "../connectors/fuel.js";
 
 const at = new Date("2026-11-12T00:00:00Z");
 const settings: Settings = {
@@ -111,6 +112,35 @@ function fixture({
 }
 
 describe("cloud execution without local PostgreSQL", () => {
+  it("sends fuel-only digests and advances the public price baseline only after successful delivery", async () => {
+    const state = new MemoryState();
+    const onlyFuel: Settings = { ...structuredClone(defaultSettings), fuel: { enabled: true }, notifications: settings.notifications };
+    const f = fixture();
+    let price = 20000;
+    let fail = false;
+    const http: HttpClient = async (url, options) => {
+      if (options?.method === "POST") {
+        if (fail) throw new Error("Unknown delivery");
+        return f.http(url, options);
+      }
+      const body = url === fuelPriceUrl() ? JSON.stringify({ Objects: [{ ID: "ron95", Title: "Xăng E10 RON 95-III", Zone1Price: price, LastModified: "2026-11-11T07:50:00Z" }] })
+        : url === petrolimexHome ? '<a href="/ndi/thong-cao-bao-chi/petrolimex-dieu-chinh-gia-xang-dau-test.html">Giá</a>'
+        : "Mức giá mới có hiệu lực từ thời điểm 15 giờ 00 phút ngày 11 tháng 11 năm 2026";
+      return { status: 200, headers: {}, body };
+    };
+    await runCloudDigest({ state, settings: onlyFuel, http, now: () => at, dryRun: true });
+    expect(state.value.fuelBaseline).toBeUndefined();
+    await runCloudDigest({ state, settings: onlyFuel, http, now: () => at });
+    expect(state.value.fuelBaseline?.prices.ron95).toBe(20000);
+    expect(f.sends[0]?.message).toContain("Lần đầu theo dõi");
+    price = 19840;
+    await runCloudDigest({ state, settings: onlyFuel, http, now: () => new Date(+at + 60000), forceSend: true });
+    expect(f.sends[1]?.message).toContain("Giảm 160 đ");
+    expect(state.value.fuelBaseline?.prices.ron95).toBe(19840);
+    fail = true; price = 22000;
+    await expect(runCloudDigest({ state, settings: onlyFuel, http, now: () => new Date(+at + 120000), forceSend: true })).rejects.toThrow();
+    expect(state.value.fuelBaseline?.prices.ron95).toBe(19840);
+  });
   it("collects three sources, reserves before POST and persists only nonprivate state", async () => {
     const state = new MemoryState();
     const { http, sends } = fixture({

@@ -12,6 +12,7 @@ const snapshotSchema = z
 export const cloudStateSchema = z
   .object({
     version: z.literal(1),
+    fuelBaseline: z.object({ at: z.iso.datetime(), prices: z.record(z.string().max(64), z.number().int().min(1000).max(100000)) }).strict().optional(),
     snapshots: z.array(snapshotSchema).max(5000),
     deliveries: z.record(
       z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -80,6 +81,7 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   const cutoff = at.getTime() - 3 * 86400000;
   return {
     version: 1,
+    ...(state.fuelBaseline && Date.parse(state.fuelBaseline.at) <= +at && +at - Date.parse(state.fuelBaseline.at) <= 14 * 86400000 ? { fuelBaseline: state.fuelBaseline } : {}),
     ...(state.translations
       ? {
           translations: Object.fromEntries(
@@ -108,7 +110,7 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   };
 }
 
-// Only public repo IDs/star counts, translated public descriptions and delivery state live here.
+// Only public repo IDs/star counts, translated public descriptions, fuel-price baseline and delivery state live here.
 // No settings, coordinates, topic, article content or credentials are persisted.
 export class GithubStateStore implements CloudStateStore {
   private base: string;

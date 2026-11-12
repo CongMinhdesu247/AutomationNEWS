@@ -7,6 +7,7 @@ import {
   type SourceResult,
 } from "@hub/contracts";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather, dateInZone } from "../connectors/weather.js";
 import { createGithubConnector } from "../connectors/github.js";
 import { safeHttp, type HttpClient } from "../connectors/http.js";
@@ -21,7 +22,7 @@ export function parseCloudSettings(value: string): Settings {
   if (
     !settings.rss.some((feed) => feed.enabled) &&
     !settings.weather.enabled &&
-    !settings.github.enabled
+    !settings.github.enabled && !settings.fuel?.enabled
   )
     throw new Error("Enable at least one cloud source.");
   if (new URL(settings.notifications.serverUrl).protocol !== "https:")
@@ -48,6 +49,7 @@ export type CloudOptions = {
     vietnamese: number;
     unavailable: number;
   }) => void;
+  onFuel?: (result: { status: string; products: number }) => void;
 };
 
 export async function runCloudDigest(options: CloudOptions) {
@@ -108,7 +110,7 @@ export async function runCloudDigest(options: CloudOptions) {
     translationCache:
       revision.state.translations ?? (revision.state.translations = {}),
   });
-  const [rss, weather, githubResult] = await Promise.all([
+  const [rss, weather, githubResult, fuel] = await Promise.all([
     collect(() => fetchRss(settings.rss, context)),
     collect(() =>
       fetchWeather(settings.weather, settings.newsletter.timezone, context),
@@ -122,8 +124,10 @@ export async function runCloudDigest(options: CloudOptions) {
         },
       }),
     ),
+    collect(() => fetchFuel(settings.fuel, { ...context, baseline: revision.state.fuelBaseline })),
   ]);
-  const sources: DigestSources = { rss, weather, github: githubResult };
+  const sources: DigestSources = { rss, weather, github: githubResult, fuel };
+  options.onFuel?.({ status: fuel.status, products: fuel.data?.items.length ?? 0 });
   const selectedRepos = [
     ...githubResult.data.rising,
     ...githubResult.data.newNotable,
@@ -162,6 +166,7 @@ export async function runCloudDigest(options: CloudOptions) {
   if (dateInZone(now(), settings.newsletter.timezone) !== day)
     throw new Error("Local day changed during collection; no send.");
   const state = pruneState(revision.state, now());
+  const fuelPrices = fuelBaseline(fuel);
   state.snapshots.push(
     ...snapshots.map((repo) => ({
       id: repo.id,
@@ -188,6 +193,7 @@ export async function runCloudDigest(options: CloudOptions) {
         ? "failed"
         : "unknown";
   state.deliveries[day] = { status: sendStatus, at: now().toISOString() };
+  if (sendStatus === "sent" && fuelPrices) state.fuelBaseline = fuelPrices;
   await options.state.save(state, sha);
   if (sendStatus !== "sent")
     throw new Error(

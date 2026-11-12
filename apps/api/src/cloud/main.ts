@@ -8,8 +8,13 @@ try {
   const repository = process.env.GITHUB_REPOSITORY;
   if (!config || !token || !repository)
     throw new Error("Missing cloud configuration.");
+  const rawSettings = JSON.parse(config);
+  const settings = parseCloudSettings(JSON.stringify({
+    ...rawSettings,
+    fuel: rawSettings.fuel ?? { enabled: process.env.HUB_FUEL_ENABLED === "true" },
+  }));
   const result = await runCloudDigest({
-    settings: parseCloudSettings(config),
+    settings,
     state: new GithubStateStore(repository, token),
     githubToken: token,
     ntfyToken: process.env.NTFY_TOKEN,
@@ -17,6 +22,7 @@ try {
     forceSend: process.env.HUB_FORCE_SEND === "true",
     onSummaries: (counts) =>
       console.log("Vietnamese repository summaries:", JSON.stringify(counts)),
+    onFuel: (result) => console.log("Fuel prices:", JSON.stringify(result)),
   });
   console.log(
     "Cloud digest:",

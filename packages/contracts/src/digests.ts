@@ -75,10 +75,20 @@ export type GithubData = {
   }[];
 };
 export type DigestSources = {
+  fuel?: SourceResult<FuelData | null>;
   rss: SourceResult<RssData>;
   weather: SourceResult<WeatherData | null>;
   github: SourceResult<GithubData>;
 };
+export type FuelData = {
+  region: "Petrolimex vùng 1";
+  sourceUrl: string;
+  updatedAt: string;
+  effectiveAt: string;
+  comparedAt: string | null;
+  items: { code: string; name: string; price: number; change: number | null }[];
+};
+export type FuelBaseline = { at: string; prices: Record<string, number> };
 export type DigestStatus = "running" | "success" | "partial" | "failed";
 export type Digest = {
   id: string;

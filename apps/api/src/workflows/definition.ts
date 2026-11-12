@@ -1,11 +1,12 @@
 import { json, topologicalOrder, type Workflow } from "@hub/engine";
-export function digestWorkflow(timeoutMs = 25000): Workflow {
+export function digestWorkflow(timeoutMs = 25000, fuelEnabled = false): Workflow {
+  const sources = ["rss", "weather", "github", ...(fuelEnabled ? ["fuel"] : [])];
   const workflow: Workflow = {
     version: "digest.v1",
     concurrency: 3,
     nodes: [
       { id: "start", type: "start", config: {}, policy: "all_success" },
-      ...["rss", "weather", "github"].map((source) => ({
+      ...sources.map((source) => ({
         id: "fetch_" + source,
         type: "fetch_" + source,
         config: json({ timeoutMs }),
@@ -25,7 +26,7 @@ export function digestWorkflow(timeoutMs = 25000): Workflow {
       },
     ],
     edges: [
-      ...["rss", "weather", "github"].flatMap((source) => [
+      ...sources.flatMap((source) => [
         { from: "start", to: "fetch_" + source },
         { from: "fetch_" + source, to: "compose_digest" },
       ]),

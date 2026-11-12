@@ -8,6 +8,7 @@ import type {
 import { DigestStore } from "../digests/store.js";
 import type { ServiceOptions } from "../digests/service.js";
 import { fetchRss } from "../connectors/rss.js";
+import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
 import { createGithubConnector, emptyGithub } from "../connectors/github.js";
 import { safeHttp } from "../connectors/http.js";
@@ -58,6 +59,7 @@ export function composeDigest(input: DependencyInput, at: string) {
     rss: value("fetch_rss", emptyRss()),
     weather: value("fetch_weather", null),
     github: value("fetch_github", emptyGithub()),
+    ...(input.dependencies.fetch_fuel ? { fuel: value("fetch_fuel", null) } : {}),
   };
   const snapshots =
     (
@@ -117,6 +119,9 @@ export class DigestNodeExecutor {
     } else if (job.type === "fetch_github") {
       enabled = config.github.enabled;
       empty = emptyGithub();
+    } else if (job.type === "fetch_fuel") {
+      enabled = config.fuel?.enabled ?? false;
+      empty = null;
     } else throw new Error("Unsupported node type.");
     if (!enabled)
       return {
@@ -135,9 +140,17 @@ export class DigestNodeExecutor {
     const combined = AbortSignal.any([signal, timeout]);
     let snapshots: Repository[] = [];
     const context = { http: this.http, now: this.now, signal: combined };
+    const collectFuel = async () => {
+      const recent = await this.store.list(1, 5);
+      const previousId = recent.items.find((item) => item.status !== "running")?.id;
+      const previous = previousId ? await this.store.get(previousId) : undefined;
+      return fetchFuel(config.fuel, { ...context, baseline: previous?.sources?.fuel ? fuelBaseline(previous.sources.fuel) : undefined });
+    };
     const operation =
       job.type === "fetch_rss"
         ? fetchRss(config.rss, context)
+        : job.type === "fetch_fuel"
+          ? collectFuel()
         : job.type === "fetch_weather"
           ? fetchWeather(config.weather, config.newsletter.timezone, context)
           : this.github(config.github, {

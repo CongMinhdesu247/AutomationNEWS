@@ -448,6 +448,24 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           )}
           {digest.sources && (
             <>
+              {digest.sources.fuel && digest.sources.fuel.status !== "disabled" && (
+                <section className="digest-section">
+                  <SourceHeader title="Giá xăng RON 95" result={digest.sources.fuel} />
+                  {digest.sources.fuel.data ? <>
+                    <p>{digest.sources.fuel.data.region} · Đơn vị: đồng/lít</p>
+                    <ul className="digest-items">
+                      {digest.sources.fuel.data.items.map((item) => <li key={item.code}>
+                        <strong>{item.name}</strong>
+                        <p>{item.price.toLocaleString("vi-VN")} đ/lít</p>
+                        <small>{item.change === null ? "Chưa có giá trước để so sánh" : item.change === 0 ? "Không đổi so với bản tin trước" : `${item.change > 0 ? "Tăng" : "Giảm"} ${Math.abs(item.change).toLocaleString("vi-VN")} đ/lít so với bản tin trước`}</small>
+                      </li>)}
+                    </ul>
+                    <p>Hiệu lực từ: {when(digest.sources.fuel.data.effectiveAt)}</p>
+                    {digest.sources.fuel.data.comparedAt && <p>So với dữ liệu lấy lúc: {when(digest.sources.fuel.data.comparedAt)}</p>}
+                    <a href={digest.sources.fuel.data.sourceUrl} target="_blank" rel="noreferrer">Nguồn: Petrolimex</a>
+                  </> : <p>Chưa lấy được bảng giá đã xác minh. Các nội dung khác vẫn có trong bản tin.</p>}
+                </section>
+              )}
               <section className="digest-section">
                 <SourceHeader title="Tin tức" result={digest.sources.rss} />
                 {digest.sources.rss.data.items.length > 0 ? (

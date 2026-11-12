@@ -83,10 +83,16 @@ function digest(): Digest {
 }
 it("keeps sections separate and all five repo summaries within the UTF-8 push limit", () => {
   const value = digest();
+  value.sources!.fuel = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
+    region: "Petrolimex vùng 1", sourceUrl: "https://www.petrolimex.com.vn/", updatedAt: value.createdAt,
+    effectiveAt: "2026-11-11T08:00:00Z", comparedAt: "2026-11-11T00:00:00Z",
+    items: [ { code: "iii", name: "Xăng E10 RON 95-III", price: 19840, change: -160 }, { code: "v", name: "Xăng E10 RON 95-V", price: 21840, change: 0 } ],
+  } };
   const message = formatDigestNotification(value);
   expect(notificationTitle(value)).toBe("Bản tin sáng · 12/11");
   expect(message).toContain("🌤 Hà Nội: 13.5–20.9 °C\nMưa nhẹ\n☔");
   expect(message).toContain("\n\n📰 Tin tức");
+  expect(message).toContain("Xăng E10 RON 95-III: 19.840 đ/lít · Giảm 160 đ");
   expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
   for (let index = 1; index <= 5; index++)
     expect(message).toContain(

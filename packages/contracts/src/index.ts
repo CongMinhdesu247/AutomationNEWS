@@ -43,6 +43,7 @@ const tags = z
   });
 export const settingsSchema = z
   .object({
+    fuel: z.object({ enabled: z.boolean() }).strict().optional(),
     newsletter: z
       .object({
         enabled: z.boolean(),
@@ -169,6 +170,7 @@ export function validationIssues(error: z.ZodError): FieldIssue[] {
   }));
 }
 export const defaultSettings: Settings = {
+  fuel: { enabled: false },
   newsletter: {
     enabled: true,
     sendTime: "07:00",

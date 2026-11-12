@@ -44,10 +44,11 @@ jobs:
           pnpm --filter @hub/contracts typecheck
           pnpm --filter @hub/api typecheck
       - name: Test cloud execution and notification layout
-        run: pnpm exec vitest run apps/api/src/cloud/cloud.test.ts apps/api/src/notifications/format.test.ts apps/api/src/connectors/vietnamese.test.ts
+        run: pnpm exec vitest run apps/api/src/cloud/cloud.test.ts apps/api/src/notifications/format.test.ts apps/api/src/connectors/vietnamese.test.ts apps/api/src/connectors/fuel.test.ts
       - name: Collect and send morning digest
         env:
           HUB_SETTINGS_JSON: ${{ secrets.HUB_SETTINGS_JSON }}
+          HUB_FUEL_ENABLED: "true"
           NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           HUB_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
