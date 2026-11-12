@@ -56,6 +56,7 @@ export async function sendNtfy(
     publicBaseUrl,
     allowedOrigins = [],
     signal,
+    message: customMessage,
   }: {
     http?: HttpClient;
     now?: () => Date;
@@ -63,6 +64,7 @@ export async function sendNtfy(
     publicBaseUrl?: string;
     allowedOrigins?: string[];
     signal: AbortSignal;
+    message?: string;
   },
 ): Promise<SourceResult<null>> {
   if (!config.enabled)
@@ -108,7 +110,7 @@ export async function sendNtfy(
       body: JSON.stringify({
         topic: config.topic,
         title: "Bản tin cá nhân",
-        message,
+        message: customMessage ?? message,
         ...(click ? { click } : {}),
       }),
       maxBytes: 65536,
