@@ -23,3 +23,4 @@ Banner thu gọn do iOS/ntfy quyết định chiều cao và số dòng; muốn 
 - Typecheck workspace và build web/API trong Docker qua.
 - Playwright: bốn mục điều hướng, đọc bản tin thật, tab cài đặt, save mặc định disabled; latitude 91 bị từ chối tại client và focus đúng trường, không ghi cấu hình sai vào database. Desktop và mobile 390px.
 - API/web cập nhật bằng Compose --no-deps; không thay database hoặc migration, không bật lịch local và không đổi GitHub secrets.
+- [Lần gửi thử mẫu mới trên GitHub](https://github.com/CongMinhdesu247/AutomationNEWS/actions/runs/43158151409) thành công ngày 12/11/2026, log kết luận sent success. Đây là lượt force-send có chủ đích để xem mẫu mới, không thay lịch hằng ngày. Console dashboard Docker không có error/warning; mobile documentWidth=390 ở viewport 390, điều hướng chính còn 4 mục.
