@@ -15,6 +15,8 @@ try {
     ntfyToken: process.env.NTFY_TOKEN,
     dryRun: process.env.HUB_DRY_RUN === "true",
     forceSend: process.env.HUB_FORCE_SEND === "true",
+    onSummaries: (counts) =>
+      console.log("Vietnamese repository summaries:", JSON.stringify(counts)),
   });
   console.log(
     "Cloud digest:",

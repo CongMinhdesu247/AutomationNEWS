@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  createVietnameseSummarizer,
+  type TranslationCache,
+} from "./vietnamese.js";
 import type {
   Settings,
   Repository,
@@ -29,6 +33,7 @@ const repositorySchema = z.object({
   created_at: z.iso.datetime(),
   archived: z.boolean(),
   fork: z.boolean(),
+  private: z.boolean().optional(),
 });
 const responseSchema = z.object({
   items: z.array(repositorySchema).max(100),
@@ -90,7 +95,7 @@ export function githubQueries(config: Settings["github"]) {
   for (const topic of topics)
     for (const language of languages) {
       queries.push(
-        "archived:false fork:false stars:>0" +
+        "is:public archived:false fork:false stars:>0" +
           (topic ? " topic:" + quote(topic) : "") +
           (language ? " language:" + quote(language) : ""),
       );
@@ -102,7 +107,20 @@ export function createGithubConnector({
   http = safeHttp,
   now = () => new Date(),
   token,
-}: { http?: HttpClient; now?: () => Date; token?: string } = {}) {
+  translationCache,
+  translateSummaries = true,
+}: {
+  http?: HttpClient;
+  now?: () => Date;
+  token?: string;
+  translationCache?: TranslationCache;
+  translateSummaries?: boolean;
+} = {}) {
+  const summarize = createVietnameseSummarizer({
+    http,
+    now,
+    cache: translationCache,
+  });
   const cooldown = new Map<string, number>();
   function rateLimit(response: HttpResponse) {
     const resource = response.headers["x-ratelimit-resource"] || "search";
@@ -227,7 +245,7 @@ export function createGithubConnector({
             });
           const fetchedAt = now().toISOString();
           for (const item of parsed.items) {
-            if (item.archived || item.fork) continue;
+            if (item.archived || item.fork || item.private) continue;
             const url = new URL(item.html_url);
             if (url.protocol !== "https:" || url.hostname !== "github.com")
               continue;
@@ -274,7 +292,8 @@ export function createGithubConnector({
     return {
       status: !successes ? "failed" : errors.length ? "partial" : "success",
       fetchedAt: now().toISOString(),
-      data,
+      data:
+        successes && translateSummaries ? await summarize(data, signal) : data,
       errors,
     };
   };

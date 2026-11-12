@@ -43,6 +43,11 @@ export type CloudOptions = {
   forceSend?: boolean;
   signal?: AbortSignal;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  onSummaries?: (counts: {
+    total: number;
+    vietnamese: number;
+    unavailable: number;
+  }) => void;
 };
 
 export async function runCloudDigest(options: CloudOptions) {
@@ -100,6 +105,8 @@ export async function runCloudDigest(options: CloudOptions) {
     http: boundedHttp,
     now,
     token: options.githubToken,
+    translationCache:
+      revision.state.translations ?? (revision.state.translations = {}),
   });
   const [rss, weather, githubResult] = await Promise.all([
     collect(() => fetchRss(settings.rss, context)),
@@ -117,6 +124,21 @@ export async function runCloudDigest(options: CloudOptions) {
     ),
   ]);
   const sources: DigestSources = { rss, weather, github: githubResult };
+  const selectedRepos = [
+    ...githubResult.data.rising,
+    ...githubResult.data.newNotable,
+  ];
+  options.onSummaries?.({
+    total: selectedRepos.length,
+    vietnamese: selectedRepos.filter(
+      (repo) =>
+        repo.summaryViStatus === "translated" ||
+        repo.summaryViStatus === "original_vi",
+    ).length,
+    unavailable: selectedRepos.filter(
+      (repo) => repo.summaryViStatus === "unavailable",
+    ).length,
+  });
   const active = Object.values(sources).filter(
     (source) => source.status !== "disabled",
   );

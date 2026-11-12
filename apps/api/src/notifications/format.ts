@@ -15,7 +15,14 @@ const oneLine = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 export const repositorySummary = (repository: Repository) =>
-  clip(oneLine(repository.description || "Chưa có mô tả từ tác giả."), 155);
+  clip(
+    oneLine(
+      repository.summaryVi ||
+        repository.description ||
+        "Chưa có mô tả từ tác giả.",
+    ),
+    210,
+  );
 
 export function notificationTitle(digest: Digest) {
   const parts = new Intl.DateTimeFormat("vi-VN", {

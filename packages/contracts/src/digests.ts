@@ -49,6 +49,8 @@ export type Repository = {
   id: number;
   name: string;
   description: string | null;
+  summaryVi?: string;
+  summaryViStatus?: "translated" | "original_vi" | "unavailable" | "missing";
   language: string | null;
   url: string;
   stars: number;

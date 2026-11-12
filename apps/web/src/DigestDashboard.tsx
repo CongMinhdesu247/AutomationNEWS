@@ -84,9 +84,20 @@ function Repositories({
             {repo.name}
           </a>
           <p>
-            {repo.description?.trim() ||
-              "Tác giả chưa cung cấp mô tả cho dự án này."}
+            {repo.summaryVi ||
+              (repo.description?.trim()
+                ? "Chưa có bản dịch tiếng Việt cho mô tả này."
+                : "Tác giả chưa cung cấp mô tả cho dự án này.")}
           </p>
+          {repo.summaryViStatus === "translated" && (
+            <small>Bản dịch tự động từ mô tả của tác giả</small>
+          )}
+          {repo.description && repo.description !== repo.summaryVi && (
+            <details>
+              <summary>Mô tả gốc</summary>
+              <p lang="und">{repo.description}</p>
+            </details>
+          )}
           <small>
             {repo.language ?? "Chưa xác định ngôn ngữ"} ·{" "}
             {repo.stars.toLocaleString("vi-VN")} sao tổng · Snapshot{" "}
@@ -343,8 +354,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                         <li key={repo.id}>
                           <strong>{repo.name}</strong>
                           <p>
-                            {repo.description?.trim() ||
-                              "Tác giả chưa cung cấp mô tả."}
+                            {repo.summaryVi || "Chưa có bản dịch tiếng Việt."}
                           </p>
                         </li>
                       ))}

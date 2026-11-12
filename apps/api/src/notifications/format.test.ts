@@ -105,3 +105,18 @@ it("normalizes multiline descriptions, keeps authors' content and has an honest 
   expect(text).toContain("owner/repo-2 — Chưa có mô tả từ tác giả.");
   expect(text).not.toContain("undefined");
 });
+
+it("uses the Vietnamese summary in pushes while the original stays available in stored data", () => {
+  const value = digest();
+  value.sources!.github.data.newNotable[0]!.description =
+    "An English description that should not be the push summary";
+  value.sources!.github.data.newNotable[0]!.summaryVi =
+    "Công cụ giúp trích xuất văn bản từ hình ảnh.";
+  value.sources!.github.data.newNotable[0]!.summaryViStatus = "translated";
+  const text = formatDigestNotification(value);
+  expect(text).toContain("owner/repo-1 — Công cụ giúp trích xuất văn bản");
+  expect(text).not.toContain("An English description");
+  expect(value.sources!.github.data.newNotable[0]!.description).toContain(
+    "An English",
+  );
+});

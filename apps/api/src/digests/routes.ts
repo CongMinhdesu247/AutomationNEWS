@@ -78,7 +78,7 @@ export function digestRoutes(
         "DIGEST_NOT_FOUND",
         "Không tìm thấy bản tin.",
       );
-    return digest;
+    return service.localize(digest);
   });
   app.post<{ Params: { id: string } }>(
     "/api/digests/:id/notifications",

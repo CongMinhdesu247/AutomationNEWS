@@ -270,6 +270,7 @@ describe("GitHub", () => {
       http: client,
       now,
       token: "never-log-this",
+      translateSummaries: false, // This test isolates GitHub quota, not translation requests.
     });
     const snapshots: Repository[] = [];
     const deps = {

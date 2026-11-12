@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BaselineLoader } from "../connectors/github.js";
+import type { TranslationCache } from "../connectors/vietnamese.js";
 
 const snapshotSchema = z
   .object({
@@ -21,6 +22,17 @@ export const cloudStateSchema = z
         })
         .strict(),
     ),
+    translations: z
+      .record(
+        z.string().regex(/^[a-f0-9]{64}$/),
+        z
+          .object({
+            text: z.string().min(1).max(600),
+            createdAt: z.iso.datetime(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 export type CloudState = z.infer<typeof cloudStateSchema>;
@@ -68,6 +80,19 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   const cutoff = at.getTime() - 3 * 86400000;
   return {
     version: 1,
+    ...(state.translations
+      ? {
+          translations: Object.fromEntries(
+            Object.entries(state.translations)
+              .filter(
+                ([, value]) =>
+                  at.getTime() - Date.parse(value.createdAt) < 30 * 86400000,
+              )
+              .sort((a, b) => b[1].createdAt.localeCompare(a[1].createdAt))
+              .slice(0, 150),
+          ) as TranslationCache,
+        }
+      : {}),
     snapshots: state.snapshots
       .filter(
         (value) =>
@@ -83,7 +108,7 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   };
 }
 
-// Only public repository IDs/star counts and delivery dates/statuses live here.
+// Only public repo IDs/star counts, translated public descriptions and delivery state live here.
 // No settings, coordinates, topic, article content or credentials are persisted.
 export class GithubStateStore implements CloudStateStore {
   private base: string;
