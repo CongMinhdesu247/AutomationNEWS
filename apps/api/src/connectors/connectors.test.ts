@@ -45,6 +45,38 @@ const githubItem = (id: number) => ({
   fork: false,
 });
 describe("RSS", () => {
+  it("explains a homepage URL without weakening the XML declaration guard", async () => {
+    const feed = [
+      {
+        id: crypto.randomUUID(),
+        name: "Homepage",
+        enabled: true,
+        url: "https://example.com/",
+      },
+    ];
+    const result = await fetchRss(feed, {
+      ...context,
+      http: async () => ({
+        status: 200,
+        headers: {},
+        body: "<!DOCTYPE html><html><head><title>News</title></head></html>",
+      }),
+    });
+    expect(result.status).toBe("failed");
+    expect(result.errors[0]).toMatchObject({
+      code: "NOT_RSS_FEED",
+      message: expect.stringContaining("thay vì trang chủ"),
+    });
+    const unsafe = await fetchRss(feed, {
+      ...context,
+      http: async () => ({
+        status: 200,
+        headers: {},
+        body: '<!DOCTYPE rss [<!ENTITY x SYSTEM "file:///etc/passwd">]><rss />',
+      }),
+    });
+    expect(unsafe.errors[0]?.code).toBe("UNSAFE_XML");
+  });
   it("deduplicates IDs and tracking URLs, skips missing dates, keeps results when a feed fails", async () => {
     const xml =
       '<rss version="2.0"><channel><title>Feed</title>' +

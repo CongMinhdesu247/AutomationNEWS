@@ -78,6 +78,15 @@ export async function fetchRss(
           signal.throwIfAborted();
           const response = await http(feed.url, { signal, maxRedirects: 3 });
           ensureOk(response);
+          if (
+            /^(?:<!doctype\s+html\b|<html(?:\s|>))/i.test(
+              response.body.trimStart(),
+            )
+          )
+            throw new ConnectorError(
+              "NOT_RSS_FEED",
+              "URL này trả về trang web HTML, không phải luồng RSS/Atom. Hãy dùng link RSS của nguồn báo thay vì trang chủ.",
+            );
           if (/<!DOCTYPE|<!ENTITY/i.test(response.body))
             throw new ConnectorError(
               "UNSAFE_XML",

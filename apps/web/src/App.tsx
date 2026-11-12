@@ -483,6 +483,7 @@ export default function App() {
                             name={"rss." + index + ".url"}
                             label={"URL RSS " + (index + 1)}
                             type="url"
+                            hint="Dùng link RSS, không dùng trang chủ. Ví dụ: https://vnexpress.net/rss/tin-moi-nhat.rss"
                             value={source.url}
                             onChange={(url) =>
                               change({
