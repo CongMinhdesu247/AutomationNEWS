@@ -8,8 +8,10 @@ import {
   type FamilyProfile,
   sourceHealth,
 } from "@hub/contracts";
+import { createHash } from "node:crypto";
 import { fetchRss } from "../connectors/rss.js";
 import { fetchGold, fetchUsd } from "../connectors/markets.js";
+import { compareMarketHistory, recordMarketHistory, lowestMarketLabels } from "../connectors/market-history.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather, dateInZone } from "../connectors/weather.js";
@@ -85,22 +87,23 @@ export async function runCloudDigest(options: CloudOptions) {
   const previousSignal = signalKey
     ? revision.state.signals?.[signalKey]
     : undefined;
+  let regularAlertsAllowed = true;
   if (options.alertsOnly) {
     if (
-      !options.alerts?.enabled ||
+      (!options.alerts?.enabled && !settings.gold?.enabled && !settings.usd?.enabled) ||
       !signalKey ||
       !/^[a-f0-9]{16}$/.test(signalKey)
     )
       return { status: "alerts_disabled" as const };
     const hour = new Date(+now() + 7 * 3600000).getUTCHours();
-    if (hour < 9 || hour >= 20) return { status: "quiet_hours" as const };
+    regularAlertsAllowed = hour >= 9 && hour < 20;
     const lastAttempt =
       previousSignal?.attemptedAt ?? previousSignal?.notifiedAt;
     if (lastAttempt && +now() - Date.parse(lastAttempt) < 6 * 3600000)
-      return { status: "alert_cooldown" as const };
+      regularAlertsAllowed = false;
     const prefix = day + ":" + signalKey + ":alert:";
     if (revision.state.deliveries[prefix + "1"])
-      return { status: "alert_limit" as const };
+      regularAlertsAllowed = false;
     deliveryKey =
       prefix + (revision.state.deliveries[prefix + "0"] ? "1" : "0");
     settings = {
@@ -202,6 +205,7 @@ export async function runCloudDigest(options: CloudOptions) {
     gold,
     usd,
   };
+  compareMarketHistory(sources, revision.state.marketHistory ?? [], now());
   options.onAirQuality?.({ status: airQuality.status });
   options.onFuel?.({
     status: fuel.status,
@@ -247,16 +251,27 @@ export async function runCloudDigest(options: CloudOptions) {
   if (dateInZone(now(), settings.newsletter.timezone) !== day)
     throw new Error("Local day changed during collection; no send.");
   const state = pruneState(revision.state, now());
+  state.marketHistory = recordMarketHistory(state.marketHistory ?? [], sources, now());
+  const lowest = lowestMarketLabels(sources);
   const signals = marketSignals(sources);
+  const fingerprint = createHash("sha256").update(JSON.stringify(lowest.map(label => [label,
+    label === "USD/VND" ? signals.usd_sell : label === "Vàng miếng SJC" ? signals.sjc_bar_sell : signals.sjc_ring_sell,
+  ]))).digest("hex").slice(0, 16);
+  const lowKey = lowest.length && signalKey ? day + ":" + signalKey + ":low:" + fingerprint : undefined;
+  const newLow = lowest.length > 0 && (!lowKey || !revision.state.deliveries[lowKey]);
   const changes = options.alertsOnly
-    ? significantChanges(signals, previousSignal, options.alerts!)
+    ? [...(newLow ? lowest : []).map(label => "🚨 KHẨN: " + label + " đã xuống thấp nhất 30 ngày"),
+      ...(options.alerts?.enabled && regularAlertsAllowed ? significantChanges(signals, previousSignal, options.alerts) : [])]
     : [];
+  if (options.alertsOnly && changes.some(line => line.startsWith("🚨"))) {
+    deliveryKey = lowKey!;
+  }
   if (options.alertsOnly && !changes.length) {
     // Seed without alarming; re-arm AQI only after it falls below the chosen level.
     if (
       !previousSignal ||
       (signals.aqi !== undefined &&
-        signals.aqi < options.alerts!.aqiThreshold &&
+        signals.aqi < (options.alerts?.aqiThreshold ?? Infinity) &&
         previousSignal.values.aqi !== signals.aqi)
     ) {
       state.signals ??= {};
@@ -270,8 +285,8 @@ export async function runCloudDigest(options: CloudOptions) {
             }
           : signals,
       };
-      await options.state.save(state, revision.sha);
     }
+    await options.state.save(state, revision.sha);
     return { status: "no_significant_change" as const };
   }
   const sealed = options.reportBaseUrl
@@ -305,6 +320,7 @@ export async function runCloudDigest(options: CloudOptions) {
     at: now().toISOString(),
     ...metadata,
   };
+  if (newLow && lowKey) state.deliveries[lowKey] = state.deliveries[deliveryKey]!;
   if (signalKey) {
     state.signals ??= {};
     state.signals[signalKey] = {
@@ -321,7 +337,9 @@ export async function runCloudDigest(options: CloudOptions) {
     now,
     token: options.ntfyToken,
     signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]),
-    message: options.alertsOnly
+    message: options.alertsOnly && lowest.length
+      ? cloudMessage(digest)
+      : options.alertsOnly
       ? changes.join("\n\n") +
         "\n\nSo với lần thông báo gần nhất.\n" +
         sourceHealth(sources)
@@ -342,7 +360,7 @@ export async function runCloudDigest(options: CloudOptions) {
         (sealed ? "\nChạm để xem đầy đủ." : "")
       : cloudMessage(digest),
     ...(sealed ? { clickUrl: sealed.url } : {}),
-    ...(options.alertsOnly ? { title: "Biến động đáng chú ý" } : {}),
+    ...(lowest.length ? { title: "KHẨN: giá xuống thấp nhất 30 ngày", priority: 5 as const } : options.alertsOnly ? { title: "Biến động đáng chú ý" } : {}),
   });
   const error = delivered.errors[0];
   const sendStatus =
@@ -356,6 +374,7 @@ export async function runCloudDigest(options: CloudOptions) {
     at: now().toISOString(),
     ...metadata,
   };
+  if (newLow && lowKey) state.deliveries[lowKey] = state.deliveries[deliveryKey]!;
   if (sendStatus === "sent" && signalKey) {
     state.signals ??= {};
     state.signals[signalKey] = {

@@ -3,11 +3,22 @@ import type {
   Digest,
   DigestSummary,
   NotificationAttempt,
+  DigestSources,
+  MarketDay,
   Settings,
 } from "@hub/contracts";
 import type { BaselineLoader } from "../connectors/github.js";
+import { recordMarketHistory } from "../connectors/market-history.js";
 export class DigestStore {
   constructor(public pool: Pool) {}
+  async marketHistory(at: Date, excludeId: string): Promise<MarketDay[]> {
+    const monitor = await this.pool.query<{ state: { marketHistory?: MarketDay[] } }>("SELECT state FROM market_monitor WHERE id=1");
+    const rows = await this.pool.query<{ sources: Pick<DigestSources, "gold" | "usd"> }>(
+      "SELECT jsonb_build_object('gold',sources->'gold','usd',sources->'usd') AS sources FROM digests WHERE created_at >= $1 AND created_at <= $2 AND id <> $3 AND sources IS NOT NULL ORDER BY created_at,id",
+      [new Date(+at - 31 * 86400000), at, excludeId],
+    );
+    return rows.rows.reduce((history, row) => recordMarketHistory(history, row.sources, at), monitor.rows[0]?.state.marketHistory ?? []);
+  }
   async settings() {
     const row = await this.pool.query<{ config: Settings }>(
       "SELECT config FROM settings WHERE id=$1",

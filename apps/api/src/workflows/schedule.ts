@@ -1,6 +1,7 @@
 import { settingsSchema, type Settings } from "@hub/contracts";
 import { WorkflowQueue } from "./queue.js";
 import { DigestStore } from "../digests/store.js";
+import { checkMarketLows } from "./market-monitor.js";
 import {
   DigestService,
   RequestError,
@@ -211,5 +212,8 @@ export class DigestScheduler {
       ),
     ]);
     return { ...schedule.rows[0], deliveries: deliveries.rows };
+  }
+  async checkMarkets() {
+    return checkMarketLows(this.queue.pool, this.options);
   }
 }

@@ -117,6 +117,15 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
     );
   expect(Buffer.byteLength(message)).toBeLessThanOrEqual(1600);
   expect(message).not.toContain("�");
+  for (const item of value.sources!.gold!.data!.items)
+    item.low30 = { minimum: 14000000, days: 30, isLowest: true };
+  value.sources!.usd!.data!.low30 = { minimum: 25900, days: 30, isLowest: true };
+  const withLows = formatDigestNotification(value);
+  expect(withLows).toContain("14.000.000");
+  expect(withLows).toContain("25.900");
+  expect(withLows).toContain("KHẨN: đã xuống thấp nhất 30 ngày");
+  expect(Buffer.byteLength(withLows)).toBeLessThanOrEqual(1600);
+  expect(withLows).not.toContain("�");
 });
 it("normalizes multiline descriptions, keeps authors' content and has an honest missing-description fallback", () => {
   const value = digest();

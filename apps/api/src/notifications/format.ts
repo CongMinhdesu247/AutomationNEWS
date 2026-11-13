@@ -1,5 +1,5 @@
 import type { Digest, Repository, RisingRepository } from "@hub/contracts";
-import { goldPricePerChi } from "@hub/contracts";
+import { goldPricePerChi, priceLow30Text } from "@hub/contracts";
 
 function clip(value: string, maxBytes: number) {
   if (Buffer.byteLength(value) <= maxBytes) return value;
@@ -73,7 +73,7 @@ export function formatDigestNotification(
                 ": mua " +
                 money(goldPricePerChi(item.buy, data.unit)) +
                 " · bán " +
-                money(goldPricePerChi(item.sell, data.unit)),
+                money(goldPricePerChi(item.sell, data.unit)) + "\n" + priceLow30Text(item.low30),
             ),
             "Webgia tổng hợp · TP.HCM · " +
               asOf(data.sourceUpdatedAt) +
@@ -92,7 +92,7 @@ export function formatDigestNotification(
               money(data.buyCash) +
               " · chuyển khoản " +
               money(data.buyTransfer),
-            "Ngân hàng bán: " + money(data.sell),
+            "Ngân hàng bán: " + money(data.sell) + "\n" + priceLow30Text(data.low30),
             "Nguồn công bố: " +
               asOf(data.sourceUpdatedAt) +
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),

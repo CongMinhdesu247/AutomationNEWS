@@ -11,7 +11,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run --exclude \"**/*.integration.test.ts\"",
-    "test:integration": "vitest run apps/api/src/settings.integration.test.ts apps/api/src/digests/digests.integration.test.ts apps/api/src/workflows/queue.integration.test.ts apps/api/src/workflows/reliability.integration.test.ts apps/api/src/telemetry/events.integration.test.ts apps/api/src/operations/retention.integration.test.ts apps/api/src/family/family.integration.test.ts",
+    "test:integration": "vitest run apps/api/src/settings.integration.test.ts apps/api/src/digests/digests.integration.test.ts apps/api/src/workflows/queue.integration.test.ts apps/api/src/workflows/reliability.integration.test.ts apps/api/src/workflows/market-monitor.integration.test.ts apps/api/src/telemetry/events.integration.test.ts apps/api/src/operations/retention.integration.test.ts apps/api/src/family/family.integration.test.ts",
     "migrate": "pnpm --filter @hub/api migrate",
     "dev:worker": "pnpm --filter @hub/worker dev",
     "dev:scheduler": "pnpm --filter @hub/scheduler dev",

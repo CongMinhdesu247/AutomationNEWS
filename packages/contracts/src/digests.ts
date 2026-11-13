@@ -86,7 +86,7 @@ export type DigestSources = {
 export type GoldData = {
   source: string; sourceUrl: string; sourceUpdatedAt: string; previousDay: boolean;
   region: string; unit: "VND/chỉ" | "VND/lượng";
-  items: { code: "sjc_bar" | "sjc_ring"; name: string; buy: number; sell: number }[];
+  items: { code: "sjc_bar" | "sjc_ring"; name: string; buy: number; sell: number; low30?: PriceLow30 }[];
 };
 // Older saved digests use VND/lượng; keep their amounts correct when displayed.
 export function goldPricePerChi(price: number, unit: GoldData["unit"]): number {
@@ -95,7 +95,15 @@ export function goldPricePerChi(price: number, unit: GoldData["unit"]): number {
 export type UsdData = {
   source: "Vietcombank"; sourceUrl: string; sourceUpdatedAt: string; previousDay: boolean;
   unit: "VND/USD"; buyCash: number | null; buyTransfer: number | null; sell: number | null;
+  low30?: PriceLow30;
 };
+export type PriceLow30 = { minimum: number | null; days: number; isLowest: boolean };
+export type MarketDay = { day: string; prices: Record<string, number> };
+export function priceLow30Text(low?: PriceLow30): string {
+  if (!low || low.minimum === null) return "Đáy bán 30 ngày trước: chưa có lịch sử";
+  return `Đáy bán 30 ngày trước: ${low.minimum.toLocaleString("vi-VN")} (ghi nhận ${low.days}/30 ngày)` +
+    (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
+}
 export type AirQualityData = {
   location: string;
   forecastAt: string;

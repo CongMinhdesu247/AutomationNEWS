@@ -2,6 +2,8 @@
 
 Dashboard cá nhân cho bản tin buổi sáng, tự host và không phụ thuộc dịch vụ trả phí.
 
+Giá vàng/USD có thêm mức bán thấp nhất đã ghi nhận trong 30 ngày trước để so sánh. Khi đủ lịch sử và giá chạm đáy, scheduler kiểm tra mỗi 30 phút và gửi thông báo **KHẨN** qua ntfy. Xem [cách tính, thời gian tích lũy lịch sử và cảnh báo](docs/gold-usd.md#so-sánh-đáy-30-ngày-và-cảnh-báo-khẩn).
+
 **Bản cục bộ để xem xét, chưa phát hành.** Cài mới và fixture tests đã qua; tích hợp live/ba buổi sáng còn chờ xác minh. Xem [release-readiness](docs/release-readiness.md), [CHANGELOG](CHANGELOG.md), [CV/GitHub description](docs/portfolio.md) và [checklist ba sáng](docs/morning-checklist.md).
 
 ## Vấn đề và cách giải quyết

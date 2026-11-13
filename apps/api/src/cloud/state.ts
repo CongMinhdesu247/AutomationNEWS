@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pruneMarketHistory } from "../connectors/market-history.js";
 import type { BaselineLoader } from "../connectors/github.js";
 import type { TranslationCache } from "../connectors/vietnamese.js";
 
@@ -12,6 +13,10 @@ const snapshotSchema = z
 export const cloudStateSchema = z
   .object({
     version: z.literal(1),
+    marketHistory: z.array(z.object({
+      day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      prices: z.record(z.string().regex(/^(sjc_bar|sjc_ring|usd)$/), z.number().finite().positive()),
+    }).strict()).max(31).optional(),
     reports: z
       .record(
         z.uuid(),
@@ -54,7 +59,7 @@ export const cloudStateSchema = z
       .optional(),
     snapshots: z.array(snapshotSchema).max(5000),
     deliveries: z.record(
-      z.string().regex(/^\d{4}-\d{2}-\d{2}(?::[a-f0-9]{16})?(?::alert:[01])?$/),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}(?::[a-f0-9]{16})?(?::alert:[01]|:low:[a-f0-9]{16})?$/),
       z
         .object({
           status: z.enum(["reserved", "sent", "failed", "unknown"]),
@@ -143,6 +148,7 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   const cutoff = at.getTime() - 3 * 86400000;
   return {
     version: 1,
+    ...(state.marketHistory ? { marketHistory: pruneMarketHistory(state.marketHistory, at) } : {}),
     ...(state.reports
       ? {
           reports: Object.fromEntries(

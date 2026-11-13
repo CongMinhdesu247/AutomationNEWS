@@ -9,7 +9,7 @@ import type {
   RisingRepository,
 } from "@hub/contracts";
 import { Icon } from "./Icons";
-import { goldPricePerChi, priceFreshness } from "@hub/contracts";
+import { goldPricePerChi, priceFreshness, priceLow30Text } from "@hub/contracts";
 const statusText: Record<string, string> = {
   success: "Thành công",
   partial: "Một phần",
@@ -489,6 +489,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                                   </strong>
                                 </p>
                               </div>
+                              <p>{priceLow30Text(item.low30)}</p>
                             </li>
                           ))}
                         </ul>
@@ -554,6 +555,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                                 "vi-VN",
                               ) ?? "Chưa có"}
                             </strong>
+                            <span>{priceLow30Text(digest.sources.usd.data.low30)}</span>
                           </p>
                         </div>
                         <p>

@@ -1,4 +1,4 @@
-import { parseCloudSettings, runCloudDigest } from "./digest.js";
+import { parseCloudSettings, runCloudDigest, type CloudOptions } from "./digest.js";
 import { GithubStateStore } from "./state.js";
 import { runCloudFamily } from "./family.js";
 import { safeHttp } from "../connectors/http.js";
@@ -55,7 +55,8 @@ try {
     )
       console.log("Cloud digest: not_due");
     else {
-      const result = await runCloudDigest({
+      const options: CloudOptions = {
+        signalNamespace: "0000000000000001",
         settings,
         state: new GithubStateStore(repository, token),
         githubToken: token,
@@ -70,7 +71,10 @@ try {
         onFuel: (result) => console.log("Fuel prices:", JSON.stringify(result)),
         onAirQuality: (result) =>
           console.log("Hanoi air quality:", JSON.stringify(result)),
-      });
+      };
+      let result = await runCloudDigest(options);
+      if (result.status === "already_attempted" && (settings.gold?.enabled || settings.usd?.enabled))
+        result = await runCloudDigest({ ...options, alertsOnly: true });
       console.log(
         "Cloud digest:",
         result.status,

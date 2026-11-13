@@ -61,7 +61,10 @@ export async function runCloudFamily(
   const errors: string[] = [];
   const sharedHttp = cachedFamilyHttp(options.http ?? safeHttp);
   for (const profile of family.profiles) {
-    if (selected ? profile.id !== selected : !profileDue(profile, now()))
+    const localWeekday = new Date(+now() + 7 * 3600000).getUTCDay() || 7;
+    const monitorBeforeDue = !selected && profile.enabled && profile.days.includes(localWeekday) &&
+      (profile.gold || profile.usd) && !profileDue(profile, now());
+    if (selected ? profile.id !== selected : !profileDue(profile, now()) && !monitorBeforeDue)
       continue;
     if (!profile.topic) {
       errors.push(profile.id);
@@ -83,11 +86,11 @@ export async function runCloudFamily(
         signalNamespace: namespace,
         alerts: profile.alerts,
       };
-      let result = await runCloudDigest(digestOptions);
+      let result = await runCloudDigest({ ...digestOptions, ...(monitorBeforeDue ? { alertsOnly: true } : {}) });
       if (
         result.status === "already_attempted" &&
         !selected &&
-        profile.alerts?.enabled
+        (profile.alerts?.enabled || profile.gold || profile.usd)
       )
         result = await runCloudDigest({ ...digestOptions, alertsOnly: true });
       results.push({ id: profile.id, status: result.status });

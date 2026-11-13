@@ -9,6 +9,7 @@ import { DigestStore } from "../digests/store.js";
 import type { ServiceOptions } from "../digests/service.js";
 import { fetchRss } from "../connectors/rss.js";
 import { fetchGold, fetchUsd } from "../connectors/markets.js";
+import { compareMarketHistory } from "../connectors/market-history.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
@@ -160,13 +161,24 @@ export class DigestNodeExecutor {
       const previous = previousId ? await this.store.get(previousId) : undefined;
       return fetchFuel(config.fuel, { ...context, baseline: previous?.sources?.fuel ? fuelBaseline(previous.sources.fuel) : undefined });
     };
+    const collectMarket = async () => {
+      const history = await this.store.marketHistory(this.now(), job.runId);
+      if (job.type === "fetch_gold") {
+        const gold = await fetchGold(config.gold, context);
+        compareMarketHistory({ gold }, history, this.now());
+        return gold;
+      }
+      const usd = await fetchUsd(config.usd, context);
+      compareMarketHistory({ usd }, history, this.now());
+      return usd;
+    };
     const operation =
       job.type === "fetch_rss"
         ? fetchRss(config.rss, context)
         : job.type === "fetch_gold"
-          ? fetchGold(config.gold, context)
+          ? collectMarket()
         : job.type === "fetch_usd"
-          ? fetchUsd(config.usd, context)
+          ? collectMarket()
         : job.type === "fetch_air_quality"
           ? fetchAirQuality(config.airQuality, context)
         : job.type === "fetch_fuel"

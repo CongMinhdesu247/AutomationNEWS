@@ -36,6 +36,7 @@ try {
     try {
       await scheduler.tick();
       if (!controller.signal.aborted) await scheduler.deliver();
+      if (!controller.signal.aborted) await scheduler.checkMarkets();
     } catch {
       console.error("Scheduler chưa xử lý được công việc; sẽ kiểm tra lại.");
     }

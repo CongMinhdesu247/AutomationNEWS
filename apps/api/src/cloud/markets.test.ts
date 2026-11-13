@@ -70,7 +70,7 @@ it("sends mom's gold/USD-only profile at 09:00, recovers transient bank errors, 
     now: () => new Date("2026-11-12T01:30:00Z"),
     sleep: async () => {},
   });
-  expect(bankCalls).toBe(0);
+  expect(bankCalls).toBe(2); // monitoring may collect before the daily send time
   expect(messages).toHaveLength(0);
   await runCloudFamily(config, {
     state,
@@ -79,7 +79,7 @@ it("sends mom's gold/USD-only profile at 09:00, recovers transient bank errors, 
     sleep: async () => {},
   });
   expect(messages).toHaveLength(1);
-  expect(bankCalls).toBe(2);
+  expect(bankCalls).toBe(3);
   expect(messages[0]).toContain("Giá vàng SJC · đồng/chỉ");
   expect(messages[0]).toContain("Miếng SJC: mua 13.600.000");
   expect(messages[0]).toContain("Nhẫn SJC 9999");

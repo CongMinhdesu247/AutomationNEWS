@@ -1,4 +1,5 @@
 import { isIP } from "node:net";
+import { lowestMarketLabels } from "./market-history.js";
 import ipaddr from "ipaddr.js";
 import type { Settings, Digest, SourceResult } from "@hub/contracts";
 import {
@@ -57,6 +58,7 @@ export async function sendNtfy(
     message: customMessage,
     clickUrl,
     title,
+    priority,
   }: {
     http?: HttpClient;
     now?: () => Date;
@@ -67,6 +69,7 @@ export async function sendNtfy(
     message?: string;
     clickUrl?: string;
     title?: string;
+    priority?: 5;
   },
 ): Promise<SourceResult<null>> {
   if (!config.enabled)
@@ -94,7 +97,8 @@ export async function sendNtfy(
       },
       body: JSON.stringify({
         topic: config.topic,
-        title: title ?? notificationTitle(digest),
+        title: title ?? (digest.sources && lowestMarketLabels(digest.sources).length ? "KHẨN: giá xuống thấp nhất 30 ngày" : notificationTitle(digest)),
+        ...((priority || (digest.sources && lowestMarketLabels(digest.sources).length)) ? { priority: priority ?? 5 } : {}),
         message: customMessage ?? formatDigestNotification(digest),
         ...(click ? { click } : {}),
       }),
