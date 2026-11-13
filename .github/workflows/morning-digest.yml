@@ -48,7 +48,7 @@ jobs:
           pnpm --filter @hub/contracts typecheck
           pnpm --filter @hub/api typecheck
       - name: Test cloud execution and notification layout
-        run: pnpm exec vitest run apps/api/src/cloud/cloud.test.ts apps/api/src/cloud/family.test.ts apps/api/src/cloud/enhancements.test.ts apps/api/src/family/cloud-admin.test.ts apps/api/src/notifications/format.test.ts apps/api/src/connectors/vietnamese.test.ts apps/api/src/connectors/fuel.test.ts apps/api/src/connectors/air-quality.test.ts apps/api/src/connectors/markets.test.ts apps/api/src/cloud/markets.test.ts
+        run: pnpm exec vitest run apps/api/src/cloud/cloud.test.ts apps/api/src/cloud/family.test.ts apps/api/src/cloud/enhancements.test.ts apps/api/src/family/cloud-admin.test.ts apps/api/src/notifications/format.test.ts apps/api/src/connectors/vietnamese.test.ts apps/api/src/connectors/fuel.test.ts apps/api/src/connectors/air-quality.test.ts apps/api/src/connectors/markets.test.ts apps/api/src/cloud/markets.test.ts apps/api/src/cloud/market-lows.test.ts apps/api/src/connectors/market-history.test.ts
       - name: Collect and send morning digest
         env:
           HUB_SETTINGS_JSON: ${{ secrets.HUB_SETTINGS_JSON }}
