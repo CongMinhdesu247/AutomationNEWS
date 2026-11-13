@@ -64,8 +64,8 @@ export function formatDigestNotification(
     });
   const briefLow = (low?: PriceLow30) =>
     low?.minimum === null || !low
-      ? "đáy 30 ngày: chưa có lịch sử"
-      : "đáy 30 ngày: " + money(low.minimum) +
+      ? "đáy bán 30 ngày: chưa có lịch sử"
+      : "đáy bán 30 ngày: " + money(low.minimum) +
         (low.days < 30 ? ` (${low.days}/30 ngày)` : "") +
         (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
   const goldHistoryNote = (lows: (PriceLow30 | undefined)[]) =>
@@ -76,9 +76,10 @@ export function formatDigestNotification(
     blocks.push(
       data
         ? !full ? [
-            "🟡 Vàng SJC · đ/chỉ (giá bán)",
+            "🟡 Vàng SJC · đ/chỉ",
             ...data.items.map(item =>
-              (item.code === "sjc_bar" ? "Miếng" : "Nhẫn 9999") + ": " +
+              (item.code === "sjc_bar" ? "Miếng" : "Nhẫn 9999") + ": mua " +
+              money(goldPricePerChi(item.buy, data.unit)) + " · bán " +
               money(goldPricePerChi(item.sell, data.unit)) + " · " + briefLow(item.low30)),
             ...goldHistoryNote(data.items.map(item => item.low30)),
             "Webgia · " + asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
@@ -109,6 +110,7 @@ export function formatDigestNotification(
       data
         ? !full ? [
             "💵 USD · Vietcombank · đ/USD",
+            "Mua tiền mặt: " + money(data.buyCash) + " · chuyển khoản: " + money(data.buyTransfer),
             "Bán: " + money(data.sell) + " · " + briefLow(data.low30),
             asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
           ].join("\n") : [

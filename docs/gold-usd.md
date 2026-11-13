@@ -11,7 +11,7 @@
 
 ## So sánh đáy 30 ngày và cảnh báo khẩn
 
-- Thông báo ngắn ưu tiên **giá bán** (giá người dùng trả khi mua) và **đáy 30 ngày** trên cùng một dòng. Chỉ ghi số ngày khi lịch sử chưa đủ; gom chú thích giá chốt phiên về một dòng. Giá mua vào, mua tiền mặt/chuyển khoản và nguồn chi tiết vẫn có trong báo cáo đầy đủ. Link báo cáo nằm ở nút **Xem chi tiết**, không còn URL dài trong nội dung thông báo; chạm banner vẫn mở ntfy.
+- Thông báo ngắn hiển thị **giá mua vào, bán ra và đáy bán 30 ngày**; vàng mỗi loại một dòng, USD có riêng giá ngân hàng mua tiền mặt/chuyển khoản. Mua/bán đều hiểu từ phía cửa hàng/ngân hàng. Chỉ ghi số ngày khi lịch sử chưa đủ; gom chú thích giá chốt phiên về một dòng. Nguồn chi tiết vẫn có trong báo cáo đầy đủ. Link báo cáo nằm ở nút **Xem chi tiết**, không còn URL dài trong nội dung thông báo; chạm banner vẫn mở ntfy.
 
 - Bên cạnh giá bán của từng loại vàng và USD, bản tin, báo cáo và dashboard hiển thị mức bán thấp nhất **đã ghi nhận trong 30 ngày lịch trước hôm nay**, theo giờ Việt Nam. So sánh giá bán vì đây là giá người dùng trả khi mua; vàng miếng, vàng nhẫn và USD có lịch sử riêng. Giá vàng cũ đồng/lượng được chuẩn hóa về đồng/chỉ.
 - Tự lấy bù lịch sử công khai cho 30 ngày trước hôm nay. USD dùng API Vietcombank với `date=YYYY-MM-DD`, kiểm tra ngày trả về và thời gian cập nhật so với chính ngày lịch sử. Vàng dùng bảng **giá chốt phiên** `giavang.pro` của đúng hai sản phẩm SJC tại Hồ Chí Minh: [miếng SJC 1L, 10L, 1KG](https://giavang.pro/gia-vang/sjc/hcm/sjc-1l-10l-1kg?range=60d) và [nhẫn SJC 99,99% 1, 2, 5 chỉ](https://giavang.pro/gia-vang/sjc/hcm/nhan-sjc-99-99-1-chi-2-chi-5-chi?range=60d). Giá lưu trữ đồng/lượng được chia 10 về đồng/chỉ. Nguồn giá hiện tại vẫn là Webgia/Vietcombank như trên.

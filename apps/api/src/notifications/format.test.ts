@@ -104,11 +104,11 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("💨 Hà Nội · AQI Mỹ: 125");
   expect(message).toContain("PM2.5: 41,4 µg/m³");
   expect(message).toContain("Dự báo Open-Meteo/CAMS");
-  expect(message).toContain("Vàng SJC · đ/chỉ (giá bán)");
-  expect(message).toContain("Miếng: 13.900.000 · đáy 30 ngày:");
-  expect(message).toContain("Nhẫn 9999: 13.880.000 · đáy 30 ngày:");
-  expect(message).toContain("Bán: 25.870 · đáy 30 ngày:");
-  expect(message).not.toContain("Ngân hàng mua:");
+  expect(message).toContain("Vàng SJC · đ/chỉ");
+  expect(message).toContain("Miếng: mua 13.600.000 · bán 13.900.000 · đáy bán 30 ngày:");
+  expect(message).toContain("Nhẫn 9999: mua 13.480.000 · bán 13.880.000 · đáy bán 30 ngày:");
+  expect(message).toContain("Bán: 25.870 · đáy bán 30 ngày:");
+  expect(message).toContain("Mua tiền mặt: 25.460 · chuyển khoản: 25.490");
   const full = formatDigestNotification(value, false, false, true);
   expect(full).toContain("Miếng SJC: mua 13.600.000 · bán 13.900.000");
   expect(full).toContain("Ngân hàng mua: tiền mặt 25.460 · chuyển khoản 25.490");
@@ -132,6 +132,8 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(withLows).toContain("KHẨN: đã xuống thấp nhất 30 ngày");
   expect(Buffer.byteLength(withLows)).toBeLessThanOrEqual(1600);
   expect(withLows).not.toContain("�");
+  value.sources!.usd!.data!.buyCash = null;
+  expect(formatDigestNotification(value)).toContain("Mua tiền mặt: chưa có · chuyển khoản: 25.490");
 });
 it("normalizes multiline descriptions, keeps authors' content and has an honest missing-description fallback", () => {
   const value = digest();

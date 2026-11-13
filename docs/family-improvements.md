@@ -40,6 +40,6 @@ Khôi phục: chọn tệp → nhập mật khẩu → **Mở & xem trước** �
 
 ## Kiểm chứng
 
-Thông báo dùng bản tóm tắt: mỗi loại giá hiển thị giá bán và đáy 30 ngày; thời tiết gộp một dòng, xăng giữ giá và mức thay đổi. Báo cáo đầy đủ mở qua nút **Xem chi tiết** của ntfy; đường dẫn mã hóa không còn xuất hiện trong nội dung. Chạm banner vẫn mở ntfy. Các cảnh báo giá cũ, thiếu dữ liệu, lịch sử chưa đủ và mức ưu tiên khẩn được giữ lại.
+Thông báo dùng bản tóm tắt: vàng hiển thị giá mua, bán và đáy bán 30 ngày; USD giữ cả mua tiền mặt/chuyển khoản và bán. Thời tiết gộp một dòng, xăng giữ giá và mức thay đổi. Báo cáo đầy đủ mở qua nút **Xem chi tiết** của ntfy; đường dẫn mã hóa không còn xuất hiện trong nội dung. Chạm banner vẫn mở ntfy. Các cảnh báo giá cũ, thiếu dữ liệu, lịch sử chưa đủ và mức ưu tiên khẩn được giữ lại.
 
 Kiểm thử `cloud/enhancements.test.ts`: lịch theo ngày Việt Nam, freshness, ngưỡng, AQI crossing, AES-GCM/tamper, reservation trước POST, telemetry, dry-run không ghi/gửi, cooldown sau lỗi mơ hồ, khung giờ và dọn report. `family-backup.test.ts`: round-trip, sai mật khẩu, sửa ciphertext, giới hạn. Integration family trên schema PostgreSQL thử riêng: quyền từng hồ sơ, field allowlist, revision, xoay/thu hồi/hết hạn token, không lộ topic và đọc trạng thái. Không dùng thông báo thật để nghiệm thu vào ban đêm.
