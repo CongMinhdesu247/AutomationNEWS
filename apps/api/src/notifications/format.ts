@@ -64,10 +64,10 @@ export function formatDigestNotification(
     });
   const briefLow = (low?: PriceLow30) =>
     low?.minimum === null || !low
-      ? "đáy bán 30 ngày: chưa có lịch sử"
-      : "đáy bán 30 ngày: " + money(low.minimum) +
-        (low.days < 30 ? ` (${low.days}/30 ngày)` : "") +
-        (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
+      ? "Đáy bán 30 ngày: chưa có lịch sử"
+      : "Đáy bán 30 ngày: " + money(low.minimum) +
+        (low.days < 30 ? `\nLịch sử: ${low.days}/30 ngày` : "") +
+        (low.isLowest ? "\n🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
   const goldHistoryNote = (lows: (PriceLow30 | undefined)[]) =>
     lows.some(low => low?.historySource === "giavang.pro")
       ? ["Đáy vàng: giá chốt phiên (giavang.pro)."] : [];
@@ -77,10 +77,13 @@ export function formatDigestNotification(
       data
         ? !full ? [
             "🟡 Vàng SJC · đ/chỉ",
-            ...data.items.map(item =>
-              (item.code === "sjc_bar" ? "Miếng" : "Nhẫn 9999") + ": mua " +
-              money(goldPricePerChi(item.buy, data.unit)) + " · bán " +
-              money(goldPricePerChi(item.sell, data.unit)) + " · " + briefLow(item.low30)),
+            data.items.map(item => [
+              item.code === "sjc_bar" ? "★ Vàng miếng SJC" : "★ Vàng nhẫn SJC 9999",
+              "Mua: " + money(goldPricePerChi(item.buy, data.unit)),
+              "Bán: " + money(goldPricePerChi(item.sell, data.unit)),
+              briefLow(item.low30),
+            ].join("\n")).join("\n\n"),
+            "",
             ...goldHistoryNote(data.items.map(item => item.low30)),
             "Webgia · " + asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
           ].join("\n") : [
@@ -99,7 +102,8 @@ export function formatDigestNotification(
           ].join("\n")
         : ["🟡 Chưa lấy được giá vàng SJC hiện tại.",
             ...Object.entries(sources.gold.priceHistory ?? {}).map(([key, low]) =>
-              (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + (full ? priceLow30Text(low) : briefLow(low))),
+              full ? (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + priceLow30Text(low) :
+              (key === "sjc_bar" ? "\n★ Vàng miếng SJC\n" : "\n★ Vàng nhẫn SJC 9999\n") + briefLow(low)),
             ...(!full ? goldHistoryNote(Object.values(sources.gold.priceHistory ?? {})) : []),
           ].join("\n"),
     );
@@ -109,9 +113,11 @@ export function formatDigestNotification(
     blocks.push(
       data
         ? !full ? [
-            "💵 USD · Vietcombank · đ/USD",
-            "Mua tiền mặt: " + money(data.buyCash) + " · chuyển khoản: " + money(data.buyTransfer),
-            "Bán: " + money(data.sell) + " · " + briefLow(data.low30),
+            "★ USD · Vietcombank · đ/USD",
+            "Mua tiền mặt: " + money(data.buyCash),
+            "Mua chuyển khoản: " + money(data.buyTransfer),
+            "Bán: " + money(data.sell),
+            briefLow(data.low30),
             asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
           ].join("\n") : [
             "💵 USD/VND · Vietcombank · đồng/USD",
@@ -124,7 +130,7 @@ export function formatDigestNotification(
               asOf(data.sourceUpdatedAt) +
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
           ].join("\n")
-        : ["💵 Chưa lấy được tỷ giá USD/VND Vietcombank hiện tại.",
+        : [full ? "💵 Chưa lấy được tỷ giá USD/VND Vietcombank hiện tại." : "★ USD · Vietcombank · đ/USD\nChưa lấy được giá hiện tại.",
             ...(sources.usd.priceHistory?.usd ? [full ? priceLow30Text(sources.usd.priceHistory.usd) : briefLow(sources.usd.priceHistory.usd)] : []),
           ].join("\n"),
     );
