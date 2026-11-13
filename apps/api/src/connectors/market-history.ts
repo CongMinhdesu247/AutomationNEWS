@@ -22,7 +22,9 @@ export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd"
     const minimum = days.size ? Math.min(...days.values()) : null;
     const intraday = history.filter(row => row.day === today).map(row => row.prices[key]).filter((price): price is number => price !== undefined);
     const imported = previous.some(row => row.historical?.[key]);
-    return { minimum, days: days.size, isLowest: fresh && days.size === 30 && minimum !== null && value !== null && value <= minimum && value <= Math.min(...intraday),
+    const matchesLow = fresh && minimum !== null && value !== null && value <= minimum && value <= Math.min(...intraday);
+    return { minimum, days: days.size, isLowest: matchesLow && days.size === 30,
+      ...(matchesLow && days.size < 30 ? { isLowestObserved: true } : {}),
       ...(imported ? { historySource: key === "usd" ? "Vietcombank" as const : "giavang.pro" as const } : {}),
     };
   };

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { MarketDay, DigestSources } from "@hub/contracts";
-import { priceLow30Text } from "@hub/contracts";
+import { priceLow30Text, priceLow30Notice } from "@hub/contracts";
 import { parseGold, parseUsd } from "./markets.js";
 import { compareMarketHistory, recordMarketHistory } from "./market-history.js";
 import { marketAt, goldHtml, usdJson } from "./test-support/market-fixtures.js";
@@ -29,22 +29,29 @@ it("compares each sell price against the previous 30 VN days, excluding today, f
   data.usd.data.sell = 25900;
   compareMarketHistory(data, history.filter(row => row.day !== "2026-11-12"), marketAt);
   expect(data.usd.data.low30?.isLowest).toBe(true);
+  expect(priceLow30Notice(data.usd.data.low30)).toContain("🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.");
 });
 it("shows partial history without claiming a 30-day low, and never alerts for old quotes", () => {
   const data = sources();
   compareMarketHistory(data, history30().slice(0, 29), marketAt);
   expect(data.usd.data.low30?.isLowest).toBe(false);
   expect(priceLow30Text(data.usd.data.low30)).toContain("29/30");
+  expect(priceLow30Notice(data.usd.data.low30)).toContain("Chúc mừng!");
+  expect(priceLow30Notice(data.usd.data.low30)).toContain("trong dữ liệu hiện có");
+  expect(priceLow30Notice(data.usd.data.low30)).not.toContain("KHẨN");
   data.usd.data.previousDay = true;
   compareMarketHistory(data, history30(), marketAt);
   expect(data.usd.data.low30?.isLowest).toBe(false);
+  expect(priceLow30Notice(data.usd.data.low30)).toBe("");
   compareMarketHistory(data, [], marketAt);
   expect(priceLow30Text(data.usd.data.low30)).toContain("chưa có lịch sử");
+  expect(priceLow30Notice(data.usd.data.low30)).toBe("");
 });
 it("does not announce a new low when a quote rebounds above an earlier intraday low", () => {
   const data = sources();
   compareMarketHistory(data, [...history30(), { day: "2026-11-12", prices: { usd: 25800 } }], marketAt);
   expect(data.usd.data.low30).toEqual({ minimum: 25900, days: 30, isLowest: false });
+  expect(priceLow30Notice(data.usd.data.low30)).toBe("");
 });
 it("keeps historical comparisons available without alerting when live sources fail", () => {
   const failed = { status: "failed" as const, fetchedAt: marketAt.toISOString(), data: null, errors: [] };

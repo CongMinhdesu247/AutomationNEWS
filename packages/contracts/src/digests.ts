@@ -98,13 +98,18 @@ export type UsdData = {
   unit: "VND/USD"; buyCash: number | null; buyTransfer: number | null; sell: number | null;
   low30?: PriceLow30;
 };
-export type PriceLow30 = { minimum: number | null; days: number; isLowest: boolean; historySource?: "giavang.pro" | "Vietcombank" };
+export type PriceLow30 = { minimum: number | null; days: number; isLowest: boolean; isLowestObserved?: boolean; historySource?: "giavang.pro" | "Vietcombank" };
+export function priceLow30Notice(low?: PriceLow30): string {
+  if (low?.isLowest) return "🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.\n🚨 KHẨN";
+  if (low?.isLowestObserved) return "🎉 Chúc mừng! Giá hôm nay thấp nhất trong dữ liệu hiện có.";
+  return "";
+}
 export type MarketDay = { day: string; prices: Record<string, number>; historical?: Record<string, string> };
 export function priceLow30Text(low?: PriceLow30): string {
   if (!low || low.minimum === null) return "Đáy bán 30 ngày trước: chưa có lịch sử (0/30 ngày)";
   return `Đáy bán 30 ngày trước: ${low.minimum.toLocaleString("vi-VN")} (ghi nhận ${low.days}/30 ngày)` +
     (low.historySource ? ` · ${low.historySource}${low.historySource === "giavang.pro" ? ", giá chốt phiên" : ""}` : "") +
-    (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
+    (priceLow30Notice(low) ? "\n" + priceLow30Notice(low) : "");
 }
 export type AirQualityData = {
   location: string;

@@ -1,5 +1,5 @@
 import type { Digest, Repository, RisingRepository, PriceLow30 } from "@hub/contracts";
-import { goldPricePerChi, priceLow30Text } from "@hub/contracts";
+import { goldPricePerChi, priceLow30Text, priceLow30Notice } from "@hub/contracts";
 
 function clip(value: string, maxBytes: number) {
   if (Buffer.byteLength(value) <= maxBytes) return value;
@@ -64,10 +64,10 @@ export function formatDigestNotification(
     });
   const briefLow = (low?: PriceLow30) =>
     low?.minimum === null || !low
-      ? "Đáy bán 30 ngày: chưa có lịch sử"
-      : "Đáy bán 30 ngày: " + money(low.minimum) +
+      ? "Đáy bán 30 ngày trước: chưa có lịch sử"
+      : "Đáy bán 30 ngày trước: " + money(low.minimum) +
         (low.days < 30 ? `\nLịch sử: ${low.days}/30 ngày` : "") +
-        (low.isLowest ? "\n🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
+        (priceLow30Notice(low) ? "\n" + priceLow30Notice(low) : "");
   const goldHistoryNote = (lows: (PriceLow30 | undefined)[]) =>
     lows.some(low => low?.historySource === "giavang.pro")
       ? ["Đáy vàng: giá chốt phiên (giavang.pro)."] : [];
