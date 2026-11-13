@@ -45,6 +45,7 @@ export function formatDigestNotification(
   compact = false,
   tight = false,
   full = false,
+  footer = "",
 ): string {
   const sources = digest.sources;
   if (!sources) return "Bản tin đang được chuẩn bị. Vui lòng thử lại sau.";
@@ -288,13 +289,18 @@ export function formatDigestNotification(
     blocks.push("ℹ️ Một số nguồn chưa có đủ dữ liệu.");
   if (weather)
     blocks.push("Thời tiết: Open-Meteo · CC BY 4.0\nhttps://open-meteo.com/");
+  if (footer && !full) blocks.push(footer);
   const message = blocks.join("\n\n");
   if (full) return message;
   // ntfy includes content in both FCM data and the APNS custom payload. Leave
   // headroom for those copies and metadata rather than using the 4 KiB HTTP limit.
   if (Buffer.byteLength(message) > 1600 && !compact)
-    return formatDigestNotification(digest, true);
+    return formatDigestNotification(digest, true, false, false, footer);
   if (Buffer.byteLength(message) > 1600 && !tight)
+    return formatDigestNotification(digest, true, true, false, footer);
+  // Never cut a report's encryption key in half. Prefer the complete ntfy
+  // summary if an optional web link does not fit after compacting.
+  if (Buffer.byteLength(message) > 1600 && footer)
     return formatDigestNotification(digest, true, true);
   return clip(message, 1600);
 }

@@ -77,7 +77,8 @@ export async function sendNtfy(
       errors: [],
     };
   try {
-    const click = clickUrl
+    // Detail links stay in the message. A normal banner tap opens ntfy.
+    const detail = clickUrl
       ? checkUrl(clickUrl).toString()
       : dashboardLink(publicBaseUrl, digest.id);
     const url = checkUrl(config.serverUrl);
@@ -95,8 +96,7 @@ export async function sendNtfy(
       body: JSON.stringify({
         topic: config.topic,
         title: title ?? notificationTitle(digest),
-        message: customMessage ?? formatDigestNotification(digest),
-        ...(click ? { click } : {}),
+        message: customMessage ?? formatDigestNotification(digest, false, false, false, detail ? "Bản web (tùy chọn):\n" + detail : ""),
       }),
       maxBytes: 65536,
     });

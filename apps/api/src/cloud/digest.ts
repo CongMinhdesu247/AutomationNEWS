@@ -339,8 +339,8 @@ export async function runCloudDigest(options: CloudOptions) {
               }),
           )
           .join(" · ") +
-        (sealed ? "\nChạm để xem đầy đủ." : "")
-      : cloudMessage(digest),
+        (sealed ? "\n\nBản web (tùy chọn):\n" + sealed.url : "")
+      : cloudMessage(digest, false, false, false, sealed ? "Bản web (tùy chọn):\n" + sealed.url : ""),
     ...(sealed ? { clickUrl: sealed.url } : {}),
     ...(options.alertsOnly ? { title: "Biến động đáng chú ý" } : {}),
   });

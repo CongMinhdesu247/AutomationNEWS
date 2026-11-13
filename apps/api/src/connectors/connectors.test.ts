@@ -427,6 +427,17 @@ it("ntfy sends only a short Vietnamese summary, credentials stay in headers and 
   expect(body).not.toHaveProperty("click");
   expect(sent.options.headers.Authorization).toBe("Bearer secret-token");
   expect(JSON.stringify(result)).not.toContain("secret-token");
+  for (const detail of [
+    { publicBaseUrl: "https://hub.example" },
+    { clickUrl: "https://fixture.github.io/repo/report.html#private-report-key" },
+  ]) {
+    await sendNtfy(digest, { enabled: true, serverUrl: "https://ntfy.sh/", topic: "private-topic" }, { ...context, http: client, ...detail });
+    const body = JSON.parse(sent.options.body);
+    expect(body).not.toHaveProperty("click");
+    expect(body.message).toContain("Bản web (tùy chọn):");
+    expect(body.message).not.toContain("Chạm để");
+    expect(Buffer.byteLength(body.message)).toBeLessThanOrEqual(1600);
+  }
   expect(dashboardLink("https://hub.example", "abc")).toBe(
     "https://hub.example/#/digests/abc",
   );

@@ -8,7 +8,7 @@
       .match(/^([a-f0-9-]{36})\.([A-Za-z0-9_-]{43})$/);
     if (!match) {
       status.textContent =
-        "Mở trang này bằng cách chạm vào thông báo mới trong ntfy.";
+        "Mở liên kết Bản web trong nội dung bản tin mới trên ntfy.";
       return;
     }
     const owner = location.hostname.split(".")[0],

@@ -128,6 +128,14 @@ it("normalizes multiline descriptions, keeps authors' content and has an honest 
   expect(text).toContain("owner/repo-2 — Chưa có mô tả từ tác giả.");
   expect(text).not.toContain("undefined");
 });
+it("keeps the optional report link complete within the push byte limit", () => {
+  const footer = "Bản web (tùy chọn):\nhttps://fixture.github.io/repo/report.html#" + crypto.randomUUID() + "." + "a".repeat(43);
+  const message = formatDigestNotification(digest(), false, false, false, footer);
+  expect(Buffer.byteLength(message)).toBeLessThanOrEqual(1600);
+  expect(message.endsWith(footer)).toBe(true);
+  expect(message).toContain("5. owner/repo-5");
+  expect(message).toContain("CC BY 4.0");
+});
 
 it("uses the Vietnamese summary in pushes while the original stays available in stored data", () => {
   const value = digest();
