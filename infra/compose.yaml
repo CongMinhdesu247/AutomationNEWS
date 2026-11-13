@@ -1,6 +1,11 @@
 name: personal-automation-hub
 services:
   db:
+    logging: &bounded-logs
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
@@ -15,6 +20,7 @@ services:
       retries: 15
     restart: unless-stopped
   migrate:
+    logging: *bounded-logs
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -35,6 +41,7 @@ services:
       db:
         condition: service_healthy
   api:
+    logging: *bounded-logs
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -61,6 +68,7 @@ services:
       retries: 10
     restart: unless-stopped
   worker:
+    logging: *bounded-logs
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -87,6 +95,7 @@ services:
     stop_grace_period: 20s
     restart: unless-stopped
   scheduler:
+    logging: *bounded-logs
     build:
       context: ..
       dockerfile: infra/Dockerfile
@@ -104,12 +113,13 @@ services:
     stop_grace_period: 25s
     restart: unless-stopped
   web:
+    logging: *bounded-logs
     build:
       context: ..
       dockerfile: infra/Dockerfile
       target: web
     ports:
-      - "127.0.0.1:8088:80"
+      - "127.0.0.1:${WEB_PORT:-8088}:80"
     depends_on:
       api:
         condition: service_healthy

@@ -11,5 +11,6 @@
   "dependencies": {
     "@hub/api": "workspace:*",
     "tsx": "4.23.15"
-  }
+  },
+  "version": "1.0.0"
 }

@@ -150,10 +150,11 @@ export class RunEventHub {
       const result = await this.pool.query<{
         id: string;
         high: string;
+        floor: string;
         status: string;
         events: EventRow[];
       }>(
-        `SELECT r.id,r.event_sequence::text AS high,r.status,coalesce(e.events,'[]'::jsonb) AS events
+        `SELECT r.id,r.event_sequence::text AS high,r.events_pruned_through::text AS floor,r.status,coalesce(e.events,'[]'::jsonb) AS events
          FROM jsonb_to_recordset($1::jsonb) AS w(id uuid,after bigint)
          JOIN workflow_runs r ON r.id=w.id
          LEFT JOIN LATERAL (
@@ -179,6 +180,10 @@ export class RunEventHub {
         for (const client of batchClients.filter(
           (c) => c.runId === row.id && this.clients.has(c) && !c.blocked,
         )) {
+          if (client.sequence < BigInt(row.floor ?? "0")) {
+            this.reset(client, "CURSOR_EXPIRED");
+            continue;
+          }
           if (client.sequence > high) {
             this.reset(client, "CURSOR_OUT_OF_RANGE");
             continue;

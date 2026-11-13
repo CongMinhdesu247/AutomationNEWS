@@ -571,7 +571,7 @@ export class WorkflowQueue {
     const row = result.rows[0];
     if (!row) return;
     const nodes = await client.query(
-      'SELECT n.node_id AS "nodeId",n.type,n.status,n.started_at AS "startedAt",n.completed_at AS "completedAt",n.error,j.recoveries,j.retry_count AS "retryCount",j.available_at AS "availableAt",j.worker_id AS "workerId",j.lease_until AS "leaseUntil",(SELECT count(*)::int FROM execution_attempts a WHERE a.job_id=j.id) AS attempts FROM node_runs n LEFT JOIN workflow_jobs j ON j.run_id=n.run_id AND j.node_id=n.node_id WHERE n.run_id=$1 ORDER BY n.node_id',
+      'SELECT n.node_id AS "nodeId",n.type,n.status,n.started_at AS "startedAt",n.completed_at AS "completedAt",n.error,j.recoveries,j.retry_count AS "retryCount",j.available_at AS "availableAt",j.worker_id AS "workerId",j.lease_until AS "leaseUntil",(n.attempts_pruned+(SELECT count(*)::int FROM execution_attempts a WHERE a.job_id=j.id)) AS attempts FROM node_runs n LEFT JOIN workflow_jobs j ON j.run_id=n.run_id AND j.node_id=n.node_id WHERE n.run_id=$1 ORDER BY n.node_id',
       [id],
     );
     const history = await client.query(

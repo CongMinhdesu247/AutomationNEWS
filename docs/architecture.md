@@ -1,4 +1,4 @@
-# Kiến trúc Personal Automation Hub, bước 3
+# Kiến trúc Personal Automation Hub, bước 1–6
 
 ## Thành phần và ranh giới
 
@@ -83,7 +83,7 @@ ntfy chỉ public trừ exact-origin allowlist LAN đã cấu hình; metadata/li
 
 Docker: database healthy → migration hoàn tất → API/worker, web chờ API. Chỉ web publish localhost:8088; worker không có port HTTP. Dev override chỉ mở PostgreSQL localhost:54329. Named volume được giữ khi stop/down không kèm -v. Migration 001/002 không sửa; 003 thêm schema queue, chạy lại không reset dữ liệu. Từ bước 5 dashboard chi tiết nhận sự kiện qua SSE, dừng khi đã đồng bộ terminal.
 
-Chưa có auth/TLS/public hosting, retention/backup hoặc dọn lịch sử tự động. Chỉ phục vụ localhost. Event store và SSE được mô tả ở phần bước 5 bên dưới.
+Chưa có auth/TLS/public hosting hoặc dọn lịch sử tự động. Backup/restore và retention thủ công được bổ sung ở bước 6. Chỉ phục vụ localhost. Event store và SSE được mô tả ở phần bước 5 bên dưới.
 
 ## Bước 4 — Retry, dead letters và scheduler
 
@@ -115,7 +115,7 @@ Cursor opaque có dạng runUUID:sequence. Sequence gửi dưới dạng chuỗi
 
 Sau khi bắt kịp watermark hiện tại, stream gửi event: sync với cursor và terminal. Control frame này không thay Last-Event-ID. Frontend chỉ đóng khi state terminal và cursor đã khớp sync terminal=true; server cũng kết thúc stream sau khi flush. Event đã commit giữa REST snapshot và lúc mở stream vẫn được replay. Frontend bỏ duplicate bằng sequence, phát hiện gap hoặc sai run rồi tải lại snapshot.
 
-Cursor sai cú pháp/thuộc run khác trả 400 INVALID_EVENT_CURSOR JSON; run không tồn tại trả 404 trước headers SSE. Cursor đúng cú pháp nhưng lớn hơn watermark, hoặc phát hiện gap do dữ liệu không còn đủ, gửi event: reset (không có id) với code/snapshotUrl rồi đóng. Frontend đóng EventSource cũ, lấy snapshot mới và mở từ cursor mới. Chưa có retention/xóa event. Run tồn tại trước migration bắt đầu ở cursor 0, lịch sử cũ không được dựng lại thành event giả.
+Cursor sai cú pháp/thuộc run khác trả 400 INVALID_EVENT_CURSOR JSON; run không tồn tại trả 404 trước headers SSE. Cursor đúng cú pháp nhưng lớn hơn watermark, hoặc phát hiện gap do dữ liệu không còn đủ, gửi event: reset (không có id) với code/snapshotUrl rồi đóng. Frontend đóng EventSource cũ, lấy snapshot mới và mở từ cursor mới. Bước 6 bổ sung retention theo batch; cursor hết hạn được reset như mô tả bên dưới. Run tồn tại trước migration bắt đầu ở cursor 0, lịch sử cũ không được dựng lại thành event giả.
 
 ### SSE hub và tài nguyên
 
@@ -134,3 +134,27 @@ Chỉ giữ/render tối đa 100 event; tự cuộn chỉ khi đang cách cuối
 Nginx có location riêng /api/runs/:id/events: HTTP/1.1, Connection header rỗng, proxy_buffering off, proxy_cache off, gzip off, timeout đọc/gửi một giờ. API gửi Cache-Control no-store/no-transform và X-Accel-Buffering no. Heartbeat giữ stream hoạt động; không cần CORS hoặc dịch vụ mới. Chỉ bind localhost như trước.
 
 Tham chiếu giao thức: [WHATWG SSE/Last-Event-ID](https://html.spec.whatwg.org/multipage/server-sent-events.html), [Nginx proxy buffering](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_buffering), [PostgreSQL isolation](https://www.postgresql.org/docs/17/transaction-iso.html).
+
+## Bước 6 — Kiểm chứng, benchmark và vận hành
+
+Mã nguồn bước 1–5 đã được đối chiếu và chạy lại trên DB thử riêng. Các adapter connector, engine, queue/lease/fencing, scheduler/outbox và event store được tái sử dụng nguyên kiến trúc. Fixture entry point trong operations/portfolio-server.ts là công cụ demo, không thay entry point production. Web chỉ bật banner khi build với VITE_DEMO_MODE=true; Compose chính không bật biến này. Không có secret ở biến VITE_.
+
+Benchmark dùng WorkerRunner thật với cùng workflow digest.v1, chỉ đổi worker concurrency 1/3; HTTP fixture delay 200 ms/request, RSS/weather mỗi nhánh 1 request, GitHub 2 nối tiếp. Timing gồm submit/queue/parse/persist/quan sát terminal, một run tại một thời điểm. Không dùng kết quả này làm cam kết hiệu năng production. Xem benchmark-step6.md và JSON samples.
+
+Migration 006 thêm events_pruned_through (watermark đã dọn), node_runs.attempts_pruned và partial index theo completed_at của run terminal. Retention mặc định dry-run; chỉ khóa một run completed/failed bằng SKIP LOCKED, giữ đúng thứ tự khóa run trước khi sửa lịch sử. Mỗi loại tối đa 1–1000 hàng/lần, trong một transaction; event 30 ngày và attempt log 90 ngày tính từ lúc run kết thúc. Không xóa queued/running hoặc bản tin. Tổng attempt UI là count còn lưu + attempts_pruned. Các counter retry/recovery và DLQ không bị reset. Rollback trả lại toàn bộ dữ liệu/counter/watermark nếu bất kỳ bước dọn nào lỗi.
+
+Sequence event vẫn tăng, không tái sử dụng. Xóa prefix event và cập nhật floor cùng transaction. SSE đọc watermark, floor và batch event trong cùng một statement snapshot. Cursor < floor nhận reset/CURSOR_EXPIRED trước khi phát dữ liệu; cursor = floor được replay các event > cursor. Snapshot vẫn đọc state/cursor/history cùng REPEATABLE READ; sau khi dọn hết lịch sử, snapshot state đầy đủ và stream terminal sync vẫn hoạt động. Gap ngoài retention vẫn dùng EVENT_GAP; cursor tương lai vẫn CURSOR_OUT_OF_RANGE. Giao sự kiện là at-least-once, frontend dedup bằng sequence.
+
+Dữ liệu event không được giữ mãi từ bước 6. Snapshot recentEvents có thể rỗng hoặc truncated do dọn; UI giải thích chính sách này. Không tự dọn hoặc scheduler retention trong nền. Node input/output, digest, snapshots GitHub, notification history và DLQ còn được giữ để replay/audit; dung lượng vẫn cần theo dõi. Process logs trong Compose chính rotate 10 MiB × 3 file/service, độc lập dữ liệu run.
+
+Backup dùng pg_dump custom format và docker cp để không hỏng binary trong PowerShell. Restore chỉ tạo database hub_restore_* mới, không --clean/drop và không ghi đè. Đã đối chiếu count/hash 13 bảng trong database thử, bao gồm migration, state, cursor, event, digest và outbox. Đây là logical backup, không có PITR/role/global object hoặc tự động backup. Hướng dẫn: operations.md.
+
+Bảo đảm quan trọng đã kiểm chứng: transaction/event rollback, run lock serialize hoàn tất song song, unique logical job/digest, token fencing sau lease, idempotency request/replay/notification, recovery khi kill worker process thật, snapshot-cursor không mất event và stale cursor reset sau retention. Giới hạn: không exactly-once HTTP/push, không HA/coordination quota GitHub giữa worker, chưa auth/TLS/public hosting, chưa soak/load test hoặc chờ lịch/điện thoại thật. Xem verification-step6.md để phân biệt code path fixture đã chạy với tích hợp ngoài chưa xác minh.
+
+## DNS của API khi recreate container
+
+Nginx trong Docker dùng resolver 127.0.0.11, cache DNS 5 giây, upstream api:3001 qua biến và truyền nguyên request_uri cho REST/SSE. Cấu hình cũ resolve API một lần khi Nginx khởi động, có thể trả 502 lâu dài sau khi API được recreate với IP khác; đã tái hiện ở môi trường cài mới v1.0.0. Có thể có lỗi thoáng qua lúc API đang đổi địa chỉ; frontend SSE reconnect/replay và nút tải lại vẫn dùng được khi API trở lại.
+
+Test riêng `tests/portfolio/proxy-dns.ps1` chỉ nhận project hub-v1-review/hub-v1-demo. Nó giữ IP cũ bằng container timer fixture, recreate API stateless để buộc IP khác, kiểm tra web container không đổi và REST qua proxy phục hồi, rồi dọn container giữ IP của chính test. Không xóa DB/volume. Sau đó proxy-smoke kiểm event/cursor qua Nginx. Không dùng script này cho ứng dụng cá nhân/production.
+
+Tham chiếu: [Nginx proxy_pass với biến và resolver](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass), [resolver/valid](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver). Resolver này dành cho image Nginx chạy trong Docker network của Compose, không phải cấu hình Nginx trên host Windows.

@@ -1,7 +1,7 @@
 FROM node:24-alpine AS dependencies
 WORKDIR /app
 RUN npm install -g pnpm@11.25.0
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json vitest.config.ts ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/worker/package.json ./apps/worker/package.json
 COPY apps/scheduler/package.json ./apps/scheduler/package.json
@@ -18,6 +18,8 @@ COPY apps/worker ./apps/worker
 COPY apps/scheduler ./apps/scheduler
 COPY db ./db
 RUN pnpm --filter @hub/contracts build && pnpm --filter @hub/api build && pnpm --filter @hub/worker build && pnpm --filter @hub/scheduler build
+RUN mkdir -p /app/node_modules/.vite-temp /app/node_modules/.vitest-cache \
+    && chown node:node /app/node_modules/.vite-temp /app/node_modules/.vitest-cache
 USER node
 EXPOSE 3001
 CMD ["pnpm", "--filter", "@hub/api", "start"]
@@ -31,6 +33,8 @@ WORKDIR /app/apps/scheduler
 CMD ["node", "--import", "tsx", "src/main.ts"]
 
 FROM dependencies AS web-build
+ARG VITE_DEMO_MODE=false
+ENV VITE_DEMO_MODE=$VITE_DEMO_MODE
 COPY packages/contracts ./packages/contracts
 COPY apps/web ./apps/web
 RUN pnpm --filter @hub/web build

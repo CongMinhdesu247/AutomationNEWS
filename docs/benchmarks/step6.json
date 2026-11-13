@@ -1,0 +1,171 @@
+{
+  "label": "DEMO FIXTURE — not production performance",
+  "measuredAt": "2026-11-12T00:49:24.767Z",
+  "environment": {
+    "node": "v24.22.3",
+    "platform": "linux",
+    "release": "6.18.33.2-microsoft-standard-WSL2",
+    "cpu": "Intel(R) Core(TM) i5-14400F",
+    "logicalCpus": 16,
+    "memoryBytes": 16678273024,
+    "postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit"
+  },
+  "method": {
+    "latencyMs": 200,
+    "httpRequestsPerRun": 4,
+    "branchRequests": {
+      "rss": 1,
+      "weather": 1,
+      "github": 2
+    },
+    "warmupsPerConcurrency": 2,
+    "queuePollMs": 5,
+    "snapshotCheckMs": 5,
+    "workflowVersion": "digest.v1",
+    "singleInFlightRun": true,
+    "percentile": "nearest rank",
+    "clock": "performance.now from before submit through observed completed snapshot"
+  },
+  "groups": [
+    {
+      "concurrency": 1,
+      "samples": 12,
+      "medianMs": 910.8893020000014,
+      "p95Ms": 924.2732680000008,
+      "throughputRunsPerSecond": 1.0954588463927846,
+      "medianThroughput": 1.0967661038723628,
+      "p95Throughput": 1.1040428838166276
+    },
+    {
+      "concurrency": 3,
+      "samples": 12,
+      "medianMs": 486.0073450000018,
+      "p95Ms": 500.4044790000007,
+      "throughputRunsPerSecond": 2.0550832484836254,
+      "medianThroughput": 2.051786092001219,
+      "p95Throughput": 2.1097047748758304
+    }
+  ],
+  "raw": [
+    {
+      "concurrency": 1,
+      "ms": 906.1113729999997,
+      "runId": "e1b17b38-0bef-4214-82f6-6299b902e142"
+    },
+    {
+      "concurrency": 3,
+      "ms": 475.6240250000001,
+      "runId": "ff72bee1-1d9d-4f8f-92b2-7e6f34a32e5c"
+    },
+    {
+      "concurrency": 3,
+      "ms": 473.99996999999985,
+      "runId": "79956508-908a-413a-8c2a-306a37a6ea2d"
+    },
+    {
+      "concurrency": 1,
+      "ms": 920.672364,
+      "runId": "a82827c1-83cb-4992-9cee-7f397233bdca"
+    },
+    {
+      "concurrency": 1,
+      "ms": 910.8234039999998,
+      "runId": "444cf1ed-07f9-4fca-97d5-f55e8b8cfd23"
+    },
+    {
+      "concurrency": 3,
+      "ms": 491.98439599999983,
+      "runId": "a25b9bb4-feb1-4f91-944e-5c8d5416530e"
+    },
+    {
+      "concurrency": 3,
+      "ms": 499.6598810000005,
+      "runId": "0f7c7738-0b2e-48aa-840f-551e54790bdc"
+    },
+    {
+      "concurrency": 1,
+      "ms": 912.3067630000005,
+      "runId": "6cfbde30-8c68-44b8-a7e3-a2e4314a1056"
+    },
+    {
+      "concurrency": 1,
+      "ms": 919.4582200000004,
+      "runId": "812451c8-c172-406d-b552-a26eb6060772"
+    },
+    {
+      "concurrency": 3,
+      "ms": 500.4044790000007,
+      "runId": "00ae8688-7cd5-4d3a-aa4d-3b5228200ba3"
+    },
+    {
+      "concurrency": 3,
+      "ms": 484.0935660000014,
+      "runId": "d4be4849-337e-430b-ac04-4156d40961a0"
+    },
+    {
+      "concurrency": 1,
+      "ms": 924.2732680000008,
+      "runId": "f320bcd6-e405-4f61-ad7a-96e40e287259"
+    },
+    {
+      "concurrency": 1,
+      "ms": 910.8893020000014,
+      "runId": "d4d5681b-1bae-4ae4-aace-9e103c69d343"
+    },
+    {
+      "concurrency": 3,
+      "ms": 474.9729810000008,
+      "runId": "83bdd6d4-664c-4e56-af34-69ae7899b85c"
+    },
+    {
+      "concurrency": 3,
+      "ms": 487.38024099999893,
+      "runId": "03e5ba8b-c600-432f-ae7f-fcd5f03f59cf"
+    },
+    {
+      "concurrency": 1,
+      "ms": 917.7875980000008,
+      "runId": "fb0c97e8-b2e9-4ea0-a48d-cf507d81b514"
+    },
+    {
+      "concurrency": 1,
+      "ms": 905.7619180000002,
+      "runId": "1e81aba6-5e0f-4573-8abb-686d2a683699"
+    },
+    {
+      "concurrency": 3,
+      "ms": 492.13593000000037,
+      "runId": "373dfbee-b37c-40c8-9017-6d60cddc61d3"
+    },
+    {
+      "concurrency": 3,
+      "ms": 486.0073450000018,
+      "runId": "94166ef8-f924-43ce-838e-b5b9068a9135"
+    },
+    {
+      "concurrency": 1,
+      "ms": 905.8741369999989,
+      "runId": "305f7b7e-f18b-48a4-9491-18716f577ede"
+    },
+    {
+      "concurrency": 1,
+      "ms": 911.771431000001,
+      "runId": "38ceaad5-2360-441f-a1e5-c1080029b883"
+    },
+    {
+      "concurrency": 3,
+      "ms": 484.93035600000076,
+      "runId": "dc4df9b5-e4a8-406e-9946-d853bea1cf1b"
+    },
+    {
+      "concurrency": 3,
+      "ms": 487.98634200000015,
+      "runId": "716c7b26-41fc-4968-9f44-6de125ecf43e"
+    },
+    {
+      "concurrency": 1,
+      "ms": 908.5840599999974,
+      "runId": "7c382316-c5ad-43ac-9d14-f00d6a2044e1"
+    }
+  ]
+}

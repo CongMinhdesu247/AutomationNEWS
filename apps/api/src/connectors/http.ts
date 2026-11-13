@@ -135,7 +135,7 @@ export const safeHttp: HttpClient = async (value, options = {}) => {
           signal,
           headers: {
             "Accept-Encoding": "identity",
-            "User-Agent": "PersonalAutomationHub/0.2",
+            "User-Agent": "PersonalAutomationHub/1.0.0",
             ...options.headers,
           },
           // Pin the validated IP for this connection; never resolve again in the socket.

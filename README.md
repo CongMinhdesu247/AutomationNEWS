@@ -1,19 +1,64 @@
-# Personal Automation Hub
+# Personal Automation Hub — v1.0.0 (bản chuẩn bị phát hành)
 
 Dashboard cá nhân cho bản tin buổi sáng, tự host và không phụ thuộc dịch vụ trả phí.
 
-## Phạm vi bước 1–5
+**Bản cục bộ để xem xét, chưa phát hành.** Cài mới và fixture tests đã qua; tích hợp live/ba buổi sáng còn chờ xác minh. Xem [release-readiness](docs/release-readiness.md), [CHANGELOG](CHANGELOG.md), [CV/GitHub description](docs/portfolio.md) và [checklist ba sáng](docs/morning-checklist.md).
+
+## Vấn đề và cách giải quyết
+
+Thay vì mở nhiều nguồn mỗi sáng, người dùng chọn RSS, tọa độ thời tiết và chủ đề GitHub một lần. Hub tạo bản tin theo yêu cầu hoặc lịch địa phương, lưu lịch sử và gửi thông báo ngắn qua ntfy. Lỗi một nguồn không làm mất kết quả của nguồn khác.
+
+Phần trọng tâm kỹ thuật là một DAG engine TypeScript thuần, queue PostgreSQL có lease/fencing, retry và DLQ replay, cùng telemetry SSE lưu bền vững. PostgreSQL giữ trạng thái để tiếp tục sau worker crash. React/Vite/Tailwind dùng contracts Zod chung với Fastify; Docker Compose chỉ mở dashboard trên localhost.
+
+![Workflow và timeline — DEMO FIXTURE](docs/images/demo-workflow.png)
+
+*Ảnh từ luồng đã chạy trên database thử. Banner vàng và nhãn DEMO FIXTURE phân biệt dữ liệu mô phỏng với nguồn thật.*
+
+## Quick start cho portfolio (không cần secret)
+
+Cần Docker Desktop Linux containers. Chạy từ thư mục gốc:
+
+```powershell
+docker compose -f tests/portfolio/compose.yaml up -d --build --wait
+```
+
+Mở [demo cục bộ](http://127.0.0.1:8099), sửa/lưu cấu hình hoặc bấm **Bản tin đã lưu → Tạo bản tin ngay**. Demo dùng database/volume riêng, mọi HTTP được inject fixture, không gọi dịch vụ ngoài hoặc gửi thông báo thật. Dừng bằng `docker compose -f tests/portfolio/compose.yaml stop` để giữ dữ liệu. Ứng dụng dùng nguồn thật và các cách development/full Docker được hướng dẫn bên dưới.
+
+```mermaid
+flowchart LR
+  Web[React dashboard] -->|REST + SSE cùng origin| Proxy[Nginx / Vite proxy]
+  Proxy --> API[Fastify API]
+  API --> PG[(PostgreSQL: settings, queue, events, digests)]
+  Worker[Worker + DAG engine] --> PG
+  Worker --> Sources[RSS / Open-Meteo / GitHub]
+  Scheduler[Scheduler + notification outbox] --> PG
+  Scheduler --> Ntfy[ntfy]
+```
+
+Tài liệu portfolio: [kiến trúc và tính đúng đắn](docs/architecture.md), [kết quả kiểm chứng bước 6](docs/verification-step6.md), [benchmark và dữ liệu thô](docs/benchmark-step6.md), [backup/restore và retention](docs/operations.md), [kịch bản video và CV bullets](docs/demo.md).
+
+| Benchmark fixture đã đo | Concurrency 1 | Concurrency 3 |
+| --- | ---: | ---: |
+| Số mẫu (không gồm warm-up) | 12 | 12 |
+| Workflow median / p95 | 910,89 / 924,27 ms | 486,01 / 500,40 ms |
+| Throughput một run tại một thời điểm | 1,095 run/s | 2,055 run/s |
+
+Cùng DAG, HTTP fixture 200 ms/request; không phải số liệu API production. Event timestamp → DOM qua Nginx: median 334 ms, p95 499 ms, 53 event từ 3 run fixture riêng. Phương pháp và giới hạn đo nằm trong báo cáo benchmark. Đã qua 61 unit test và 40 integration test PostgreSQL, cộng browser flow desktop/mobile; chưa xác minh push điện thoại thật hoặc chạy lịch qua đêm.
+
+![Bản tin đã lưu — DEMO FIXTURE](docs/images/demo-digest.png)
+
+## Phạm vi bước 1–6
 
 Bước 1: chỉnh năm nhóm cấu hình, validate hai phía, lưu nguyên tử vào PostgreSQL và giữ dữ liệu qua reload/restart.
 
-Bước 2: lấy RSS/thời tiết/GitHub và lưu bản tin. Bước 3: DAG thuần TypeScript và PostgreSQL queue, API trả 202/run ID, worker riêng có lease/heartbeat/phục hồi, dashboard theo dõi tiến độ. Bước 4: retry với backoff/jitter, DLQ và scheduler hằng ngày theo múi giờ, tự gửi ntfy cho run theo lịch. Bước 5: event store PostgreSQL và SSE có cursor/replay, timeline và reconnect. Chưa có Cron expression tùy ý hoặc webhook.
+Bước 2: lấy RSS/thời tiết/GitHub và lưu bản tin. Bước 3: DAG thuần TypeScript và PostgreSQL queue, API trả 202/run ID, worker riêng có lease/heartbeat/phục hồi, dashboard theo dõi tiến độ. Bước 4: retry với backoff/jitter, DLQ và scheduler hằng ngày theo múi giờ, tự gửi ntfy cho run theo lịch. Bước 5: event store PostgreSQL và SSE có cursor/replay, timeline và reconnect. Bước 6: kiểm chứng toàn hệ thống, benchmark fixture tái lập, backup/restore, retention và portfolio. Chưa có Cron expression tùy ý hoặc webhook.
 
 **Chỉ dùng trên localhost. Chưa có xác thực hoặc TLS; không đưa trực tiếp lên Internet, không mở port qua router/tunnel.**
 
 ## Yêu cầu
 
 - Windows PowerShell 7 hoặc Windows PowerShell 5.1.
-- Node.js 24 LTS, pnpm **11.25.0** (cài bằng `npm install --global pnpm@11.25.0`).
+- Khi chạy development/test trên host: Node.js 24 LTS, pnpm **11.25.0** (cài bằng `npm install --global pnpm@11.25.0`).
 - Docker Desktop đang chạy Linux containers và Docker Compose v2.
 - Port mặc định: web dev 5173, API dev 3001, PostgreSQL dev 54329, web Docker 8088.
 
@@ -24,7 +69,7 @@ Dependency trực tiếp được khóa phiên bản trong manifest, dependency 
 Chạy từ thư mục gốc:
 
 ```powershell
-Set-Location C:\Users\ADMIN\AutomationNEWS
+# Mở PowerShell tại thư mục gốc của repository.
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
@@ -130,7 +175,7 @@ Mặc định: bản tin bật, 07:00 Asia/Ho_Chi_Minh; tích hợp tắt, RSS r
 
 Single-user, chưa có xác thực, chỉ localhost. Worker khôi phục job mất lease; node đã commit thành công không chạy lại. Job có thể thực thi lại sau sự cố nên chỉ đảm bảo at-least-once. ntfy hỗ trợ gửi thủ công và gửi sau run theo lịch; gửi lỗi/unknown không tự gửi lại.
 
-Hai tab sửa settings dùng lần lưu cuối thắng; run đã tạo giữ cấu hình snapshot riêng. Chưa backup/retention tự động. Image theo tag ổn định có thể nhận bản vá, dependency pnpm khóa trong lockfile.
+Hai tab sửa settings dùng lần lưu cuối thắng; run đã tạo giữ cấu hình snapshot riêng. Có backup/restore PowerShell và retention theo batch/dry-run; chưa tự chạy các tác vụ này. Image theo tag ổn định có thể nhận bản vá, dependency pnpm khóa trong lockfile.
 
 ## Tạo và gửi bản tin đầu tiên
 
@@ -228,7 +273,7 @@ Không exactly-once execution: HTTP fetch chưa commit có thể chạy lại sa
 
 Bản tin cũ vẫn xem/gửi được, không tạo run lịch sử giả. Bản tin còn running từ luồng đồng bộ bước 2 không có queue/lease nên không được tự phục hồi; dùng request mới nếu muốn tạo lại. Nếu client gửi lại key thuộc bản tin bước 2, API trả 409 LEGACY_IDEMPOTENCY_KEY; mở bản tin cũ hoặc dùng key mới nếu muốn tạo thêm. Request bước 3 lưu payload chuẩn hóa, đổi settings không làm đổi run đã có.
 
-Kết quả kiểm tra bước 3: [docs/verification-step3.md](docs/verification-step3.md). Xem [kiến trúc/state machine/lease](docs/architecture.md). Chưa có Cron expression tùy ý/webhook/editor DAG, retention/backup hoặc quota GitHub phối hợp nhiều worker. Không có commit hoặc push tự động.
+Kết quả kiểm tra bước 3: [docs/verification-step3.md](docs/verification-step3.md). Xem [kiến trúc/state machine/lease](docs/architecture.md). Chưa có Cron expression tùy ý/webhook/editor DAG hoặc quota GitHub phối hợp nhiều worker; backup/retention thủ công có từ bước 6. Không có commit hoặc push tự động.
 
 ## Bước 4: retry, DLQ và bản tin mỗi sáng
 
@@ -291,6 +336,36 @@ curl.exe -N "http://127.0.0.1:8088/api/runs/$runId/events?cursor=$cursor"
 
 State và cursor được đọc cùng snapshot database; event và chuyển trạng thái commit cùng transaction dưới khóa run. Replay truyền lại có thể lặp sau reconnect; frontend bỏ trùng bằng sequence và lấy lại snapshot khi phát hiện gap. Không đảm bảo exactly-once delivery. Run cũ trước migration bắt đầu cursor 0, không dựng lại lịch sử giả.
 
-Giới hạn mỗi API process: 100 stream / 50 run đang theo dõi, vượt trả 429; hub gom đọc mỗi 500 ms, batch 100 event/run, không giữ connection database cho từng client. Heartbeat 15 giây; buffer socket 64 KiB, chờ drain tối đa 10 giây rồi đóng để reconnect. Replay nhường I/O sau đợt khoảng 16 KiB. Frontend chỉ giữ/render 100 sự kiện, chỉ tự cuộn khi gần cuối. Event payload tối đa 4 KiB; không lưu input/output, token, header hoặc raw response. Chưa có retention nên event store sẽ tăng theo lịch sử. Nginx tắt buffering/cache/gzip riêng cho SSE, timeout một giờ; vẫn cùng origin và chỉ localhost.
+Giới hạn mỗi API process: 100 stream / 50 run đang theo dõi, vượt trả 429; hub gom đọc mỗi 500 ms, batch 100 event/run, không giữ connection database cho từng client. Heartbeat 15 giây; buffer socket 64 KiB, chờ drain tối đa 10 giây rồi đóng để reconnect. Replay nhường I/O sau đợt khoảng 16 KiB. Frontend chỉ giữ/render 100 sự kiện, chỉ tự cuộn khi gần cuối. Event payload tối đa 4 KiB; không lưu input/output, token, header hoặc raw response. Có retention thủ công từ bước 6; event store vẫn tăng nếu không chạy dọn. Nginx tắt buffering/cache/gzip riêng cho SSE, timeout một giờ; vẫn cùng origin và chỉ localhost.
 
 Kiểm tra bằng `pnpm typecheck`, `pnpm test`, `pnpm build` và `pnpm test:integration` với PostgreSQL thử riêng như phần kiểm tra. Suite mới dùng fixture, kiểm tra rollback, race, cursor/replay/reset, retry/recovery/terminal, heartbeat và cleanup. Kết quả PostgreSQL, Nginx và trình duyệt: [verification-step5.md](docs/verification-step5.md). Thiết kế chi tiết: [architecture.md](docs/architecture.md).
+
+
+## Bước 6: vận hành và áp dụng bản mới
+
+Các lệnh nghiệm thu và demo dùng database riêng; stack chính chưa được nâng cấp trong lần bàn giao. Để áp dụng code hiện tại, bao gồm migration **006_retention.sql**, giữ `.env` và volume:
+
+```powershell
+docker compose --env-file .env -f infra/compose.yaml stop web api worker scheduler
+docker compose --env-file .env -f infra/compose.yaml up -d --build --wait
+```
+
+Migration mới chạy trước API/worker/scheduler, không sửa migration cũ. Bản mới thêm log rotation khi recreate container. Development dừng tiến trình pnpm cũ, chạy `pnpm migrate` rồi `pnpm dev`.
+
+Backup/restore PowerShell, retention mặc định dry-run và giới hạn lưu trữ: [operations.md](docs/operations.md). Script restore chỉ tạo database mới, không ghi đè. Kết quả 13 bảng đã restore/đối chiếu và phần chưa xác minh: [verification-step6.md](docs/verification-step6.md). Không chạy tác vụ xóa hoặc notification thật khi kiểm thử.
+
+## Cài mới song song để xem xét v1.0.0
+
+Dùng một thư mục source mới (không sao chép `.env`, `node_modules`, `dist`, `output` hoặc `.git` từ máy khác). Chạy tại thư mục gốc mới và thực hiện phần **Chuẩn bị môi trường**: sao chép `.env.example` thành `.env`, chọn POSTGRES_PASSWORD riêng và thay cùng giá trị trong DATABASE_URL. Chưa bật nguồn hoặc ntfy khi chỉ kiểm tra khởi động.
+
+```powershell
+$env:WEB_PORT = '8108'
+docker compose -p hub-v1-review --env-file .env -f infra/compose.yaml up -d --build --wait
+Invoke-RestMethod http://127.0.0.1:8108/api/ready
+docker compose -p hub-v1-review --env-file .env -f infra/compose.yaml stop
+Remove-Item Env:WEB_PORT
+```
+
+Project `hub-v1-review` có volume mới `hub-v1-review_hub_data`; port 8108 tránh đụng dashboard mặc định 8088. Không chạy lệnh stop/down trên project cá nhân để nghiệm thu. Mặc định WEB_PORT vẫn 8088; chỉ localhost. Chọn tên project khác nếu tên thử đã có dữ liệu. Cách này dùng đúng entry point API/worker/scheduler production; quick start fixture phía trên dùng adapter HTTP giả và có banner riêng.
+
+Trạng thái bản chuẩn bị phát hành, quét secret/history, kiểm chứng cài mới và việc còn cần chủ repository thực hiện: [release-readiness.md](docs/release-readiness.md). Checklist ba buổi sáng: [morning-checklist.md](docs/morning-checklist.md). [CHANGELOG.md](CHANGELOG.md) mô tả phạm vi v1.0.0; chưa tạo tag/release hoặc công khai repository.

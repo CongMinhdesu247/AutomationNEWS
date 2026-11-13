@@ -1,0 +1,223 @@
+{
+  "label": "DEMO FIXTURE; timestamp generated before transaction commit to observed DOM insertion; same-machine wall clocks; not time-to-paint",
+  "measuredAt": "2026-11-12T00:48:51.607Z",
+  "runs": 3,
+  "samples": 53,
+  "medianMs": 334,
+  "p95Ms": 499,
+  "ssePollMs": 500,
+  "raw": [
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:5",
+      "latencyMs": 492
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:6",
+      "latencyMs": 489
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:7",
+      "latencyMs": 486
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:8",
+      "latencyMs": 484
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:9",
+      "latencyMs": 453
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:10",
+      "latencyMs": 448
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:11",
+      "latencyMs": 443
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:12",
+      "latencyMs": 350
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:13",
+      "latencyMs": 341
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:14",
+      "latencyMs": 247
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:15",
+      "latencyMs": 243
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:16",
+      "latencyMs": 204
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:17",
+      "latencyMs": 198
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:18",
+      "latencyMs": 191
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:19",
+      "latencyMs": 143
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:20",
+      "latencyMs": 135
+    },
+    {
+      "id": "a3317608-d12f-4731-b423-128fd3aec7b3:21",
+      "latencyMs": 134
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:5",
+      "latencyMs": 499
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:6",
+      "latencyMs": 496
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:7",
+      "latencyMs": 493
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:8",
+      "latencyMs": 491
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:9",
+      "latencyMs": 450
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:10",
+      "latencyMs": 444
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:11",
+      "latencyMs": 439
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:12",
+      "latencyMs": 338
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:13",
+      "latencyMs": 334
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:14",
+      "latencyMs": 238
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:15",
+      "latencyMs": 235
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:16",
+      "latencyMs": 198
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:17",
+      "latencyMs": 193
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:18",
+      "latencyMs": 191
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:19",
+      "latencyMs": 138
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:20",
+      "latencyMs": 128
+    },
+    {
+      "id": "2a563259-04d0-48dc-a955-f9d20ffc101c:21",
+      "latencyMs": 126
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:3",
+      "latencyMs": 501
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:4",
+      "latencyMs": 499
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:5",
+      "latencyMs": 494
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:6",
+      "latencyMs": 492
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:7",
+      "latencyMs": 490
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:8",
+      "latencyMs": 488
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:9",
+      "latencyMs": 440
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:10",
+      "latencyMs": 435
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:11",
+      "latencyMs": 431
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:12",
+      "latencyMs": 326
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:13",
+      "latencyMs": 321
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:14",
+      "latencyMs": 239
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:15",
+      "latencyMs": 237
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:16",
+      "latencyMs": 187
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:17",
+      "latencyMs": 183
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:18",
+      "latencyMs": 181
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:19",
+      "latencyMs": 131
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:20",
+      "latencyMs": 125
+    },
+    {
+      "id": "6912afa4-cf80-46dd-9cd9-07b4805823d5:21",
+      "latencyMs": 124
+    }
+  ]
+}
