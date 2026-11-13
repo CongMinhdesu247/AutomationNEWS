@@ -100,7 +100,7 @@ export type UsdData = {
 export type PriceLow30 = { minimum: number | null; days: number; isLowest: boolean };
 export type MarketDay = { day: string; prices: Record<string, number> };
 export function priceLow30Text(low?: PriceLow30): string {
-  if (!low || low.minimum === null) return "Đáy bán 30 ngày trước: chưa có lịch sử";
+  if (!low || low.minimum === null) return "Đáy bán 30 ngày trước: chưa có lịch sử (0/30 ngày)";
   return `Đáy bán 30 ngày trước: ${low.minimum.toLocaleString("vi-VN")} (ghi nhận ${low.days}/30 ngày)` +
     (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
 }
