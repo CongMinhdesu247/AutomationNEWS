@@ -10,6 +10,7 @@ import type { ServiceOptions } from "../digests/service.js";
 import { fetchRss } from "../connectors/rss.js";
 import { fetchGold, fetchUsd } from "../connectors/markets.js";
 import { compareMarketHistory } from "../connectors/market-history.js";
+import { backfillMarketHistory } from "../connectors/market-backfill.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
@@ -162,7 +163,9 @@ export class DigestNodeExecutor {
       return fetchFuel(config.fuel, { ...context, baseline: previous?.sources?.fuel ? fuelBaseline(previous.sources.fuel) : undefined });
     };
     const collectMarket = async () => {
-      const history = await this.store.marketHistory(this.now(), job.runId);
+      const history = await backfillMarketHistory(await this.store.marketHistory(this.now(), job.runId), {
+        gold: job.type === "fetch_gold", usd: job.type === "fetch_usd", now: this.now(), signal: combined, http: this.http,
+      });
       if (job.type === "fetch_gold") {
         const gold = await fetchGold(config.gold, context);
         compareMarketHistory({ gold }, history, this.now());

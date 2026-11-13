@@ -15,6 +15,7 @@ try {
     throw new Error("Missing cloud configuration.");
   if (family) {
     const results = await runCloudFamily(JSON.parse(family), {
+      backfillHistory: true,
       state: new GithubStateStore(repository, token),
       http: safeHttp,
       githubToken: token,
@@ -59,6 +60,7 @@ try {
       console.log("Cloud digest: not_due");
     else {
       const options: CloudOptions = {
+        backfillHistory: true,
         signalNamespace: "0000000000000001",
         settings,
         state: new GithubStateStore(repository, token),

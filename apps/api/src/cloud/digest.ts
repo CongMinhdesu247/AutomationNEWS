@@ -11,6 +11,7 @@ import {
 import { createHash } from "node:crypto";
 import { fetchRss } from "../connectors/rss.js";
 import { fetchGold, fetchUsd } from "../connectors/markets.js";
+import { backfillMarketHistory } from "../connectors/market-backfill.js";
 import { compareMarketHistory, recordMarketHistory, lowestMarketLabels } from "../connectors/market-history.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
@@ -46,6 +47,7 @@ export { formatDigestNotification as cloudMessage } from "../notifications/forma
 import { formatDigestNotification as cloudMessage } from "../notifications/format.js";
 
 export type CloudOptions = {
+  backfillHistory?: boolean;
   state: CloudStateStore;
   settings: Settings;
   http?: HttpClient;
@@ -206,6 +208,16 @@ export async function runCloudDigest(options: CloudOptions) {
     gold,
     usd,
   };
+  const backfillGold = settings.gold?.enabled && (options.forceSend || revision.state.marketBackfillDays?.gold !== day);
+  const backfillUsd = settings.usd?.enabled && (options.forceSend || revision.state.marketBackfillDays?.usd !== day);
+  if (options.backfillHistory && (backfillGold || backfillUsd)) {
+    revision.state.marketHistory = await backfillMarketHistory(revision.state.marketHistory ?? [], {
+      gold: backfillGold, usd: backfillUsd, now: now(), signal, http: boundedHttp,
+    });
+    revision.state.marketBackfillDays = { ...revision.state.marketBackfillDays,
+      ...(backfillGold ? { gold: day } : {}), ...(backfillUsd ? { usd: day } : {}),
+    };
+  }
   compareMarketHistory(sources, revision.state.marketHistory ?? [], now());
   options.onSourceResults?.(Object.entries(sources).filter(([, value]) => value && value.status !== "disabled").map(([source, value]) => ({
     source, status: value.status,

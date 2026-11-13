@@ -6,6 +6,41 @@ import { marketAt, usdJson } from "../connectors/test-support/market-fixtures.js
 import { dateInZone } from "../connectors/weather.js";
 import type { HttpClient } from "../connectors/http.js";
 
+it("imports verified bank history before formatting and retains it for later runs", async () => {
+  let value = initialState();
+  let revision = 0;
+  const state: CloudStateStore = {
+    async load() { return { state: structuredClone(value), sha: String(revision) }; },
+    async save(next, sha) {
+      expect(sha).toBe(String(revision)); value = cloudStateSchema.parse(next); return String(++revision);
+    },
+  };
+  const settings: Settings = { ...structuredClone(defaultSettings), usd: { enabled: true },
+    notifications: { enabled: true, topic: "fixture_private", serverUrl: "https://ntfy.sh/" } };
+  let historicalReads = 0;
+  const sends: Record<string, unknown>[] = [];
+  const http: HttpClient = async (url, request = {}) => {
+    if (request.method === "POST") {
+      sends.push(JSON.parse(request.body!)); return { status: 200, headers: {}, body: "{}" };
+    }
+    const day = new URL(url).searchParams.get("date")!;
+    const data = JSON.parse(usdJson);
+    if (day !== "2026-11-12") {
+      historicalReads++; data.Date = day + "T00:00:00"; data.UpdatedDate = day + "T23:00:00+07:00";
+      data.Data[0].sell = "25900";
+    }
+    return { status: 200, headers: {}, body: JSON.stringify(data) };
+  };
+  await runCloudDigest({ state, settings, http, now: () => marketAt, backfillHistory: true });
+  expect(historicalReads).toBe(30);
+  expect(sends[0]?.message).toContain("25.900");
+  expect(sends[0]?.message).toContain("Vietcombank");
+  expect(sends[0]?.priority).toBe(5);
+  expect(value.marketHistory).toHaveLength(31);
+  expect(value.marketHistory?.[0]?.historical?.usd).toContain("date=2026-10-13");
+  expect(value.marketBackfillDays?.usd).toBe("2026-11-12");
+});
+
 it("sends urgent lows automatically without general alerts, reserves before POST, deduplicates and permits a further drop within 30 minutes", async () => {
   let value = initialState();
   value.marketHistory = Array.from({ length: 30 }, (_, i) => ({

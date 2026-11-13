@@ -16,7 +16,12 @@ export const cloudStateSchema = z
     marketHistory: z.array(z.object({
       day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       prices: z.record(z.string().regex(/^(sjc_bar|sjc_ring|usd)$/), z.number().finite().positive()),
+      historical: z.record(z.string().regex(/^(sjc_bar|sjc_ring|usd)$/), z.url()).optional(),
     }).strict()).max(31).optional(),
+    marketBackfillDays: z.object({
+      gold: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      usd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).strict().optional(),
     reports: z
       .record(
         z.uuid(),
@@ -149,6 +154,7 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   return {
     version: 1,
     ...(state.marketHistory ? { marketHistory: pruneMarketHistory(state.marketHistory, at) } : {}),
+    ...(state.marketBackfillDays ? { marketBackfillDays: state.marketBackfillDays } : {}),
     ...(state.reports
       ? {
           reports: Object.fromEntries(

@@ -21,7 +21,10 @@ export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd"
     }
     const minimum = days.size ? Math.min(...days.values()) : null;
     const intraday = history.filter(row => row.day === today).map(row => row.prices[key]).filter((price): price is number => price !== undefined);
-    return { minimum, days: days.size, isLowest: fresh && days.size === 30 && minimum !== null && value !== null && value <= minimum && value <= Math.min(...intraday) };
+    const imported = previous.some(row => row.historical?.[key]);
+    return { minimum, days: days.size, isLowest: fresh && days.size === 30 && minimum !== null && value !== null && value <= minimum && value <= Math.min(...intraday),
+      ...(imported ? { historySource: key === "usd" ? "Vietcombank" as const : "giavang.pro" as const } : {}),
+    };
   };
   const gold = sources.gold?.data;
   if (gold) for (const item of gold.items)
@@ -31,24 +34,38 @@ export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd"
 }
 export function recordMarketHistory(history: MarketDay[], sources: Pick<DigestSources, "gold" | "usd">, now: Date): MarketDay[] {
   const rows = new Map<string, Record<string, number>>();
+  const origins = new Map<string, Record<string, string>>();
   for (const row of pruneMarketHistory(history, now)) {
     const prices = rows.get(row.day) ?? {};
-    for (const [key, value] of Object.entries(row.prices))
-      prices[key] = Math.min(prices[key] ?? Infinity, value);
+    const historical = origins.get(row.day) ?? {};
+    for (const [key, value] of Object.entries(row.prices)) {
+      if (value < (prices[key] ?? Infinity)) {
+        prices[key] = value;
+        if (row.historical?.[key]) historical[key] = row.historical[key]!;
+        else delete historical[key];
+      }
+    }
+    origins.set(row.day, historical);
     rows.set(row.day, prices);
   }
   const add = (at: string, key: string, value: number | null) => {
     if (value === null || !Number.isFinite(value) || value <= 0) return;
     const day = dateInZone(new Date(at), zone);
     const prices = rows.get(day) ?? {};
-    prices[key] = Math.min(prices[key] ?? Infinity, value);
+    if (value < (prices[key] ?? Infinity)) {
+      prices[key] = value;
+      const historical = origins.get(day);
+      if (historical) delete historical[key];
+    }
     rows.set(day, prices);
   };
   const gold = sources.gold?.data;
   if (gold && sources.gold?.status !== "failed") for (const item of gold.items) add(sources.gold!.fetchedAt, item.code, goldPricePerChi(item.sell, gold.unit));
   const usd = sources.usd?.data;
   if (usd && sources.usd?.status !== "failed") add(sources.usd!.fetchedAt, "usd", usd.sell);
-  return pruneMarketHistory([...rows].map(([day, prices]) => ({ day, prices })).sort((a, b) => a.day.localeCompare(b.day)), now);
+  return pruneMarketHistory([...rows].map(([day, prices]) => ({ day, prices,
+    ...(Object.keys(origins.get(day) ?? {}).length ? { historical: origins.get(day)! } : {}),
+  })).sort((a, b) => a.day.localeCompare(b.day)), now);
 }
 export function lowestMarketLabels(sources: Pick<DigestSources, "gold" | "usd">): string[] {
   return [

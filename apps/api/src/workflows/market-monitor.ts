@@ -37,6 +37,7 @@ export async function checkMarketLows(pool: Pool, options: ServiceOptions = {}) 
   };
   const http = options.http ?? safeHttp;
   return runCloudDigest({
+    backfillHistory: true,
     state,
     settings: { ...settings, airQuality: { enabled: false } },
     now: () => at,
