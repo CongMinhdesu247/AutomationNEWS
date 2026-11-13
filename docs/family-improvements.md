@@ -2,6 +2,8 @@
 
 ## Sử dụng
 
+Chạm banner mở ntfy để đọc tin, không tự chuyển sang Safari. Khi có report và còn chỗ trong thông báo, liên kết **Bản web (tùy chọn)** nằm trong nội dung và chỉ mở khi tự chọn. Banner cũ đã gửi vẫn có thể giữ liên kết mở web từ phiên bản trước.
+
 Mở dashboard → **Gia đình** → chọn hồ sơ. Mục **Trạng thái cloud** đọc ledger GitHub thật, làm mới mỗi phút: đã gửi, lỗi, giữ lượt/chưa xác nhận; có thời điểm nguồn, lịch sử 10 lần gần nhất và lịch kế tiếp. Đây là xác nhận máy chủ gửi, không phải xác nhận iPhone hiện banner. Nút **Gửi lại / gửi thử** tạo thêm một thông báo dù đã gửi hôm nay. Không tự gửi lại một POST có kết quả mơ hồ.
 
 Vàng/USD ngày trước được ghi **Giá gần nhất**. Dashboard so ngày Việt Nam với ngày hiện tại, kể cả khi mở bản tin cũ. Nguồn quá cũ bị connector từ chối như trước; không dùng giá cũ cho cảnh báo biến động.

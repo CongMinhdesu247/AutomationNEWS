@@ -80,7 +80,8 @@ export async function sendNtfy(
       errors: [],
     };
   try {
-    const click = clickUrl
+    // Detail links stay in the message. A normal banner tap opens ntfy.
+    const detail = clickUrl
       ? checkUrl(clickUrl).toString()
       : dashboardLink(publicBaseUrl, digest.id);
     const url = checkUrl(config.serverUrl);
@@ -99,8 +100,7 @@ export async function sendNtfy(
         topic: config.topic,
         title: title ?? (digest.sources && lowestMarketLabels(digest.sources).length ? "KHẨN: giá xuống thấp nhất 30 ngày" : notificationTitle(digest)),
         ...((priority || (digest.sources && lowestMarketLabels(digest.sources).length)) ? { priority: priority ?? 5 } : {}),
-        message: customMessage ?? formatDigestNotification(digest),
-        ...(click ? { click } : {}),
+        message: customMessage ?? formatDigestNotification(digest, false, false, false, detail ? "Bản web (tùy chọn):\n" + detail : ""),
       }),
       maxBytes: 65536,
     });

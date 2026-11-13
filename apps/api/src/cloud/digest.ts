@@ -60,6 +60,7 @@ export type CloudOptions = {
   alerts?: FamilyProfile["alerts"];
   reportBaseUrl?: string;
   signal?: AbortSignal;
+  onSourceResults?: (results: { source: string; status: string; errorCodes: string[] }[]) => void;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   onSummaries?: (counts: {
     total: number;
@@ -206,6 +207,10 @@ export async function runCloudDigest(options: CloudOptions) {
     usd,
   };
   compareMarketHistory(sources, revision.state.marketHistory ?? [], now());
+  options.onSourceResults?.(Object.entries(sources).filter(([, value]) => value && value.status !== "disabled").map(([source, value]) => ({
+    source, status: value.status,
+    errorCodes: value.errors.map(error => /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code) ? error.code : "UNCLASSIFIED"),
+  })));
   options.onAirQuality?.({ status: airQuality.status });
   options.onFuel?.({
     status: fuel.status,
@@ -357,8 +362,8 @@ export async function runCloudDigest(options: CloudOptions) {
               }),
           )
           .join(" · ") +
-        (sealed ? "\nChạm để xem đầy đủ." : "")
-      : cloudMessage(digest),
+        (sealed ? "\n\nBản web (tùy chọn):\n" + sealed.url : "")
+      : cloudMessage(digest, false, false, false, sealed ? "Bản web (tùy chọn):\n" + sealed.url : ""),
     ...(sealed ? { clickUrl: sealed.url } : {}),
     ...(lowest.length ? { title: "KHẨN: giá xuống thấp nhất 30 ngày", priority: 5 as const } : options.alertsOnly ? { title: "Biến động đáng chú ý" } : {}),
   });
