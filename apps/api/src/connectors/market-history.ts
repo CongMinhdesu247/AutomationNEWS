@@ -29,8 +29,12 @@ export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd"
   const gold = sources.gold?.data;
   if (gold) for (const item of gold.items)
     item.low30 = compare(item.code, goldPricePerChi(item.sell, gold.unit), !gold.previousDay && dateInZone(new Date(gold.sourceUpdatedAt), zone) === today);
+  if (!gold && sources.gold && sources.gold.status !== "disabled") sources.gold.priceHistory = {
+    sjc_bar: compare("sjc_bar", null, false), sjc_ring: compare("sjc_ring", null, false),
+  };
   const usd = sources.usd?.data;
   if (usd) usd.low30 = compare("usd", usd.sell, !usd.previousDay && dateInZone(new Date(usd.sourceUpdatedAt), zone) === today);
+  if (!usd && sources.usd && sources.usd.status !== "disabled") sources.usd.priceHistory = { usd: compare("usd", null, false) };
 }
 export function recordMarketHistory(history: MarketDay[], sources: Pick<DigestSources, "gold" | "usd">, now: Date): MarketDay[] {
   const rows = new Map<string, Record<string, number>>();

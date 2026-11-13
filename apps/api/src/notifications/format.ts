@@ -80,7 +80,10 @@ export function formatDigestNotification(
               asOf(data.sourceUpdatedAt) +
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
           ].join("\n")
-        : "🟡 Chưa lấy được giá vàng SJC đã xác minh.",
+        : ["🟡 Chưa lấy được giá vàng SJC hiện tại.",
+            ...Object.entries(sources.gold.priceHistory ?? {}).map(([key, low]) =>
+              (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + priceLow30Text(low)),
+          ].join("\n"),
     );
   }
   if (sources.usd && sources.usd.status !== "disabled") {
@@ -98,7 +101,9 @@ export function formatDigestNotification(
               asOf(data.sourceUpdatedAt) +
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
           ].join("\n")
-        : "💵 Chưa lấy được tỷ giá USD/VND Vietcombank.",
+        : ["💵 Chưa lấy được tỷ giá USD/VND Vietcombank hiện tại.",
+            ...(sources.usd.priceHistory?.usd ? [priceLow30Text(sources.usd.priceHistory.usd)] : []),
+          ].join("\n"),
     );
   }
   const weather = sources.weather.data;

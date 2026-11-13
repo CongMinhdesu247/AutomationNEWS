@@ -12,6 +12,7 @@ export type SourceResult<T> = {
   fetchedAt: string;
   data: T;
   errors: SourceError[];
+  priceHistory?: Record<string, PriceLow30>;
 };
 export type NewsItem = {
   id: string;

@@ -137,6 +137,21 @@ it("normalizes multiline descriptions, keeps authors' content and has an honest 
   expect(text).toContain("owner/repo-2 — Chưa có mô tả từ tác giả.");
   expect(text).not.toContain("undefined");
 });
+it("shows historical gold and USD floors even when their live quotes are unavailable", () => {
+  const value = digest();
+  const failed = { status: "failed" as const, fetchedAt: value.createdAt, errors: [], data: null };
+  value.sources!.gold = { ...failed, priceHistory: {
+    sjc_bar: { minimum: 13900000, days: 26, isLowest: false, historySource: "giavang.pro" },
+    sjc_ring: { minimum: 13580000, days: 26, isLowest: false, historySource: "giavang.pro" },
+  } };
+  value.sources!.usd = { ...failed, priceHistory: { usd: { minimum: 25700, days: 30, isLowest: false, historySource: "Vietcombank" } } };
+  const message = formatDigestNotification(value);
+  expect(message).toContain("Chưa lấy được giá vàng SJC hiện tại");
+  expect(message).toContain("13.900.000");
+  expect(message).toContain("13.580.000");
+  expect(message).toContain("25.700");
+  expect(message).not.toContain("KHẨN");
+});
 it("keeps the optional report link complete within the push byte limit", () => {
   const footer = "Bản web (tùy chọn):\nhttps://fixture.github.io/repo/report.html#" + crypto.randomUUID() + "." + "a".repeat(43);
   const message = formatDigestNotification(digest(), false, false, false, footer);

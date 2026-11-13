@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { MarketDay } from "@hub/contracts";
+import type { MarketDay, DigestSources } from "@hub/contracts";
 import { priceLow30Text } from "@hub/contracts";
 import { parseGold, parseUsd } from "./markets.js";
 import { compareMarketHistory, recordMarketHistory } from "./market-history.js";
@@ -45,6 +45,13 @@ it("does not announce a new low when a quote rebounds above an earlier intraday 
   const data = sources();
   compareMarketHistory(data, [...history30(), { day: "2026-11-12", prices: { usd: 25800 } }], marketAt);
   expect(data.usd.data.low30).toEqual({ minimum: 25900, days: 30, isLowest: false });
+});
+it("keeps historical comparisons available without alerting when live sources fail", () => {
+  const failed = { status: "failed" as const, fetchedAt: marketAt.toISOString(), data: null, errors: [] };
+  const data: Pick<DigestSources, "gold" | "usd"> = { gold: { ...failed }, usd: { ...failed } };
+  compareMarketHistory(data, history30(), marketAt);
+  expect(data.gold?.priceHistory?.sjc_bar).toEqual({ minimum: 14000000, days: 30, isLowest: false });
+  expect(data.usd?.priceHistory?.usd).toEqual({ minimum: 25900, days: 30, isLowest: false });
 });
 it("keeps intraday minima, counts duplicate days once, normalizes legacy units and preserves independent products", () => {
   const data = sources();
