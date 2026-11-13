@@ -147,7 +147,8 @@ describe("cloud execution without local PostgreSQL", () => {
     expect(state.value.fuelBaseline).toBeUndefined();
     await runCloudDigest({ state, settings: onlyFuel, http, now: () => at });
     expect(state.value.fuelBaseline?.prices.ron95).toBe(20000);
-    expect(f.sends[0]?.message).toContain("Lần đầu theo dõi");
+    expect(f.sends[0]?.message).toContain("20.000 đ/lít");
+    expect(f.sends[0]?.message).not.toContain("Lần đầu theo dõi");
     price = 19840;
     await runCloudDigest({ state, settings: onlyFuel, http, now: () => new Date(+at + 60000), forceSend: true });
     expect(f.sends[1]?.message).toContain("Giảm 160 đ");

@@ -217,7 +217,9 @@ it("persists delivery/source telemetry and report before POST, limits alerts, av
   await run(at);
   expect(sends).toHaveLength(1);
   expect(sends[0]).not.toHaveProperty("click");
-  expect(sends[0].message).toContain("Bản web (tùy chọn):\nhttps://fixture.github.io/repo/report.html#");
+  expect(sends[0].actions).toMatchObject([{ action: "view", label: "Xem chi tiết" }]);
+  expect(sends[0].actions[0].url).toContain("https://fixture.github.io/repo/report.html#");
+  expect(sends[0].message).not.toContain("report.html#");
   expect(sends[0].message).not.toContain("Chạm để");
   const first = Object.values(state.value.deliveries)[0]!;
   expect(first.sources).toMatchObject([{ key: "usd", status: "success" }]);

@@ -373,9 +373,8 @@ export async function runCloudDigest(options: CloudOptions) {
                 month: "2-digit",
               }),
           )
-          .join(" · ") +
-        (sealed ? "\n\nBản web (tùy chọn):\n" + sealed.url : "")
-      : cloudMessage(digest, false, false, false, sealed ? "Bản web (tùy chọn):\n" + sealed.url : ""),
+          .join(" · ")
+      : cloudMessage(digest),
     ...(sealed ? { clickUrl: sealed.url } : {}),
     ...(lowest.length ? { title: "KHẨN: giá xuống thấp nhất 30 ngày", priority: 5 as const } : options.alertsOnly ? { title: "Biến động đáng chú ý" } : {}),
   });

@@ -1,4 +1,4 @@
-import type { Digest, Repository, RisingRepository } from "@hub/contracts";
+import type { Digest, Repository, RisingRepository, PriceLow30 } from "@hub/contracts";
 import { goldPricePerChi, priceLow30Text } from "@hub/contracts";
 
 function clip(value: string, maxBytes: number) {
@@ -62,11 +62,27 @@ export function formatDigestNotification(
       day: "2-digit",
       month: "2-digit",
     });
+  const briefLow = (low?: PriceLow30) =>
+    low?.minimum === null || !low
+      ? "đáy 30 ngày: chưa có lịch sử"
+      : "đáy 30 ngày: " + money(low.minimum) +
+        (low.days < 30 ? ` (${low.days}/30 ngày)` : "") +
+        (low.isLowest ? " · 🚨 KHẨN: đã xuống thấp nhất 30 ngày" : "");
+  const goldHistoryNote = (lows: (PriceLow30 | undefined)[]) =>
+    lows.some(low => low?.historySource === "giavang.pro")
+      ? ["Đáy vàng: giá chốt phiên (giavang.pro)."] : [];
   if (sources.gold && sources.gold.status !== "disabled") {
     const data = sources.gold.data;
     blocks.push(
       data
-        ? [
+        ? !full ? [
+            "🟡 Vàng SJC · đ/chỉ (giá bán)",
+            ...data.items.map(item =>
+              (item.code === "sjc_bar" ? "Miếng" : "Nhẫn 9999") + ": " +
+              money(goldPricePerChi(item.sell, data.unit)) + " · " + briefLow(item.low30)),
+            ...goldHistoryNote(data.items.map(item => item.low30)),
+            "Webgia · " + asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
+          ].join("\n") : [
             "🟡 Giá vàng SJC · đồng/chỉ",
             ...data.items.map(
               (item) =>
@@ -82,7 +98,8 @@ export function formatDigestNotification(
           ].join("\n")
         : ["🟡 Chưa lấy được giá vàng SJC hiện tại.",
             ...Object.entries(sources.gold.priceHistory ?? {}).map(([key, low]) =>
-              (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + priceLow30Text(low)),
+              (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + (full ? priceLow30Text(low) : briefLow(low))),
+            ...(!full ? goldHistoryNote(Object.values(sources.gold.priceHistory ?? {})) : []),
           ].join("\n"),
     );
   }
@@ -90,7 +107,11 @@ export function formatDigestNotification(
     const data = sources.usd.data;
     blocks.push(
       data
-        ? [
+        ? !full ? [
+            "💵 USD · Vietcombank · đ/USD",
+            "Bán: " + money(data.sell) + " · " + briefLow(data.low30),
+            asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
+          ].join("\n") : [
             "💵 USD/VND · Vietcombank · đồng/USD",
             "Ngân hàng mua: tiền mặt " +
               money(data.buyCash) +
@@ -102,13 +123,17 @@ export function formatDigestNotification(
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
           ].join("\n")
         : ["💵 Chưa lấy được tỷ giá USD/VND Vietcombank hiện tại.",
-            ...(sources.usd.priceHistory?.usd ? [priceLow30Text(sources.usd.priceHistory.usd)] : []),
+            ...(sources.usd.priceHistory?.usd ? [full ? priceLow30Text(sources.usd.priceHistory.usd) : briefLow(sources.usd.priceHistory.usd)] : []),
           ].join("\n"),
     );
   }
   const weather = sources.weather.data;
   if (weather) {
     blocks.push(
+      !full ? "🌤 " + clip(oneLine(weather.location), 65) + ": " +
+        (weather.minTemperature ?? "?") + "–" + (weather.maxTemperature ?? "?") + " °C · " +
+        clip(oneLine(weather.description), 60) + " · Mưa " + (weather.rainProbability ?? "?") + "%" +
+        (weather.umbrella ? " · Mang ô" : "") :
       [
         "🌤 " +
           clip(oneLine(weather.location), 65) +
@@ -187,7 +212,7 @@ export function formatDigestNotification(
                       money(Math.abs(item.change)) +
                       " đ"),
             ),
-            ...(!compact
+            ...(full
               ? [
                   "Hiệu lực: " +
                     new Date(data.effectiveAt).toLocaleString("vi-VN", {
@@ -205,7 +230,7 @@ export function formatDigestNotification(
                     : "Lần đầu theo dõi; chưa có giá để so sánh.",
                 ]
               : []),
-            "Nguồn: Petrolimex",
+            full ? "Nguồn: Petrolimex" : "Petrolimex · " + asOf(data.effectiveAt),
           ].join("\n")
         : "⛽ RON 95\nChưa lấy được giá đã xác minh từ Petrolimex.",
     );
@@ -222,7 +247,7 @@ export function formatDigestNotification(
           full ? 1000 : compact ? (tight ? 60 : 75) : 105,
         );
       const link =
-        !compact && (full || Buffer.byteLength(item.url) <= 150)
+        full
           ? "\n" + item.url
           : "";
       lines.push(headline + link);
@@ -260,7 +285,7 @@ export function formatDigestNotification(
             "h"
           : repo.stars.toLocaleString("vi-VN") + " sao · Mới đáng chú ý";
       const url =
-        !compact && (full || Buffer.byteLength(repo.url) <= 160)
+        full
           ? "\n" + repo.url
           : "";
       lines.push(

@@ -395,8 +395,9 @@ it("ntfy sends only a short Vietnamese summary, credentials stay in headers and 
     sent = { url, options };
     return ok({ id: "ntfy-id" });
   };
+  const digestId = crypto.randomUUID();
   const digest = {
-    id: crypto.randomUUID(),
+    id: digestId,
     createdAt: at.toISOString(),
     settings: defaultSettings,
     status: "partial",
@@ -425,6 +426,7 @@ it("ntfy sends only a short Vietnamese summary, credentials stay in headers and 
   const body = JSON.parse(sent.options.body);
   expect(body.message).toContain("1 tin");
   expect(body).not.toHaveProperty("click");
+  expect(body).not.toHaveProperty("actions");
   expect(sent.options.headers.Authorization).toBe("Bearer secret-token");
   expect(JSON.stringify(result)).not.toContain("secret-token");
   for (const detail of [
@@ -434,7 +436,8 @@ it("ntfy sends only a short Vietnamese summary, credentials stay in headers and 
     await sendNtfy(digest, { enabled: true, serverUrl: "https://ntfy.sh/", topic: "private-topic" }, { ...context, http: client, ...detail });
     const body = JSON.parse(sent.options.body);
     expect(body).not.toHaveProperty("click");
-    expect(body.message).toContain("Bản web (tùy chọn):");
+    expect(body.actions).toEqual([{ action: "view", label: "Xem chi tiết", url: detail.clickUrl ?? dashboardLink(detail.publicBaseUrl, digestId) }]);
+    expect(body.message).not.toContain("https://");
     expect(body.message).not.toContain("Chạm để");
     expect(Buffer.byteLength(body.message)).toBeLessThanOrEqual(1600);
   }

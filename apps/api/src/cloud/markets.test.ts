@@ -80,10 +80,10 @@ it("sends mom's gold/USD-only profile at 09:00, recovers transient bank errors, 
   });
   expect(messages).toHaveLength(1);
   expect(bankCalls).toBe(3);
-  expect(messages[0]).toContain("Giá vàng SJC · đồng/chỉ");
-  expect(messages[0]).toContain("Miếng SJC: mua 13.600.000");
-  expect(messages[0]).toContain("Nhẫn SJC 9999");
-  expect(messages[0]).toContain("Ngân hàng bán: 25.870");
+  expect(messages[0]).toContain("Vàng SJC · đ/chỉ (giá bán)");
+  expect(messages[0]).toContain("Miếng: 13.900.000");
+  expect(messages[0]).toContain("Nhẫn 9999: 13.880.000");
+  expect(messages[0]).toContain("Bán: 25.870");
   expect(Buffer.byteLength(messages[0]!)).toBeLessThanOrEqual(1600);
   await runCloudFamily(config, {
     state,
