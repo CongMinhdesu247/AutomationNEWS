@@ -2,6 +2,8 @@ import { parseCloudSettings, runCloudDigest } from "./digest.js";
 import { GithubStateStore } from "./state.js";
 import { runCloudFamily } from "./family.js";
 import { safeHttp } from "../connectors/http.js";
+const onSourceResults = (results: { source: string; status: string; errorCodes: string[] }[]) =>
+  console.log("Source diagnostics:", JSON.stringify(results));
 
 // Intentionally does NOT import env.ts, database code or the local scheduler.
 try {
@@ -21,6 +23,7 @@ try {
       forceSend: process.env.HUB_FORCE_SEND === "true",
       profileId: process.env.HUB_PROFILE_ID || undefined,
       reportBaseUrl: process.env.HUB_REPORT_BASE_URL || undefined,
+      onSourceResults,
     });
     console.log(
       "Family digest:",
@@ -62,6 +65,7 @@ try {
         ntfyToken: process.env.NTFY_TOKEN,
         dryRun: process.env.HUB_DRY_RUN === "true",
         forceSend: process.env.HUB_FORCE_SEND === "true",
+        onSourceResults,
         onSummaries: (counts) =>
           console.log(
             "Vietnamese repository summaries:",

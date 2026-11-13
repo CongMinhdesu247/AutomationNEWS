@@ -58,6 +58,7 @@ export type CloudOptions = {
   alerts?: FamilyProfile["alerts"];
   reportBaseUrl?: string;
   signal?: AbortSignal;
+  onSourceResults?: (results: { source: string; status: string; errorCodes: string[] }[]) => void;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   onSummaries?: (counts: {
     total: number;
@@ -202,6 +203,10 @@ export async function runCloudDigest(options: CloudOptions) {
     gold,
     usd,
   };
+  options.onSourceResults?.(Object.entries(sources).filter(([, value]) => value && value.status !== "disabled").map(([source, value]) => ({
+    source, status: value.status,
+    errorCodes: value.errors.map(error => /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code) ? error.code : "UNCLASSIFIED"),
+  })));
   options.onAirQuality?.({ status: airQuality.status });
   options.onFuel?.({
     status: fuel.status,

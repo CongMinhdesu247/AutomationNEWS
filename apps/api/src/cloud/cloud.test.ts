@@ -257,10 +257,14 @@ describe("cloud execution without local PostgreSQL", () => {
   it("still sends a partial digest when one source fails permanently", async () => {
     const state = new MemoryState();
     const f = fixture({ weatherStatus: 401 });
+    let diagnostics: unknown;
     expect(
-      await runCloudDigest({ state, settings, http: f.http, now: () => at }),
+      await runCloudDigest({ state, settings, http: f.http, now: () => at, onSourceResults: result => { diagnostics = result; } }),
     ).toMatchObject({ status: "sent", sourceStatus: "partial" });
     expect(f.sends[0]!.message).toContain("Chưa lấy được dự báo");
+    expect(diagnostics).toContainEqual({ source: "weather", status: "failed", errorCodes: ["HTTP_401"] });
+    expect(JSON.stringify(diagnostics)).not.toContain("https://");
+    expect(JSON.stringify(diagnostics)).not.toContain("topic");
   });
   it("retries transient reads but does not violate a long Retry-After", async () => {
     const state = new MemoryState();
