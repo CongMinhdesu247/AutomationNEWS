@@ -23,7 +23,7 @@ Trong chế độ cũ, sửa Cài đặt không tự sửa GitHub Secret. Với 
 
 ## Lịch và chi phí
 
-Cron `0,30 * * * *` kiểm tra mỗi 30 phút. Bộ chạy lọc hồ sơ đã tới giờ, đúng ngày trong tuần, chưa được thử gửi hôm nay; lịch gửi theo giờ Việt Nam. Cấu hình cũ một người chỉ gửi từ `sendTime` trở đi. GitHub có thể chạy trễ hoặc bỏ job khi tải cao; không dùng như hệ thống báo thức chính xác. Public repo không hoạt động 60 ngày có thể bị tắt schedule; kiểm tra Actions và bật lại khi cần.
+Cron `7,37 * * * *` kiểm tra mỗi 30 phút, ở phút 07 và 37 để tránh đỉnh tải đầu giờ. Bộ chạy lọc hồ sơ đã tới giờ, đúng ngày trong tuần, chưa được thử gửi hôm nay; lịch gửi theo giờ Việt Nam. Cấu hình cũ một người chỉ gửi từ `sendTime` trở đi. Thời gian hồ sơ là mốc sớm nhất được gửi, không bảo đảm đúng phút: còn phụ thuộc lượt kiểm tra kế tiếp và độ trễ của GitHub. GitHub vẫn có thể chạy trễ hoặc bỏ job khi tải cao; đổi phút cron chỉ giảm nguy cơ, không thay thế một bộ lập lịch chạy liên tục. Public repo không hoạt động 60 ngày có thể bị tắt schedule; kiểm tra Actions và bật lại khi cần.
 
 Runner Ubuntu tiêu chuẩn của public repository miễn phí theo điều kiện hiện tại của GitHub. Workflow timeout 7 phút, không tạo artifact/cache trả phí, không thuê server/database. Private repository dùng quota của tài khoản; không tự bật chi tiêu hay runner trả phí.
 

@@ -2,8 +2,8 @@ name: Morning digest (PC off)
 
 on:
   schedule:
-    # Check family profiles every 30 minutes; GitHub may start jobs late.
-    - cron: "0,30 * * * *"
+    # Avoid the top-of-hour load spike; GitHub can still delay or drop runs.
+    - cron: "7,37 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
