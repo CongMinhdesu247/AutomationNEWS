@@ -125,6 +125,23 @@ it("builds separate source settings and city coordinates without exposing destin
   ]);
   expect(s.notifications.topic).toBe(p.topic);
 });
+it("sends Minh at 09:00 and Mom at 09:30 Vietnam time, with no duplicates on backup triggers", async () => {
+  const state = new Memory();
+  const f = fixture();
+  const config = { version: 1, profiles: [profile("personal", { sendTime: "09:00" }), profile("mom", { sendTime: "09:30" })] };
+  const run = (time: string) => runCloudFamily(config, { state, http: f.http, now: () => new Date("2026-11-12T" + time + "+07:00") });
+  await run("08:59:00");
+  expect(f.sends).toHaveLength(0);
+  await run("09:00:00");
+  expect(f.sends.map(s => s.topic)).toEqual(["private_topic_personal"]);
+  await run("09:05:00");
+  await run("09:29:00");
+  expect(f.sends).toHaveLength(1);
+  await run("09:30:00");
+  expect(f.sends.map(s => s.topic)).toEqual(["private_topic_personal", "private_topic_mom"]);
+  await run("09:35:00");
+  expect(f.sends).toHaveLength(2);
+});
 it("deduplicates per profile/day, inherits legacy personal delivery and caches shared GETs", async () => {
   const state = new Memory();
   const f = fixture();
