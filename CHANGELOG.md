@@ -1,5 +1,14 @@
 # Changelog
 
+## Chưa phát hành — tài khoản và máy chủ tại nhà (2026-11-15)
+
+- Đăng ký có thể bật/tắt, đăng nhập, đổi mật khẩu, phiên cookie HttpOnly/Secure, hash mật khẩu scrypt và giới hạn yêu cầu lưu trong PostgreSQL.
+- Cấu hình, phiên bản lưu, lịch theo ngày/múi giờ, lịch sử bản tin và topic ntfy riêng theo tài khoản. Giới hạn tạo/gửi thủ công và kiểm tra quyền trên API/SSE; API legacy dành cho admin.
+- Cổng người dùng trên mobile/desktop, giao diện sáng/tối, xem trước bằng tạo bản tin và gửi thử từ trang chi tiết; admin quản lý khóa/mở khóa thành viên.
+- Migration 010 giữ dữ liệu cũ, thêm chủ sở hữu vào run/digest, giữ owner khi replay và tách chống trùng lịch theo người dùng.
+- Bộ triển khai Ubuntu/Cloudflare Tunnel riêng cho AutomationNEWS, CLI tạo admin/reset mật khẩu, đóng gói source không chứa secret. Chưa triển khai lên máy chủ HP EliteDesk hoặc thay DNS.
+- Chưa có xác minh email/reset qua email hoặc credential ntfy riêng cho từng người. Luồng cảnh báo ngoài lịch legacy chưa được chuyển thành cảnh báo tài khoản.
+
 ## 1.0.0 — bản chuẩn bị phát hành (2026-11-12)
 
 Chưa công khai repository, tạo Git tag hoặc GitHub Release. Đây là nội dung phát hành dự kiến để chủ dự án xem xét.

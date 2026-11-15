@@ -1,0 +1,53 @@
+# Use with compose.yaml and a separate .env.home; project name comes from -p automationnews.
+services:
+  api:
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to the exact public HTTPS origin}
+      PUBLIC_BASE_URL: ${APP_ORIGIN:?Set APP_ORIGIN}
+      HUB_ADMIN_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN}
+  scheduler:
+    environment:
+      PUBLIC_BASE_URL: ${APP_ORIGIN:?Set APP_ORIGIN}
+  tunnel:
+    image: cloudflare/cloudflared@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
+    profiles: [tunnel]
+    command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/cloudflare_tunnel_token]
+    secrets: [cloudflare_tunnel_token]
+    depends_on:
+      web:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  quick-tunnel:
+    image: cloudflare/cloudflared@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
+    profiles: [quick]
+    command: [tunnel, --no-autoupdate, --url, "http://web:80"]
+    depends_on:
+      web:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+  owner:
+    extends:
+      file: compose.yaml
+      service: api
+    profiles: [tools]
+    command: [pnpm, --filter, "@hub/api", exec, tsx, src/accounts/owner-cli.ts]
+    environment:
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      OWNER_PASSWORD_FILE: /run/secrets/owner_password
+      CLAIM_LEGACY_DATA: ${CLAIM_LEGACY_DATA:-false}
+      ACCOUNT_ACTION: ${ACCOUNT_ACTION:-create-owner}
+    secrets: [owner_password]
+    healthcheck:
+      disable: true
+    restart: "no"
+secrets:
+  owner_password:
+    file: ../secrets/owner_password
+  cloudflare_tunnel_token:
+    file: ../secrets/cloudflare_tunnel_token

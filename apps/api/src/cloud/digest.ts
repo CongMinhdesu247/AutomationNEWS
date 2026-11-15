@@ -1,5 +1,6 @@
 import {
   settingsSchema,
+  hasEnabledSources,
   type Settings,
   type Digest,
   type DigestSources,
@@ -16,6 +17,7 @@ import { compareMarketHistory, recordMarketHistory, lowestMarketLabels } from ".
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather, dateInZone } from "../connectors/weather.js";
+import { fetchUv, collectHolidays, collectTasks } from "../connectors/daily-utilities.js";
 import { createGithubConnector } from "../connectors/github.js";
 import { safeHttp, type HttpClient } from "../connectors/http.js";
 import { sendNtfy } from "../connectors/ntfy.js";
@@ -28,15 +30,7 @@ export function parseCloudSettings(value: string): Settings {
   const settings = settingsSchema.parse(JSON.parse(value));
   if (!settings.notifications.enabled || !settings.notifications.topic)
     throw new Error("Cloud notifications must be enabled with a topic.");
-  if (
-    !settings.rss.some((feed) => feed.enabled) &&
-    !settings.weather.enabled &&
-    !settings.github.enabled &&
-    !settings.fuel?.enabled &&
-    !settings.airQuality?.enabled &&
-    !settings.gold?.enabled &&
-    !settings.usd?.enabled
-  )
+  if (!hasEnabledSources(settings))
     throw new Error("Enable at least one cloud source.");
   if (new URL(settings.notifications.serverUrl).protocol !== "https:")
     throw new Error("Cloud ntfy requires HTTPS.");
@@ -174,7 +168,7 @@ export async function runCloudDigest(options: CloudOptions) {
     translationCache:
       revision.state.translations ?? (revision.state.translations = {}),
   });
-  const [rss, weather, githubResult, fuel, airQuality, gold, usd] =
+  const [rss, weather, githubResult, fuel, airQuality, gold, usd, uv] =
     await Promise.all([
       collect(() => fetchRss(settings.rss, context)),
       collect(() =>
@@ -198,6 +192,7 @@ export async function runCloudDigest(options: CloudOptions) {
       collect(() => fetchAirQuality(settings.airQuality, context)),
       collect(() => fetchGold(settings.gold, context)),
       collect(() => fetchUsd(settings.usd, context)),
+      settings.uv?.enabled ? collect(() => fetchUv(settings, context)) : undefined,
     ]);
   const sources: DigestSources = {
     rss,
@@ -207,6 +202,9 @@ export async function runCloudDigest(options: CloudOptions) {
     airQuality,
     gold,
     usd,
+    ...(uv ? { uv } : {}),
+    ...(settings.holidays?.enabled ? { holidays: collectHolidays(settings, now()) } : {}),
+    ...(settings.tasks?.enabled ? { tasks: collectTasks(settings, now()) } : {}),
   };
   const backfillGold = settings.gold?.enabled && (options.forceSend || revision.state.marketBackfillDays?.gold !== day);
   const backfillUsd = settings.usd?.enabled && (options.forceSend || revision.state.marketBackfillDays?.usd !== day);
@@ -272,7 +270,7 @@ export async function runCloudDigest(options: CloudOptions) {
   const lowest = lowestMarketLabels(sources);
   const signals = marketSignals(sources);
   const fingerprint = createHash("sha256").update(JSON.stringify(lowest.map(label => [label,
-    label === "USD/VND" ? signals.usd_sell : label === "Vàng miếng SJC" ? signals.sjc_bar_sell : signals.sjc_ring_sell,
+    label === "USD/VND" ? signals.usd_sell : signals.sjc_bar_sell,
   ]))).digest("hex").slice(0, 16);
   const lowKey = lowest.length && signalKey ? day + ":" + signalKey + ":low:" + fingerprint : undefined;
   const newLow = lowest.length > 0 && (!lowKey || !revision.state.deliveries[lowKey]);

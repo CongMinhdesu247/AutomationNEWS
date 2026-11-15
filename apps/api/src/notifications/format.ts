@@ -1,5 +1,5 @@
 import type { Digest, Repository, RisingRepository, PriceLow30 } from "@hub/contracts";
-import { goldPricePerChi, priceLow30Text, priceLow30Notice } from "@hub/contracts";
+import { goldPricePerChi, goldBarItems, priceLow30Text, priceLow30Notice } from "@hub/contracts";
 
 function clip(value: string, maxBytes: number) {
   if (Buffer.byteLength(value) <= maxBytes) return value;
@@ -71,26 +71,37 @@ export function formatDigestNotification(
   const goldHistoryNote = (lows: (PriceLow30 | undefined)[]) =>
     lows.some(low => low?.historySource === "giavang.pro")
       ? ["Đáy vàng: giá chốt phiên (giavang.pro)."] : [];
+  if (sources.tasks && sources.tasks.status !== "disabled") {
+    const tasks = sources.tasks.data?.items ?? [];
+    blocks.push(["☑ Việc cần làm hôm nay", ...tasks.slice(0, full ? 20 : 3).map(item => "• " + clip(oneLine(item.title), full ? 1000 : 120) + (item.overdue ? " (quá hạn)" : "")), ...(!sources.tasks.data ? ["Chưa tổng hợp được việc cần làm."] : !tasks.length ? ["Không có việc đến hạn chưa hoàn thành."] : !full && tasks.length > 3 ? [`Còn ${tasks.length - 3} việc trong bản tin đầy đủ.`] : [])].join("\n"));
+  }
+  if (sources.holidays?.data) {
+    blocks.push(["📅 Ngày lễ & kỷ niệm", ...sources.holidays.data.events.slice(0, full ? 3 : 1).map(event => event.name + ": " + (event.daysAway === 0 ? "hôm nay" : `còn ${event.daysAway} ngày`))].join("\n"));
+  }
+  if (sources.uv && sources.uv.status !== "disabled") {
+    const uv = sources.uv.data;
+    blocks.push(uv ? `☀ UV tối đa hôm nay tại ${oneLine(uv.location)}: ${uv.maximum.toLocaleString("vi-VN")} · ${uv.level} (dự báo Open-Meteo)` : "☀ Chưa lấy được dự báo UV hôm nay.");
+  }
   if (sources.gold && sources.gold.status !== "disabled") {
-    const data = sources.gold.data;
+    const data = sources.gold.data && goldBarItems(sources.gold.data).length ? sources.gold.data : null;
     blocks.push(
       data
         ? !full ? [
             "🟡 Vàng SJC · đ/chỉ",
-            data.items.map(item => [
-              item.code === "sjc_bar" ? "★ Vàng miếng SJC" : "★ Vàng nhẫn SJC 9999",
+            goldBarItems(data).map(item => [
+              "★ Vàng miếng SJC",
               "Mua: " + money(goldPricePerChi(item.buy, data.unit)),
               "Bán: " + money(goldPricePerChi(item.sell, data.unit)),
               briefLow(item.low30),
             ].join("\n")).join("\n\n"),
             "",
-            ...goldHistoryNote(data.items.map(item => item.low30)),
+            ...goldHistoryNote(goldBarItems(data).map(item => item.low30)),
             "Webgia · " + asOf(data.sourceUpdatedAt) + (data.previousDay ? " · GIÁ NGÀY TRƯỚC" : ""),
           ].join("\n") : [
             "🟡 Giá vàng SJC · đồng/chỉ",
-            ...data.items.map(
+            ...goldBarItems(data).map(
               (item) =>
-                (item.code === "sjc_bar" ? "Miếng SJC" : "Nhẫn SJC 9999") +
+                "Miếng SJC" +
                 ": mua " +
                 money(goldPricePerChi(item.buy, data.unit)) +
                 " · bán " +
@@ -101,10 +112,9 @@ export function formatDigestNotification(
               (data.previousDay ? " · Giá gần nhất (ngày trước)" : ""),
           ].join("\n")
         : ["🟡 Chưa lấy được giá vàng SJC hiện tại.",
-            ...Object.entries(sources.gold.priceHistory ?? {}).map(([key, low]) =>
-              full ? (key === "sjc_bar" ? "Miếng SJC: " : "Nhẫn SJC 9999: ") + priceLow30Text(low) :
-              (key === "sjc_bar" ? "\n★ Vàng miếng SJC\n" : "\n★ Vàng nhẫn SJC 9999\n") + briefLow(low)),
-            ...(!full ? goldHistoryNote(Object.values(sources.gold.priceHistory ?? {})) : []),
+            ...Object.entries(sources.gold.priceHistory ?? {}).filter(([key]) => key === "sjc_bar").map(([, low]) =>
+              full ? "Miếng SJC: " + priceLow30Text(low) : "\n★ Vàng miếng SJC\n" + briefLow(low)),
+            ...(!full ? goldHistoryNote([sources.gold.priceHistory?.sjc_bar]) : []),
           ].join("\n"),
     );
   }
@@ -327,6 +337,7 @@ export function formatDigestNotification(
     blocks.push("ℹ️ Một số nguồn chưa có đủ dữ liệu.");
   if (weather)
     blocks.push("Thời tiết: Open-Meteo · CC BY 4.0\nhttps://open-meteo.com/");
+  else if (sources.uv?.data) blocks.push("UV: Open-Meteo · CC BY 4.0\nhttps://open-meteo.com/");
   if (footer && !full) blocks.push(footer);
   const message = blocks.join("\n\n");
   if (full) return message;

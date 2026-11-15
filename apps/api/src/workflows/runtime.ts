@@ -14,6 +14,7 @@ import { backfillMarketHistory } from "../connectors/market-backfill.js";
 import { fetchAirQuality } from "../connectors/air-quality.js";
 import { fetchFuel, fuelBaseline } from "../connectors/fuel.js";
 import { fetchWeather } from "../connectors/weather.js";
+import { fetchUv, collectHolidays, collectTasks } from "../connectors/daily-utilities.js";
 import { createGithubConnector, emptyGithub } from "../connectors/github.js";
 import { safeHttp } from "../connectors/http.js";
 import {
@@ -67,6 +68,9 @@ export function composeDigest(input: DependencyInput, at: string) {
     ...(input.dependencies.fetch_air_quality ? { airQuality: value("fetch_air_quality", null) } : {}),
     ...(input.dependencies.fetch_gold ? { gold: value("fetch_gold", null) } : {}),
     ...(input.dependencies.fetch_usd ? { usd: value("fetch_usd", null) } : {}),
+    ...(input.dependencies.fetch_uv ? { uv: value("fetch_uv", null) } : {}),
+    ...(input.dependencies.fetch_holidays ? { holidays: value("fetch_holidays", null) } : {}),
+    ...(input.dependencies.fetch_tasks ? { tasks: value("fetch_tasks", null) } : {}),
   };
   const snapshots =
     (
@@ -114,6 +118,10 @@ export class DigestNodeExecutor {
     if (job.type === "persist_digest")
       return { status: "succeeded", output: null, error: null };
     const config = job.settings;
+    if (job.type === "fetch_holidays" || job.type === "fetch_tasks") {
+      const result = job.type === "fetch_holidays" ? collectHolidays(config, this.now()) : collectTasks(config, this.now());
+      return { status: result.status === "disabled" ? "skipped" : "succeeded", output: json({ result, snapshots: [] }), error: null };
+    }
     const fetchedAt = this.now().toISOString();
     let enabled: boolean;
     let empty: unknown;
@@ -134,6 +142,9 @@ export class DigestNodeExecutor {
       empty = null;
     } else if (job.type === "fetch_gold") {
       enabled = config.gold?.enabled ?? false;
+      empty = null;
+    } else if (job.type === "fetch_uv") {
+      enabled = config.uv?.enabled ?? false;
       empty = null;
     } else if (job.type === "fetch_usd") {
       enabled = config.usd?.enabled ?? false;
@@ -163,21 +174,23 @@ export class DigestNodeExecutor {
       return fetchFuel(config.fuel, { ...context, baseline: previous?.sources?.fuel ? fuelBaseline(previous.sources.fuel) : undefined });
     };
     const collectMarket = async () => {
+      // A slow history service must never consume the live quote's deadline.
+      const sources = job.type === "fetch_gold"
+        ? { gold: await fetchGold(config.gold, context) }
+        : { usd: await fetchUsd(config.usd, context) };
+      const quote = sources.gold ?? sources.usd!;
+      if (quote.status === "failed") return quote;
       const history = await backfillMarketHistory(await this.store.marketHistory(this.now(), job.runId), {
         gold: job.type === "fetch_gold", usd: job.type === "fetch_usd", now: this.now(), signal: combined, http: this.http,
+        budgetMs: Math.min(5000, Math.max(1, Math.floor(timeoutMs / 4))),
       });
-      if (job.type === "fetch_gold") {
-        const gold = await fetchGold(config.gold, context);
-        compareMarketHistory({ gold }, history, this.now());
-        return gold;
-      }
-      const usd = await fetchUsd(config.usd, context);
-      compareMarketHistory({ usd }, history, this.now());
-      return usd;
+      compareMarketHistory(sources, history, this.now());
+      return quote;
     };
     const operation =
       job.type === "fetch_rss"
         ? fetchRss(config.rss, context)
+        : job.type === "fetch_uv" ? fetchUv(config, context)
         : job.type === "fetch_gold"
           ? collectMarket()
         : job.type === "fetch_usd"

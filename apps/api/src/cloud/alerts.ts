@@ -1,5 +1,6 @@
 import {
   goldPricePerChi,
+  goldBarItems,
   type DigestSources,
   type FamilyProfile,
 } from "@hub/contracts";
@@ -14,7 +15,7 @@ export function marketSignals(sources: DigestSources): Record<string, number> {
   // Old-day prices must never trigger a fresh-price alert.
   const gold = sources.gold?.data;
   if (gold && !gold.previousDay)
-    for (const item of gold.items) {
+    for (const item of goldBarItems(gold)) {
       values[item.code + "_buy"] = goldPricePerChi(item.buy, gold.unit);
       values[item.code + "_sell"] = goldPricePerChi(item.sell, gold.unit);
     }
@@ -39,14 +40,13 @@ export function significantChanges(
   const labels: Record<string, string> = {
     sjc_bar_buy: "Miếng SJC mua",
     sjc_bar_sell: "Miếng SJC bán",
-    sjc_ring_buy: "Nhẫn SJC mua",
-    sjc_ring_sell: "Nhẫn SJC bán",
     usd_cash: "USD mua tiền mặt",
     usd_transfer: "USD mua chuyển khoản",
     usd_sell: "USD bán",
   };
   const lines: string[] = [];
   for (const [key, value] of Object.entries(current)) {
+    if (!(key in labels) && key !== "aqi") continue;
     const old = previous.values[key];
     if (old === undefined) continue;
     if (key === "aqi") {

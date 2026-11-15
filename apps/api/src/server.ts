@@ -20,6 +20,11 @@ const app = buildApp(pool, {
   totalTimeoutMs: positiveEnv("DIGEST_TIMEOUT_MS", 25000, 45000),
   requestTimeoutMs: positiveEnv("HTTP_TIMEOUT_MS", 6000, 15000),
   maxConcurrent: positiveEnv("MAX_CONCURRENT_OPERATIONS", 2, 4),
+}, {}, undefined, {
+  origin: process.env.APP_ORIGIN ?? "http://127.0.0.1:8088",
+  registrationOpen: process.env.REGISTRATION_OPEN === "true",
+  maxUsers: positiveEnv("MAX_USERS", 100, 10000),
+  ntfyUrl: process.env.ACCOUNT_NTFY_URL ?? "https://ntfy.sh/",
 });
 app.addHook("onClose", async () => {
   await pool.end();

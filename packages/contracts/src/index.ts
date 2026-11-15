@@ -43,6 +43,13 @@ const tags = z
   });
 export const settingsSchema = z
   .object({
+    uv: z.object({ enabled: z.boolean() }).strict().optional(),
+    holidays: z.object({ enabled: z.boolean() }).strict().optional(),
+    tasks: z.object({
+      enabled: z.boolean(),
+      items: z.array(z.object({ id: z.uuid(), title: z.string().trim().min(1).max(120), date: z.iso.date(), done: z.boolean() }).strict()).max(20)
+        .refine(items => new Set(items.map(item => item.id)).size === items.length, "Việc cần làm bị trùng ID."),
+    }).strict().optional(),
     gold: z.object({ enabled: z.boolean() }).strict().optional(),
     usd: z.object({ enabled: z.boolean() }).strict().optional(),
     airQuality: z.object({ enabled: z.boolean(), location: z.string().trim().min(1).max(80).optional(), latitude: z.number().min(-90).max(90).optional(), longitude: z.number().min(-180).max(180).optional() }).strict().optional(),
@@ -155,8 +162,19 @@ export const settingsSchema = z
           });
       }),
   })
-  .strict();
+  .strict()
+  .superRefine((settings, ctx) => {
+    if (settings.uv?.enabled && !settings.weather.location) ctx.addIssue({ code: "custom", path: ["weather", "location"], message: "Chọn địa điểm khi bật chỉ số UV." });
+  });
 export type Settings = z.infer<typeof settingsSchema>;
+export function hasEnabledSources(settings: Settings): boolean {
+  return settings.rss.some(feed => feed.enabled) || [settings.weather, settings.github, settings.fuel, settings.airQuality, settings.gold, settings.usd, settings.uv, settings.holidays, settings.tasks].some(source => source?.enabled);
+}
+export function calendarDate(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const part = (key: string) => parts.find(p => p.type === key)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
 export type FieldIssue = { path: (string | number)[]; message: string };
 export type ApiError = {
   error: { code: string; message: string; issues: FieldIssue[] };

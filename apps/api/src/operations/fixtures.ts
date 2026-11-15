@@ -73,6 +73,7 @@ export function fixtureClient(
           temperature_2m_max: [31],
           precipitation_probability_max: [65],
           weather_code: [61],
+          uv_index_max: [6.4],
         },
       });
     if (source === "github")

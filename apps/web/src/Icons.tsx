@@ -9,10 +9,34 @@ export function Icon({
     | "settings"
     | "sun"
     | "arrow"
-    | "send";
+    | "send"
+    | "lock"
+    | "user"
+    | "logout"
+    | "check"
+    | "chevron";
   size?: number;
 }) {
   const paths = {
+    lock: (
+      <>
+        <rect x="5" y="10" width="14" height="11" rx="3" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+      </>
+    ),
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M14 8l4 4-4 4M8 12h10" />
+      </>
+    ),
+    check: <path d="m5 12 4 4L19 6" />,
+    chevron: <path d="m8 10 4 4 4-4" />,
     brief: (
       <>
         <rect x="4" y="3" width="16" height="18" rx="3" />

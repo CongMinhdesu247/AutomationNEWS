@@ -67,3 +67,28 @@ it("persists 30-minute checks and low reservations across restarts, merges obser
   expect(digest?.sources?.usd?.data?.low30).toEqual({ minimum: 25900, days: 30, isLowest: true });
   await migrate(pool); // upgrade remains idempotent
 });
+it("keeps a valid live USD quote when historical requests exceed their optional budget", async () => {
+  await pool.query("UPDATE settings SET config=$1::jsonb WHERE id=1", [JSON.stringify({ ...structuredClone(defaultSettings), usd: { enabled: true } })]);
+  await pool.query("UPDATE market_monitor SET state=$1::jsonb WHERE id=1", [JSON.stringify(initialState())]);
+  const requestedDates: (string | null)[] = [];
+  const today = dateInZone(marketAt, "Asia/Ho_Chi_Minh");
+  const http: HttpClient = async (url, request = {}) => {
+    const day = new URL(url).searchParams.get("date");
+    requestedDates.push(day);
+    if (day === today) return { status: 200, headers: {}, body: usdJson };
+    return new Promise((_resolve, reject) => {
+      if (request.signal?.aborted) reject(Error("history budget exhausted"));
+      else request.signal?.addEventListener("abort", () => reject(Error("history budget exhausted")), { once: true });
+    });
+  };
+  const queue = new WorkflowQueue(pool, { sourceTimeoutMs: 1000, maxRetries: 0 });
+  const run = await queue.submit(crypto.randomUUID(), {});
+  const worker = new WorkerRunner(queue, {}, { http, now: () => marketAt });
+  for (let i = 0; i < 20 && await worker.tick(); i++) { /* drain fixture only */ }
+  const digest = await new DigestStore(pool).get(run.runId);
+  expect(requestedDates[0]).toBe(today);
+  expect(requestedDates.length).toBeGreaterThan(1);
+  expect(digest?.sources?.usd?.status).toBe("success");
+  expect(digest?.sources?.usd?.data?.sell).toBe(25870);
+  expect((await queue.get(run.runId))?.nodes.find(n => n.nodeId === "fetch_usd")?.retryCount).toBe(0);
+});

@@ -11,7 +11,7 @@ import pg from "pg";
 import "../env.js";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import { WorkflowQueue } from "../workflows/queue.js";
 import { WorkerRunner } from "../workflows/runtime.js";
 import {

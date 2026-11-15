@@ -1,18 +1,37 @@
-import { goldPricePerChi, type DigestSources, type MarketDay, type PriceLow30 } from "@hub/contracts";
+import {
+  goldPricePerChi,
+  goldBarItems,
+  type DigestSources,
+  type MarketDay,
+  type PriceLow30,
+} from "@hub/contracts";
 import { dateInZone } from "./weather.js";
 
 const zone = "Asia/Ho_Chi_Minh";
 // Calendar days in Vietnam, excluding the current day. Daily minima preserve
 // intraday lows while bounding persisted public data to 31 small records.
-export function pruneMarketHistory(history: MarketDay[], now: Date): MarketDay[] {
+export function pruneMarketHistory(
+  history: MarketDay[],
+  now: Date,
+): MarketDay[] {
   const today = dateInZone(now, zone);
   const start = dateInZone(new Date(+now - 30 * 86400000), zone);
-  return history.filter(row => row.day >= start && row.day <= today);
+  return history.filter((row) => row.day >= start && row.day <= today);
 }
-export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd">, history: MarketDay[], now: Date) {
+export function compareMarketHistory(
+  sources: Pick<DigestSources, "gold" | "usd">,
+  history: MarketDay[],
+  now: Date,
+) {
   const today = dateInZone(now, zone);
-  const previous = pruneMarketHistory(history, now).filter(row => row.day < today);
-  const compare = (key: string, value: number | null, fresh: boolean): PriceLow30 => {
+  const previous = pruneMarketHistory(history, now).filter(
+    (row) => row.day < today,
+  );
+  const compare = (
+    key: string,
+    value: number | null,
+    fresh: boolean,
+  ): PriceLow30 => {
     const days = new Map<string, number>();
     for (const row of previous) {
       const price = row.prices[key];
@@ -20,31 +39,68 @@ export function compareMarketHistory(sources: Pick<DigestSources, "gold" | "usd"
         days.set(row.day, Math.min(days.get(row.day) ?? Infinity, price));
     }
     const minimum = days.size ? Math.min(...days.values()) : null;
-    const intraday = history.filter(row => row.day === today).map(row => row.prices[key]).filter((price): price is number => price !== undefined);
-    const imported = previous.some(row => row.historical?.[key]);
-    const matchesLow = fresh && minimum !== null && value !== null && value <= minimum && value <= Math.min(...intraday);
-    return { minimum, days: days.size, isLowest: matchesLow && days.size === 30,
+    const intraday = history
+      .filter((row) => row.day === today)
+      .map((row) => row.prices[key])
+      .filter((price): price is number => price !== undefined);
+    const imported = previous.some((row) => row.historical?.[key]);
+    const matchesLow =
+      fresh &&
+      minimum !== null &&
+      value !== null &&
+      value <= minimum &&
+      value <= Math.min(...intraday);
+    return {
+      minimum,
+      days: days.size,
+      isLowest: matchesLow && days.size === 30,
       ...(matchesLow && days.size < 30 ? { isLowestObserved: true } : {}),
-      ...(imported ? { historySource: key === "usd" ? "Vietcombank" as const : "giavang.pro" as const } : {}),
+      ...(imported
+        ? {
+            historySource:
+              key === "usd"
+                ? ("Vietcombank" as const)
+                : ("giavang.pro" as const),
+          }
+        : {}),
     };
   };
   const gold = sources.gold?.data;
-  if (gold) for (const item of gold.items)
-    item.low30 = compare(item.code, goldPricePerChi(item.sell, gold.unit), !gold.previousDay && dateInZone(new Date(gold.sourceUpdatedAt), zone) === today);
-  if (!gold && sources.gold && sources.gold.status !== "disabled") sources.gold.priceHistory = {
-    sjc_bar: compare("sjc_bar", null, false), sjc_ring: compare("sjc_ring", null, false),
-  };
+  if (gold)
+    for (const item of goldBarItems(gold))
+      item.low30 = compare(
+        item.code,
+        goldPricePerChi(item.sell, gold.unit),
+        !gold.previousDay &&
+          dateInZone(new Date(gold.sourceUpdatedAt), zone) === today,
+      );
+  if (!gold && sources.gold && sources.gold.status !== "disabled")
+    sources.gold.priceHistory = {
+      sjc_bar: compare("sjc_bar", null, false),
+    };
   const usd = sources.usd?.data;
-  if (usd) usd.low30 = compare("usd", usd.sell, !usd.previousDay && dateInZone(new Date(usd.sourceUpdatedAt), zone) === today);
-  if (!usd && sources.usd && sources.usd.status !== "disabled") sources.usd.priceHistory = { usd: compare("usd", null, false) };
+  if (usd)
+    usd.low30 = compare(
+      "usd",
+      usd.sell,
+      !usd.previousDay &&
+        dateInZone(new Date(usd.sourceUpdatedAt), zone) === today,
+    );
+  if (!usd && sources.usd && sources.usd.status !== "disabled")
+    sources.usd.priceHistory = { usd: compare("usd", null, false) };
 }
-export function recordMarketHistory(history: MarketDay[], sources: Pick<DigestSources, "gold" | "usd">, now: Date): MarketDay[] {
+export function recordMarketHistory(
+  history: MarketDay[],
+  sources: Pick<DigestSources, "gold" | "usd">,
+  now: Date,
+): MarketDay[] {
   const rows = new Map<string, Record<string, number>>();
   const origins = new Map<string, Record<string, string>>();
   for (const row of pruneMarketHistory(history, now)) {
     const prices = rows.get(row.day) ?? {};
     const historical = origins.get(row.day) ?? {};
     for (const [key, value] of Object.entries(row.prices)) {
+      if (key !== "sjc_bar" && key !== "usd") continue;
       if (value < (prices[key] ?? Infinity)) {
         prices[key] = value;
         if (row.historical?.[key]) historical[key] = row.historical[key]!;
@@ -66,16 +122,38 @@ export function recordMarketHistory(history: MarketDay[], sources: Pick<DigestSo
     rows.set(day, prices);
   };
   const gold = sources.gold?.data;
-  if (gold && sources.gold?.status !== "failed") for (const item of gold.items) add(sources.gold!.fetchedAt, item.code, goldPricePerChi(item.sell, gold.unit));
+  if (gold && sources.gold?.status !== "failed")
+    for (const item of goldBarItems(gold))
+      add(
+        sources.gold!.fetchedAt,
+        item.code,
+        goldPricePerChi(item.sell, gold.unit),
+      );
   const usd = sources.usd?.data;
-  if (usd && sources.usd?.status !== "failed") add(sources.usd!.fetchedAt, "usd", usd.sell);
-  return pruneMarketHistory([...rows].map(([day, prices]) => ({ day, prices,
-    ...(Object.keys(origins.get(day) ?? {}).length ? { historical: origins.get(day)! } : {}),
-  })).sort((a, b) => a.day.localeCompare(b.day)), now);
+  if (usd && sources.usd?.status !== "failed")
+    add(sources.usd!.fetchedAt, "usd", usd.sell);
+  return pruneMarketHistory(
+    [...rows]
+      .map(([day, prices]) => ({
+        day,
+        prices,
+        ...(Object.keys(origins.get(day) ?? {}).length
+          ? { historical: origins.get(day)! }
+          : {}),
+      }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
+    now,
+  );
 }
-export function lowestMarketLabels(sources: Pick<DigestSources, "gold" | "usd">): string[] {
+export function lowestMarketLabels(
+  sources: Pick<DigestSources, "gold" | "usd">,
+): string[] {
   return [
-    ...(sources.gold?.data?.items.filter(item => item.low30?.isLowest).map(item => item.code === "sjc_bar" ? "Vàng miếng SJC" : "Nhẫn SJC 9999") ?? []),
+    ...(sources.gold?.data
+      ? goldBarItems(sources.gold.data)
+          .filter((item) => item.low30?.isLowest)
+          .map(() => "Vàng miếng SJC")
+      : []),
     ...(sources.usd?.data?.low30?.isLowest ? ["USD/VND"] : []),
   ];
 }

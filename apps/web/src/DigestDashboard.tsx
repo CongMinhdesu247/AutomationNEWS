@@ -7,9 +7,15 @@ import type {
   SourceResult,
   Repository,
   RisingRepository,
+  DigestSources,
 } from "@hub/contracts";
 import { Icon } from "./Icons";
-import { goldPricePerChi, priceFreshness, priceLow30Text } from "@hub/contracts";
+import {
+  goldPricePerChi,
+  goldBarItems,
+  priceFreshness,
+  priceLow30Text,
+} from "@hub/contracts";
 const statusText: Record<string, string> = {
   success: "Thành công",
   partial: "Một phần",
@@ -70,6 +76,98 @@ function SourceHeader({
     </>
   );
 }
+function DailyUtilities({ sources }: { sources: DigestSources }) {
+  const uv = sources.uv;
+  const holidays = sources.holidays;
+  const tasks = sources.tasks;
+  if (
+    ![uv, holidays, tasks].some(
+      (source) => source && source.status !== "disabled",
+    )
+  )
+    return null;
+  return (
+    <div className="daily-utility-grid">
+      {tasks && tasks.status !== "disabled" && (
+        <section className="daily-utility-card">
+          <SourceHeader title="Việc cần làm hôm nay" result={tasks} />
+          {tasks.data ? (
+            tasks.data.items.length ? (
+              <ul>
+                {tasks.data.items.map((item) => (
+                  <li key={item.id}>
+                    <strong>{item.title}</strong>
+                    <small>
+                      {item.date.split("-").reverse().join("/")}
+                      {item.overdue ? " · Quá hạn" : " · Đến hạn hôm nay"}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>Không có việc đến hạn chưa hoàn thành.</p>
+            )
+          ) : (
+            <p>Chưa tổng hợp được việc cần làm.</p>
+          )}
+          <a href="#/preferences" className="text-link">
+            Quản lý việc của bạn <Icon name="arrow" size={15} />
+          </a>
+        </section>
+      )}
+      {holidays && holidays.status !== "disabled" && (
+        <section className="daily-utility-card">
+          <SourceHeader title="Ngày lễ & kỷ niệm" result={holidays} />
+          {holidays.data ? (
+            <ul>
+              {holidays.data.events.map((event) => (
+                <li key={event.date}>
+                  <strong>{event.name}</strong>
+                  <small>
+                    {event.date.split("-").reverse().join("/")} ·{" "}
+                    {event.daysAway === 0
+                      ? "Hôm nay"
+                      : `Còn ${event.daysAway} ngày`}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Chưa tổng hợp được lịch.</p>
+          )}
+          <p className="muted">Các ngày cố định theo dương lịch Việt Nam.</p>
+        </section>
+      )}
+      {uv && uv.status !== "disabled" && (
+        <section className="daily-utility-card">
+          <SourceHeader title="Chỉ số UV hôm nay" result={uv} />
+          {uv.data ? (
+            <>
+              <p>{uv.data.location}</p>
+              <strong className="daily-uv-value">
+                {uv.data.maximum.toLocaleString("vi-VN", {
+                  maximumFractionDigits: 1,
+                })}
+                <span>{uv.data.level}</span>
+              </strong>
+              <p>Dự báo chỉ số UV cao nhất trong ngày.</p>
+              <a
+                href={uv.data.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-link"
+              >
+                Open-Meteo · CC BY 4.0
+              </a>
+            </>
+          ) : (
+            <p>Chưa lấy được dự báo UV.</p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
 function Repositories({
   items,
   rising = false,
@@ -116,7 +214,17 @@ function Repositories({
     </ul>
   );
 }
-export default function DigestDashboard({ hash }: { hash: string }) {
+export default function DigestDashboard({
+  hash,
+  apiBase = "/api",
+  accountId = "legacy",
+  canCreate = true,
+}: {
+  hash: string;
+  apiBase?: string;
+  accountId?: string;
+  canCreate?: boolean;
+}) {
   const id = hash.startsWith("#/digests/")
     ? hash.slice("#/digests/".length)
     : null;
@@ -140,7 +248,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
       return;
     }
     const controller = new AbortController();
-    void request<Digest>("/api/digests/" + latestId, {
+    void request<Digest>(apiBase + "/digests/" + latestId, {
       signal: controller.signal,
     })
       .then((value) => {
@@ -150,7 +258,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
         if (!controller.signal.aborted) setLatest(null);
       });
     return () => controller.abort();
-  }, [latestId]);
+  }, [latestId, apiBase]);
   const busy = useRef(false);
   const sendBusy = useRef(false);
   useEffect(() => {
@@ -159,11 +267,11 @@ export default function DigestDashboard({ hash }: { hash: string }) {
     setError("");
     setDigest(null);
     (id
-      ? request<Digest>("/api/digests/" + encodeURIComponent(id), {
+      ? request<Digest>(apiBase + "/digests/" + encodeURIComponent(id), {
           signal: controller.signal,
         }).then(setDigest)
       : request<{ items: DigestSummary[]; hasMore: boolean }>(
-          "/api/digests?page=" + page + "&pageSize=10",
+          apiBase + "/digests?page=" + page + "&pageSize=10",
           { signal: controller.signal },
         ).then(setList)
     )
@@ -177,24 +285,24 @@ export default function DigestDashboard({ hash }: { hash: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [id, page, reload]);
+  }, [id, page, reload, apiBase]);
   async function create() {
     if (busy.current) return;
     busy.current = true;
     setCreating(true);
     setError("");
     setNotice("Đang lưu yêu cầu workflow. Chỉ cấu hình đã lưu được sử dụng.");
-    let key = sessionStorage.getItem("hub-create-key");
+    let key = sessionStorage.getItem("hub-create-key-" + accountId);
     if (!key) {
       key = crypto.randomUUID();
-      sessionStorage.setItem("hub-create-key", key);
+      sessionStorage.setItem("hub-create-key-" + accountId, key);
     }
     try {
-      const result = await request<RunAccepted>("/api/digests", {
+      const result = await request<RunAccepted>(apiBase + "/digests", {
         method: "POST",
         headers: { "Idempotency-Key": key },
       });
-      sessionStorage.removeItem("hub-create-key");
+      sessionStorage.removeItem("hub-create-key-" + accountId);
       window.location.hash = "/runs/" + result.runId;
       setNotice("Yêu cầu đã được lưu bền vững. Worker sẽ tạo bản tin.");
       setReload((v) => v + 1);
@@ -220,7 +328,7 @@ export default function DigestDashboard({ hash }: { hash: string }) {
     }
     try {
       const attempt = await request<NotificationAttempt>(
-        "/api/digests/" + digest.id + "/notifications",
+        apiBase + "/digests/" + digest.id + "/notifications",
         { method: "POST", headers: { "Idempotency-Key": key } },
       );
       sessionStorage.removeItem(storage);
@@ -254,7 +362,11 @@ export default function DigestDashboard({ hash }: { hash: string }) {
             </a>
           )}
           <h1>
-            {id ? "Bản tin của bạn" : "Buổi sáng, gọn trong một bản tin."}
+            {id
+              ? "Bản tin của bạn"
+              : apiBase === "/api/account"
+                ? "Bản tin của tôi"
+                : "Buổi sáng, gọn trong một bản tin."}
           </h1>
           <p>
             {id
@@ -271,6 +383,11 @@ export default function DigestDashboard({ hash }: { hash: string }) {
             <Icon name="send" size={17} />
             {sending ? "Đang gửi…" : "Gửi đến điện thoại"}
           </button>
+        ) : !canCreate ? (
+          <a className="primary-button" href="#/preferences">
+            <Icon name="settings" size={17} />
+            Chọn nội dung
+          </a>
         ) : (
           <button
             className="primary-button"
@@ -306,71 +423,76 @@ export default function DigestDashboard({ hash }: { hash: string }) {
       {loading && <p role="status">Đang tải bản tin…</p>}
       {!id && !loading && list && (
         <>
-          {latest?.sources && (
-            <section className="latest-brief">
-              <div className="brief-heading">
-                <div>
-                  <span className="section-kicker">Gần nhất trên máy</span>
-                  <h2>
-                    {new Date(latest.createdAt).toLocaleDateString("vi-VN", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </h2>
+          {latest?.sources && <DailyUtilities sources={latest.sources} />}
+          {latest?.sources &&
+            (latest.sources.weather.status !== "disabled" ||
+              latest.sources.github.status !== "disabled") && (
+              <section className="latest-brief">
+                <div className="brief-heading">
+                  <div>
+                    <span className="section-kicker">Bản tin gần nhất</span>
+                    <h2>
+                      {new Date(latest.createdAt).toLocaleDateString("vi-VN", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </h2>
+                  </div>
+                  <a href={"#/digests/" + latest.id} className="text-link">
+                    Đọc bản tin <Icon name="arrow" size={17} />
+                  </a>
                 </div>
-                <a href={"#/digests/" + latest.id} className="text-link">
-                  Đọc bản tin <Icon name="arrow" size={17} />
-                </a>
-              </div>
-              <div className="brief-overview">
-                <div className="brief-weather">
-                  <Icon name="sun" size={34} />
-                  <p>{latest.sources.weather.data?.location || "Thời tiết"}</p>
-                  <strong>
-                    {latest.sources.weather.data
-                      ? `${latest.sources.weather.data.minTemperature ?? "—"}–${latest.sources.weather.data.maxTemperature ?? "—"}°`
-                      : "Chưa có dữ liệu"}
-                  </strong>
-                  <p>
-                    {latest.sources.weather.data?.description ||
-                      "Bật nguồn thời tiết trong cài đặt."}
-                  </p>
-                  {latest.sources.weather.data?.rainProbability != null && (
-                    <small>
-                      Khả năng mưa {latest.sources.weather.data.rainProbability}
-                      %
-                    </small>
-                  )}
-                </div>
-                <div className="brief-highlights">
-                  <h3>Dự án đáng chú ý</h3>
-                  <ul>
-                    {[
-                      ...latest.sources.github.data.rising,
-                      ...latest.sources.github.data.newNotable,
-                    ]
-                      .slice(0, 3)
-                      .map((repo) => (
-                        <li key={repo.id}>
-                          <strong>{repo.name}</strong>
-                          <p>
-                            {repo.summaryVi || "Chưa có bản dịch tiếng Việt."}
-                          </p>
-                        </li>
-                      ))}
-                  </ul>
-                  {latest.sources.github.data.rising.length +
-                    latest.sources.github.data.newNotable.length ===
-                    0 && (
-                    <p className="muted">
-                      Chưa có dự án GitHub trong bản tin này.
+                <div className="brief-overview">
+                  <div className="brief-weather">
+                    <Icon name="sun" size={34} />
+                    <p>
+                      {latest.sources.weather.data?.location || "Thời tiết"}
                     </p>
-                  )}
+                    <strong>
+                      {latest.sources.weather.data
+                        ? `${latest.sources.weather.data.minTemperature ?? "—"}–${latest.sources.weather.data.maxTemperature ?? "—"}°`
+                        : "Chưa có dữ liệu"}
+                    </strong>
+                    <p>
+                      {latest.sources.weather.data?.description ||
+                        "Bật nguồn thời tiết trong cài đặt."}
+                    </p>
+                    {latest.sources.weather.data?.rainProbability != null && (
+                      <small>
+                        Khả năng mưa{" "}
+                        {latest.sources.weather.data.rainProbability}%
+                      </small>
+                    )}
+                  </div>
+                  <div className="brief-highlights">
+                    <h3>Dự án đáng chú ý</h3>
+                    <ul>
+                      {[
+                        ...latest.sources.github.data.rising,
+                        ...latest.sources.github.data.newNotable,
+                      ]
+                        .slice(0, 3)
+                        .map((repo) => (
+                          <li key={repo.id}>
+                            <strong>{repo.name}</strong>
+                            <p>
+                              {repo.summaryVi || "Chưa có bản dịch tiếng Việt."}
+                            </p>
+                          </li>
+                        ))}
+                    </ul>
+                    {latest.sources.github.data.rising.length +
+                      latest.sources.github.data.newNotable.length ===
+                      0 && (
+                      <p className="muted">
+                        Chưa có dự án GitHub trong bản tin này.
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </section>
-          )}
+              </section>
+            )}
           <div className="section-heading">
             <h2>Lịch sử bản tin</h2>
             <a href="#/settings/rss" className="text-link">
@@ -379,10 +501,24 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           </div>
           {list.items.length === 0 ? (
             <div className="empty-state">
-              <strong>Chưa có bản tin nào</strong>
+              <span className="account-empty-icon">
+                <Icon name="brief" size={32} />
+              </span>
+              <strong>Bắt đầu với những điều bạn quan tâm</strong>
               <p>
-                Bật ít nhất một nguồn trong cài đặt, lưu rồi bấm tạo bản tin.
+                Chọn thời tiết, tin tức hay những cập nhật yêu thích. Bản tin
+                đầu tiên của bạn sẽ xuất hiện tại đây.
               </p>
+              <a
+                className="account-empty-action"
+                href={
+                  apiBase === "/api/account"
+                    ? "#/preferences"
+                    : "#/settings/rss"
+                }
+              >
+                Chọn nội dung bản tin <Icon name="arrow" size={17} />
+              </a>
             </div>
           ) : (
             <ul className="digest-history">
@@ -449,49 +585,49 @@ export default function DigestDashboard({ hash }: { hash: string }) {
           )}
           {digest.sources && (
             <>
+              <DailyUtilities sources={digest.sources} />
               {digest.sources.gold &&
                 digest.sources.gold.status !== "disabled" && (
                   <section className="digest-section">
                     <SourceHeader
-                      title="Vàng miếng SJC & nhẫn SJC 9999"
+                      title="Vàng miếng SJC"
                       result={digest.sources.gold}
                     />
-                    {digest.sources.gold.data ? (
+                    {digest.sources.gold.data &&
+                    goldBarItems(digest.sources.gold.data).length ? (
                       <>
                         <p>
                           {digest.sources.gold.data.region} · Đơn vị: đồng/chỉ
                         </p>
                         <ul className="digest-items">
-                          {digest.sources.gold.data.items.map((item) => (
-                            <li key={item.code}>
-                              <strong>
-                                {item.code === "sjc_bar"
-                                  ? "Vàng miếng SJC"
-                                  : "Nhẫn SJC 9999"}
-                              </strong>
-                              <div className="weather-facts">
-                                <p>
-                                  Mua vào
-                                  <strong>
-                                    {goldPricePerChi(
-                                      item.buy,
-                                      digest.sources!.gold!.data!.unit,
-                                    ).toLocaleString("vi-VN")}
-                                  </strong>
-                                </p>
-                                <p>
-                                  Bán ra
-                                  <strong>
-                                    {goldPricePerChi(
-                                      item.sell,
-                                      digest.sources!.gold!.data!.unit,
-                                    ).toLocaleString("vi-VN")}
-                                  </strong>
-                                </p>
-                              </div>
-                              <p>{priceLow30Text(item.low30)}</p>
-                            </li>
-                          ))}
+                          {goldBarItems(digest.sources.gold.data).map(
+                            (item) => (
+                              <li key={item.code}>
+                                <strong>Vàng miếng SJC</strong>
+                                <div className="weather-facts">
+                                  <p>
+                                    Mua vào
+                                    <strong>
+                                      {goldPricePerChi(
+                                        item.buy,
+                                        digest.sources!.gold!.data!.unit,
+                                      ).toLocaleString("vi-VN")}
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    Bán ra
+                                    <strong>
+                                      {goldPricePerChi(
+                                        item.sell,
+                                        digest.sources!.gold!.data!.unit,
+                                      ).toLocaleString("vi-VN")}
+                                    </strong>
+                                  </p>
+                                </div>
+                                <p>{priceLow30Text(item.low30)}</p>
+                              </li>
+                            ),
+                          )}
                         </ul>
                         <p>
                           {priceFreshness(
@@ -555,7 +691,9 @@ export default function DigestDashboard({ hash }: { hash: string }) {
                                 "vi-VN",
                               ) ?? "Chưa có"}
                             </strong>
-                            <span>{priceLow30Text(digest.sources.usd.data.low30)}</span>
+                            <span>
+                              {priceLow30Text(digest.sources.usd.data.low30)}
+                            </span>
                           </p>
                         </div>
                         <p>

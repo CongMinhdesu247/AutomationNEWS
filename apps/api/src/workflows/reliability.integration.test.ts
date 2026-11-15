@@ -7,7 +7,7 @@ import { defaultSettings, type Settings } from "@hub/contracts";
 import { WorkflowQueue } from "./queue.js";
 import { WorkerRunner } from "./runtime.js";
 import { DigestScheduler } from "./schedule.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import type { HttpClient } from "../connectors/http.js";
 
 const url = process.env.TEST_DATABASE_URL;

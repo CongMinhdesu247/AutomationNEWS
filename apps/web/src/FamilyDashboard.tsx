@@ -314,7 +314,7 @@ export default function FamilyDashboard() {
                         ["airQuality", "Chất lượng không khí"],
                         ["fuel", "Xăng E10 RON 95-III · vùng 1"],
                         ["github", "5 dự án GitHub · tiếng Việt"],
-                        ["gold", "Vàng miếng SJC & nhẫn SJC 9999"],
+                        ["gold", "Vàng miếng SJC"],
                         ["usd", "USD/VND · Vietcombank"],
                       ] as const
                     ).map(([key, label]) => (

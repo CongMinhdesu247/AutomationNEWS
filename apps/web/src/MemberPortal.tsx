@@ -184,7 +184,7 @@ export default function MemberPortal() {
                   ["weather", "Thời tiết"],
                   ["airQuality", "Chất lượng không khí"],
                   ["fuel", "Xăng E10 RON 95-III"],
-                  ["gold", "Vàng SJC · đồng/chỉ"],
+                  ["gold", "Vàng miếng SJC · đồng/chỉ"],
                   ["usd", "USD/VND"],
                   ["github", "Dự án GitHub"],
                 ] as const

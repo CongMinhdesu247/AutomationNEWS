@@ -124,9 +124,7 @@ export function parseGold(html: string, now: Date): GoldData {
     const code =
       cells[0] === "Vàng SJC 1L, 10L, 1KG"
         ? "sjc_bar"
-        : cells[0] === "Vàng nhẫn SJC 99,99% 1 chỉ, 2 chỉ, 5 chỉ"
-          ? "sjc_ring"
-          : null;
+        : null;
     if (!code || items.some((item) => item.code === code)) continue;
     if (!cells.slice(1).every((v) => /^\d{1,3}(?:\.\d{3})+$/.test(v))) continue;
     const buy = Number(cells[1]!.replaceAll(".", "")),
@@ -141,10 +139,7 @@ export function parseGold(html: string, now: Date): GoldData {
       continue;
     items.push({
       code,
-      name:
-        code === "sjc_bar"
-          ? "Vàng miếng SJC"
-          : "Nhẫn SJC 9999 (1, 2, 5 chỉ)",
+      name: "Vàng miếng SJC",
       buy,
       sell,
     });
@@ -152,7 +147,7 @@ export function parseGold(html: string, now: Date): GoldData {
   if (!items.length)
     throw new ConnectorError(
       "GOLD_MISSING_PRODUCTS",
-      "Chưa lấy được giá vàng miếng SJC và nhẫn SJC 9999.",
+      "Chưa lấy được giá vàng miếng SJC.",
     );
   return {
     source: "Webgia (tổng hợp giá SJC)",
@@ -244,7 +239,7 @@ export async function fetchGold(
     const response = await marketRead(goldSourceUrl, http, now(), signal);
     ensureOk(response);
     const data = parseGold(response.body, now());
-    const partial = data.previousDay || data.items.length !== 2;
+    const partial = data.previousDay;
     return {
       status: partial ? "partial" : "success",
       fetchedAt,
@@ -255,7 +250,7 @@ export async function fetchGold(
               code: "GOLD_PARTIAL",
               message: data.previousDay
                 ? "Nguồn đang công bố giá của ngày trước; xem ngày cập nhật."
-                : "Nguồn thiếu một loại vàng đã chọn.",
+                : "Nguồn chưa đủ dữ liệu vàng miếng SJC.",
             },
           ]
         : [],

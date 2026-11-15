@@ -76,6 +76,9 @@ export type GithubData = {
   }[];
 };
 export type DigestSources = {
+  uv?: SourceResult<UvData | null>;
+  holidays?: SourceResult<HolidayData | null>;
+  tasks?: SourceResult<TaskData | null>;
   gold?: SourceResult<GoldData | null>;
   usd?: SourceResult<UsdData | null>;
   airQuality?: SourceResult<AirQualityData | null>;
@@ -84,11 +87,18 @@ export type DigestSources = {
   weather: SourceResult<WeatherData | null>;
   github: SourceResult<GithubData>;
 };
+export type UvData = { date: string; location: string; timezone: string; maximum: number; level: string; sourceUrl: string };
+export type HolidayData = { date: string; events: { name: string; date: string; daysAway: number }[] };
+export type TaskData = { date: string; items: { id: string; title: string; date: string; overdue: boolean }[] };
 export type GoldData = {
   source: string; sourceUrl: string; sourceUpdatedAt: string; previousDay: boolean;
   region: string; unit: "VND/chỉ" | "VND/lượng";
   items: { code: "sjc_bar" | "sjc_ring"; name: string; buy: number; sell: number; low30?: PriceLow30 }[];
 };
+// Accept historical ring snapshots, but all current presentation and alerts use bars only.
+export function goldBarItems(data: GoldData): GoldData["items"] {
+  return data.items.filter(item => item.code === "sjc_bar");
+}
 // Older saved digests use VND/lượng; keep their amounts correct when displayed.
 export function goldPricePerChi(price: number, unit: GoldData["unit"]): number {
   return unit === "VND/lượng" ? price / 10 : price;

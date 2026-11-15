@@ -12,6 +12,7 @@ import {
 } from "@hub/engine";
 import {
   settingsSchema,
+  hasEnabledSources,
   createRunSchema,
   type Settings,
   type WorkflowRun,
@@ -91,6 +92,7 @@ export class WorkflowQueue {
     body: unknown,
     scheduled?: { at: Date; day: string },
     snapshot?: Settings,
+    userId?: string,
   ): Promise<string> {
     const parsed = createRunSchema.safeParse(body ?? {});
     const payload = parsed.success ? parsed.data : body;
@@ -139,20 +141,16 @@ export class WorkflowQueue {
         (await client.query("SELECT config FROM settings WHERE id=$1", [1]))
           .rows[0]?.config,
       );
-    if (
-      !settings.rss.some((source) => source.enabled) &&
-      !settings.weather.enabled &&
-      !settings.github.enabled && !settings.fuel?.enabled && !settings.airQuality?.enabled && !settings.gold?.enabled && !settings.usd?.enabled
-    )
+    if (!hasEnabledSources(settings))
       throw new RequestError(
         400,
         "NO_ENABLED_SOURCE",
         "Bật ít nhất một nguồn và lưu cấu hình trước khi tạo bản tin.",
       );
     const id = crypto.randomUUID();
-    const workflow = digestWorkflow(this.options.sourceTimeoutMs ?? 25000, settings.fuel?.enabled ?? false, settings.airQuality?.enabled ?? false, settings.gold?.enabled ?? false, settings.usd?.enabled ?? false);
+    const workflow = digestWorkflow(this.options.sourceTimeoutMs ?? 25000, settings.fuel?.enabled ?? false, settings.airQuality?.enabled ?? false, settings.gold?.enabled ?? false, settings.usd?.enabled ?? false, settings);
     await client.query(
-      "INSERT INTO workflow_runs(id,idempotency_key,request_payload,workflow,settings_snapshot,status,scheduled_at,schedule_day) VALUES($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,$8)",
+      "INSERT INTO workflow_runs(id,idempotency_key,request_payload,workflow,settings_snapshot,status,scheduled_at,schedule_day,user_id) VALUES($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6,$7,$8,$9)",
       [
         id,
         key,
@@ -162,6 +160,7 @@ export class WorkflowQueue {
         "queued",
         scheduled?.at ?? null,
         scheduled?.day ?? null,
+        userId ?? null,
       ],
     );
     for (const node of workflow.nodes)
@@ -363,7 +362,7 @@ export class WorkflowQueue {
         };
         const digestId = run.id;
         await client.query(
-          "INSERT INTO digests(id,idempotency_key,settings_snapshot,status,sources,created_at,completed_at,workflow_run_id) VALUES($1,$1,$2::jsonb,$3,$4::jsonb,clock_timestamp(),clock_timestamp(),$1) ON CONFLICT(workflow_run_id) DO NOTHING",
+          "INSERT INTO digests(id,idempotency_key,settings_snapshot,status,sources,created_at,completed_at,workflow_run_id,user_id) VALUES($1,$1,$2::jsonb,$3,$4::jsonb,clock_timestamp(),clock_timestamp(),$1,(SELECT user_id FROM workflow_runs WHERE id=$1)) ON CONFLICT(workflow_run_id) DO NOTHING",
           [
             digestId,
             JSON.stringify(run.settings_snapshot),
@@ -520,7 +519,7 @@ export class WorkflowQueue {
     return this.transaction(async (client) => {
       const row = (
         await client.query(
-          "SELECT d.*,r.settings_snapshot FROM dead_letters d JOIN workflow_jobs j ON j.id=d.job_id JOIN workflow_runs r ON r.id=j.run_id WHERE d.id=$1 FOR UPDATE OF d",
+          "SELECT d.*,r.settings_snapshot,r.user_id FROM dead_letters d JOIN workflow_jobs j ON j.id=d.job_id JOIN workflow_runs r ON r.id=j.run_id WHERE d.id=$1 FOR UPDATE OF d",
           [id],
         )
       ).rows[0];
@@ -538,6 +537,7 @@ export class WorkflowQueue {
         {},
         undefined,
         settingsSchema.parse(row.settings_snapshot),
+        row.user_id ?? undefined,
       );
       await client.query(
         "UPDATE dead_letters SET replay_run_id=$2 WHERE id=$1",
@@ -601,10 +601,10 @@ export class WorkflowQueue {
       })),
     };
   }
-  async list(page: number, pageSize: number) {
+  async list(page: number, pageSize: number, userId?: string) {
     const result = await this.pool.query(
-      'SELECT id,status,workflow->>\'version\' AS "workflowVersion",digest_id AS "digestId",created_at AS "createdAt",started_at AS "startedAt",completed_at AS "completedAt",error FROM workflow_runs ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2',
-      [pageSize + 1, (page - 1) * pageSize],
+      'SELECT id,status,workflow->>\'version\' AS "workflowVersion",digest_id AS "digestId",created_at AS "createdAt",started_at AS "startedAt",completed_at AS "completedAt",error FROM workflow_runs WHERE ($3::uuid IS NULL OR user_id=$3) ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2',
+      [pageSize + 1, (page - 1) * pageSize, userId ?? null],
     );
     return {
       items: result.rows.slice(0, pageSize).map((row) => ({

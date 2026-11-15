@@ -2,7 +2,7 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import pg from "pg";
 import "./env.js";
 import { createPool } from "./db.js";
-import { buildApp } from "./app.js";
+import { buildTestApp as buildApp } from "./test-app.js";
 import { migrate } from "./migrate.js";
 import { defaultSettings, type Settings } from "@hub/contracts";
 // Require an explicit opt-in URL. Every object belongs to a random isolated schema.
@@ -33,7 +33,8 @@ afterAll(async () => {
 it("persists all five groups, survives API restart, rejects invalid writes, reruns migrations and rolls back database failures", async () => {
   expect((await app.inject("/api/health")).statusCode).toBe(200);
   expect((await app.inject("/api/ready")).statusCode).toBe(200);
-  expect((await app.inject("/api/settings")).json()).toEqual(defaultSettings);
+  const { gold: _gold, usd: _usd, airQuality: _aqi, fuel: _fuel, ...legacyDefaults } = defaultSettings;
+  expect((await app.inject("/api/settings")).json()).toEqual(legacyDefaults);
   const value: Settings = {
     newsletter: {
       enabled: false,
@@ -108,7 +109,7 @@ it("persists all five groups, survives API restart, rejects invalid writes, reru
   expect(
     (await pool.query("SELECT count(*)::int AS count FROM schema_migrations"))
       .rows[0].count,
-  ).toBe(6);
+  ).toBe(10);
   expect((await app.inject("/api/settings")).json()).toEqual(expected);
   // Force a real database write failure after UPDATE and ensure transaction rollback.
   await pool.query(

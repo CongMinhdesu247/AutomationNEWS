@@ -25,7 +25,7 @@ export function registerFamilyRoutes(
   const adminRequest = async (request: FastifyRequest) => {
     const origin = request.headers.origin;
     const allowed = [
-      process.env.HUB_ADMIN_ORIGIN ?? "http://127.0.0.1:8088",
+      process.env.APP_ORIGIN ?? process.env.HUB_ADMIN_ORIGIN ?? "http://127.0.0.1:8088",
       "http://localhost:8088",
     ];
     if (origin && !allowed.includes(origin))

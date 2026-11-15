@@ -1,7 +1,7 @@
 import { databaseUrl } from "../env.js";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import { WorkflowQueue, WorkerRunner } from "../workflows/runtime.js";
 import { DigestScheduler } from "../workflows/schedule.js";
 import { fixtureSettings, fixtureClient } from "./fixtures.js";

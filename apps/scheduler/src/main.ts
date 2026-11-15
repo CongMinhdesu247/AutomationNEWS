@@ -35,6 +35,7 @@ try {
   while (!controller.signal.aborted) {
     try {
       await scheduler.tick();
+      if (!controller.signal.aborted) await scheduler.tickAccounts();
       if (!controller.signal.aborted) await scheduler.deliver();
       if (!controller.signal.aborted) await scheduler.checkMarkets();
     } catch {

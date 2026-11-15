@@ -1,6 +1,51 @@
 import { expect, it } from "vitest";
 import { defaultSettings, type Digest, type Repository } from "@hub/contracts";
 import { formatDigestNotification, notificationTitle } from "./format.js";
+import {
+  collectHolidays,
+  collectTasks,
+} from "../connectors/daily-utilities.js";
+
+it("includes personal due tasks, observances and UV in the morning push", () => {
+  const value = digest();
+  const now = new Date("2026-11-15T01:00:00Z");
+  value.settings.tasks = {
+    enabled: true,
+    items: [
+      {
+        id: crypto.randomUUID(),
+        title: "Thanh toán hóa đơn",
+        date: "2026-11-14",
+        done: false,
+      },
+    ],
+  };
+  value.settings.holidays = { enabled: true };
+  value.sources!.tasks = collectTasks(value.settings, now);
+  value.sources!.holidays = collectHolidays(value.settings, now);
+  value.sources!.uv = {
+    status: "success",
+    fetchedAt: now.toISOString(),
+    errors: [],
+    data: {
+      date: "2026-11-15",
+      location: "Hà Nội",
+      timezone: "Asia/Ho_Chi_Minh",
+      maximum: 6.4,
+      level: "Cao",
+      sourceUrl: "https://open-meteo.com/",
+    },
+  };
+  const text = formatDigestNotification(value);
+  expect(text).toContain("Thanh toán hóa đơn (quá hạn)");
+  expect(text).toContain("Ngày Nhà giáo Việt Nam: còn 5 ngày");
+  expect(text).toContain("UV tối đa hôm nay tại Hà Nội: 6,4");
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(1600);
+  value.sources!.tasks.data = null;
+  expect(formatDigestNotification(value)).toContain(
+    "Chưa tổng hợp được việc cần làm.",
+  );
+});
 
 function digest(): Digest {
   return {
@@ -58,20 +103,18 @@ function digest(): Digest {
         errors: [],
         data: {
           rising: [],
-          newNotable: Array.from(
-            { length: 5 },
-            (_, index): Repository => ({
-              id: index + 1,
-              name: "owner/repo-" + (index + 1),
-              description:
-                "Công cụ mã nguồn mở giúp tự động hóa tác vụ. ".repeat(30),
-              language: "TypeScript",
-              url: "https://github.com/owner/repo-" + (index + 1),
-              stars: 100,
-              createdAt: "2026-11-01T00:00:00Z",
-              fetchedAt: "2026-11-12T00:00:00Z",
-            }),
-          ),
+          newNotable: Array.from({ length: 5 }, (_, index): Repository => ({
+            id: index + 1,
+            name: "owner/repo-" + (index + 1),
+            description: "Công cụ mã nguồn mở giúp tự động hóa tác vụ. ".repeat(
+              30,
+            ),
+            language: "TypeScript",
+            url: "https://github.com/owner/repo-" + (index + 1),
+            stars: 100,
+            createdAt: "2026-11-01T00:00:00Z",
+            fetchedAt: "2026-11-12T00:00:00Z",
+          })),
           candidates: 5,
           withoutBaseline: 5,
           comparisonWindowHours: [20, 28],
@@ -83,20 +126,89 @@ function digest(): Digest {
 }
 it("keeps sections separate and all five repo summaries within the UTF-8 push limit", () => {
   const value = digest();
-  value.sources!.gold={status:"success",fetchedAt:value.createdAt,errors:[],data:{source:"Webgia (tổng hợp giá SJC)",sourceUrl:"https://webgia.com/gia-vang/sjc/",sourceUpdatedAt:value.createdAt,previousDay:false,region:"Bảng SJC tại TP.HCM",unit:"VND/lượng",items:[{code:"sjc_bar",name:"Vàng miếng SJC 1 lượng",buy:136000000,sell:139000000},{code:"sjc_ring",name:"Nhẫn SJC 9999",buy:134800000,sell:138800000}]}};
-  value.sources!.usd={status:"success",fetchedAt:value.createdAt,errors:[],data:{source:"Vietcombank",sourceUrl:"https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx",sourceUpdatedAt:value.createdAt,previousDay:false,unit:"VND/USD",buyCash:25460,buyTransfer:25490,sell:25870}};
-  value.sources!.airQuality = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
-    location: "Hà Nội", forecastAt: value.createdAt, usAqi: 125, pm25: 41.4,
-    category: "Không tốt cho nhóm nhạy cảm", sourceUrl: "https://open-meteo.com/en/docs/air-quality-api", attribution: "Dự báo Open-Meteo/CAMS",
-  } };
-  value.sources!.fuel = { status: "success", fetchedAt: value.createdAt, errors: [], data: {
-    region: "Petrolimex vùng 1", sourceUrl: "https://www.petrolimex.com.vn/", updatedAt: value.createdAt,
-    effectiveAt: "2026-11-11T08:00:00Z", comparedAt: "2026-11-11T00:00:00Z",
-    items: [ { code: "iii", name: "Xăng E10 RON 95-III", price: 19840, change: -160 }, { code: "v", name: "Xăng E10 RON 95-V", price: 21840, change: 0 } ],
-  } };
+  value.sources!.gold = {
+    status: "success",
+    fetchedAt: value.createdAt,
+    errors: [],
+    data: {
+      source: "Webgia (tổng hợp giá SJC)",
+      sourceUrl: "https://webgia.com/gia-vang/sjc/",
+      sourceUpdatedAt: value.createdAt,
+      previousDay: false,
+      region: "Bảng SJC tại TP.HCM",
+      unit: "VND/lượng",
+      items: [
+        {
+          code: "sjc_bar",
+          name: "Vàng miếng SJC 1 lượng",
+          buy: 136000000,
+          sell: 139000000,
+        },
+        {
+          code: "sjc_ring",
+          name: "Nhẫn SJC 9999",
+          buy: 134800000,
+          sell: 138800000,
+        },
+      ],
+    },
+  };
+  value.sources!.usd = {
+    status: "success",
+    fetchedAt: value.createdAt,
+    errors: [],
+    data: {
+      source: "Vietcombank",
+      sourceUrl:
+        "https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx",
+      sourceUpdatedAt: value.createdAt,
+      previousDay: false,
+      unit: "VND/USD",
+      buyCash: 25460,
+      buyTransfer: 25490,
+      sell: 25870,
+    },
+  };
+  value.sources!.airQuality = {
+    status: "success",
+    fetchedAt: value.createdAt,
+    errors: [],
+    data: {
+      location: "Hà Nội",
+      forecastAt: value.createdAt,
+      usAqi: 125,
+      pm25: 41.4,
+      category: "Không tốt cho nhóm nhạy cảm",
+      sourceUrl: "https://open-meteo.com/en/docs/air-quality-api",
+      attribution: "Dự báo Open-Meteo/CAMS",
+    },
+  };
+  value.sources!.fuel = {
+    status: "success",
+    fetchedAt: value.createdAt,
+    errors: [],
+    data: {
+      region: "Petrolimex vùng 1",
+      sourceUrl: "https://www.petrolimex.com.vn/",
+      updatedAt: value.createdAt,
+      effectiveAt: "2026-11-11T08:00:00Z",
+      comparedAt: "2026-11-11T00:00:00Z",
+      items: [
+        {
+          code: "iii",
+          name: "Xăng E10 RON 95-III",
+          price: 19840,
+          change: -160,
+        },
+        { code: "v", name: "Xăng E10 RON 95-V", price: 21840, change: 0 },
+      ],
+    },
+  };
   const message = formatDigestNotification(value);
   expect(notificationTitle(value)).toBe("Bản tin sáng · 12/11");
-  expect(message).toContain("🌤 Hà Nội: 13.5–20.9 °C · Mưa nhẹ · Mưa 80% · Mang ô");
+  expect(message).toContain(
+    "🌤 Hà Nội: 13.5–20.9 °C · Mưa nhẹ · Mưa 80% · Mang ô",
+  );
   expect(message).toContain("\n\n📰 Tin tức");
   expect(message).toContain("Xăng E10 RON 95-III: 19.840 đ/lít · Giảm 160 đ");
   expect(message).not.toContain("Xăng E10 RON 95-V");
@@ -105,16 +217,22 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).toContain("PM2.5: 41,4 µg/m³");
   expect(message).toContain("Dự báo Open-Meteo/CAMS");
   expect(message).toContain("Vàng SJC · đ/chỉ");
-  expect(message).toContain("★ Vàng miếng SJC\nMua: 13.600.000\nBán: 13.900.000\nĐáy bán 30 ngày trước:");
-  expect(message).toContain("\n\n★ Vàng nhẫn SJC 9999\nMua: 13.480.000\nBán: 13.880.000\nĐáy bán 30 ngày trước:");
-  expect(message).toContain("★ USD · Vietcombank · đ/USD\nMua tiền mặt: 25.460\nMua chuyển khoản: 25.490\nBán: 25.870\nĐáy bán 30 ngày trước:");
+  expect(message).toContain(
+    "★ Vàng miếng SJC\nMua: 13.600.000\nBán: 13.900.000\nĐáy bán 30 ngày trước:",
+  );
+  expect(message).not.toMatch(/nhẫn/i);
+  expect(message).toContain(
+    "★ USD · Vietcombank · đ/USD\nMua tiền mặt: 25.460\nMua chuyển khoản: 25.490\nBán: 25.870\nĐáy bán 30 ngày trước:",
+  );
   const full = formatDigestNotification(value, false, false, true);
   expect(full).toContain("Miếng SJC: mua 13.600.000 · bán 13.900.000");
-  expect(full).toContain("Ngân hàng mua: tiền mặt 25.460 · chuyển khoản 25.490");
+  expect(full).toContain(
+    "Ngân hàng mua: tiền mặt 25.460 · chuyển khoản 25.490",
+  );
   expect(full).toContain("Nguồn công bố:");
   expect(Buffer.byteLength(message)).toBeLessThan(Buffer.byteLength(full));
   expect(message).toContain("CC BY 4.0");
-  expect((message.match(/^• /gm) ?? [])).toHaveLength(3);
+  expect(message.match(/^• /gm) ?? []).toHaveLength(3);
   expect(message).toContain("\n\n🚀 GitHub · 5 dự án");
   for (let index = 1; index <= 5; index++)
     expect(message).toContain(
@@ -124,15 +242,23 @@ it("keeps sections separate and all five repo summaries within the UTF-8 push li
   expect(message).not.toContain("�");
   for (const item of value.sources!.gold!.data!.items)
     item.low30 = { minimum: 14000000, days: 30, isLowest: true };
-  value.sources!.usd!.data!.low30 = { minimum: 25900, days: 30, isLowest: true };
+  value.sources!.usd!.data!.low30 = {
+    minimum: 25900,
+    days: 30,
+    isLowest: true,
+  };
   const withLows = formatDigestNotification(value);
   expect(withLows).toContain("14.000.000");
   expect(withLows).toContain("25.900");
-  expect(withLows).toContain("🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.\n🚨 KHẨN");
+  expect(withLows).toContain(
+    "🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.\n🚨 KHẨN",
+  );
   expect(Buffer.byteLength(withLows)).toBeLessThanOrEqual(1600);
   expect(withLows).not.toContain("�");
   value.sources!.usd!.data!.buyCash = null;
-  expect(formatDigestNotification(value)).toContain("Mua tiền mặt: chưa có\nMua chuyển khoản: 25.490");
+  expect(formatDigestNotification(value)).toContain(
+    "Mua tiền mặt: chưa có\nMua chuyển khoản: 25.490",
+  );
 });
 it("normalizes multiline descriptions, keeps authors' content and has an honest missing-description fallback", () => {
   const value = digest();
@@ -146,22 +272,60 @@ it("normalizes multiline descriptions, keeps authors' content and has an honest 
 });
 it("shows historical gold and USD floors even when their live quotes are unavailable", () => {
   const value = digest();
-  const failed = { status: "failed" as const, fetchedAt: value.createdAt, errors: [], data: null };
-  value.sources!.gold = { ...failed, priceHistory: {
-    sjc_bar: { minimum: 13900000, days: 26, isLowest: false, historySource: "giavang.pro" },
-    sjc_ring: { minimum: 13580000, days: 26, isLowest: false, historySource: "giavang.pro" },
-  } };
-  value.sources!.usd = { ...failed, priceHistory: { usd: { minimum: 25700, days: 30, isLowest: false, historySource: "Vietcombank" } } };
+  const failed = {
+    status: "failed" as const,
+    fetchedAt: value.createdAt,
+    errors: [],
+    data: null,
+  };
+  value.sources!.gold = {
+    ...failed,
+    priceHistory: {
+      sjc_bar: {
+        minimum: 13900000,
+        days: 26,
+        isLowest: false,
+        historySource: "giavang.pro",
+      },
+      sjc_ring: {
+        minimum: 13580000,
+        days: 26,
+        isLowest: false,
+        historySource: "giavang.pro",
+      },
+    },
+  };
+  value.sources!.usd = {
+    ...failed,
+    priceHistory: {
+      usd: {
+        minimum: 25700,
+        days: 30,
+        isLowest: false,
+        historySource: "Vietcombank",
+      },
+    },
+  };
   const message = formatDigestNotification(value);
   expect(message).toContain("Chưa lấy được giá vàng SJC hiện tại");
   expect(message).toContain("13.900.000");
-  expect(message).toContain("13.580.000");
+  expect(message).not.toContain("13.580.000");
   expect(message).toContain("25.700");
   expect(message).not.toContain("KHẨN");
 });
 it("keeps the optional report link complete within the push byte limit", () => {
-  const footer = "Bản web (tùy chọn):\nhttps://fixture.github.io/repo/report.html#" + crypto.randomUUID() + "." + "a".repeat(43);
-  const message = formatDigestNotification(digest(), false, false, false, footer);
+  const footer =
+    "Bản web (tùy chọn):\nhttps://fixture.github.io/repo/report.html#" +
+    crypto.randomUUID() +
+    "." +
+    "a".repeat(43);
+  const message = formatDigestNotification(
+    digest(),
+    false,
+    false,
+    false,
+    footer,
+  );
   expect(Buffer.byteLength(message)).toBeLessThanOrEqual(1600);
   expect(message.endsWith(footer)).toBe(true);
   expect(message).toContain("5. owner/repo-5");
@@ -184,11 +348,12 @@ it("uses the Vietnamese summary in pushes while the original stays available in 
 });
 it("leaves push-gateway headroom with long names without dropping the fifth repo or source attribution", () => {
   const value = digest();
-  for (const repo of value.sources!.github.data.newNotable) repo.name = "owner/" + "long-repository-name-".repeat(12) + repo.id;
+  for (const repo of value.sources!.github.data.newNotable)
+    repo.name = "owner/" + "long-repository-name-".repeat(12) + repo.id;
   const text = formatDigestNotification(value);
   expect(Buffer.byteLength(text)).toBeLessThanOrEqual(1600);
-  expect((text.match(/^\d\. /gm) ?? [])).toHaveLength(5);
-  expect((text.match(/^• /gm) ?? [])).toHaveLength(3);
+  expect(text.match(/^\d\. /gm) ?? []).toHaveLength(5);
+  expect(text.match(/^• /gm) ?? []).toHaveLength(3);
   expect(text).toContain("Open-Meteo");
   expect(text).toContain("CC BY 4.0");
   expect(text).not.toContain("�");

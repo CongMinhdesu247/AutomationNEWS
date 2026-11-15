@@ -42,10 +42,10 @@ export class DigestStore {
       notifications: await this.notifications(id),
     };
   }
-  async list(page: number, pageSize: number) {
+  async list(page: number, pageSize: number, userId?: string) {
     const rows = await this.pool.query<DigestSummary>(
-      'SELECT id, created_at AS "createdAt", completed_at AS "completedAt", status FROM digests ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2',
-      [pageSize + 1, (page - 1) * pageSize],
+      'SELECT id, created_at AS "createdAt", completed_at AS "completedAt", status FROM digests WHERE ($3::uuid IS NULL OR user_id=$3) ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2',
+      [pageSize + 1, (page - 1) * pageSize, userId ?? null],
     );
     return {
       items: rows.rows.slice(0, pageSize).map((row) => ({

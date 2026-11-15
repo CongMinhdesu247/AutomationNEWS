@@ -20,6 +20,13 @@ const titles: Record<string, string> = {
   fetch_rss: "Lấy tin RSS",
   fetch_weather: "Lấy thời tiết",
   fetch_github: "Lấy GitHub",
+  fetch_fuel: "Lấy giá xăng",
+  fetch_air_quality: "Lấy chất lượng không khí",
+  fetch_gold: "Lấy giá vàng",
+  fetch_usd: "Lấy tỷ giá USD",
+  fetch_uv: "Lấy chỉ số UV",
+  fetch_holidays: "Tính ngày lễ sắp tới",
+  fetch_tasks: "Tổng hợp việc cần làm",
   compose_digest: "Gộp bản tin",
   persist_digest: "Lưu bản tin",
 };
@@ -28,6 +35,11 @@ const order = [
   "fetch_rss",
   "fetch_weather",
   "fetch_github",
+  "fetch_fuel",
+  "fetch_air_quality",
+  "fetch_gold",
+  "fetch_usd",
+  "fetch_uv", "fetch_holidays", "fetch_tasks",
   "compose_digest",
   "persist_digest",
 ];
@@ -43,7 +55,13 @@ function duration(start: string | null, end: string | null, now: number) {
     ).toFixed(1) + " giây"
   );
 }
-export default function RunDashboard({ hash }: { hash: string }) {
+export default function RunDashboard({
+  hash,
+  listUrl = "/api/runs",
+}: {
+  hash: string;
+  listUrl?: string;
+}) {
   const id = hash.startsWith("#/runs/") ? hash.slice("#/runs/".length) : null;
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [list, setList] = useState<{
@@ -165,7 +183,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
         const response = await fetch(
           id
             ? "/api/runs/" + encodeURIComponent(id)
-            : "/api/runs?page=" + page + "&pageSize=10",
+            : listUrl + "?page=" + page + "&pageSize=10",
           {
             signal: AbortSignal.any([
               controller.signal,
@@ -202,7 +220,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
       window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
     };
-  }, [id, page, revision]);
+  }, [id, page, revision, listUrl]);
   return (
     <div className="runs-dashboard">
       <div className="page-heading">
@@ -211,7 +229,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
           <p>
             {id
               ? "Theo dõi từng bước khi bản tin được tạo."
-              : "Lịch sử xử lý bản tin trên máy này."}
+              : "Theo dõi những bản tin đã tạo và trạng thái xử lý."}
           </p>
         </div>
       </div>
@@ -219,7 +237,7 @@ export default function RunDashboard({ hash }: { hash: string }) {
         <a href="#/digests" className="text-link">
           Bản tin
         </a>
-        {id && <a href="#/runs">Tất cả workflow</a>}
+        {id && <a href="#/runs">Tất cả lần tạo bản tin</a>}
         {(!id || error || connection === "reconnecting") && (
           <button
             onClick={() => setRevision((value) => value + 1)}
@@ -338,7 +356,11 @@ export default function RunDashboard({ hash }: { hash: string }) {
                       <strong>{titles[node.nodeId] ?? node.nodeId}</strong>
                     </div>
                     <span className={"result-badge " + node.status}>
-                      {labels[node.status]}
+                      {node.retryCount > 0 && node.status === "running"
+                        ? "Đang thử lại"
+                        : node.retryCount > 0 && node.status === "queued"
+                          ? "Chờ thử lại"
+                          : labels[node.status]}
                     </span>
                     <span>
                       {duration(node.startedAt, node.completedAt, elapsedNow)}
@@ -363,9 +385,10 @@ export default function RunDashboard({ hash }: { hash: string }) {
                   {node.error && (
                     <p
                       className={
-                        node.status === "skipped" ? "muted" : "field-error"
+                        ["skipped", "queued", "running"].includes(node.status) ? "muted" : "field-error"
                       }
                     >
+                      {["queued", "running"].includes(node.status) && "Lần thử trước: "}
                       {node.error.code}: {node.error.message}
                     </p>
                   )}

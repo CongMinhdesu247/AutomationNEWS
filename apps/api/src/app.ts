@@ -17,13 +17,18 @@ import {
 import { digestRoutes } from "./digests/routes.js";
 import { registerFamilyRoutes } from "./family/routes.js";
 import { githubFamilyAdmin, type FamilyCloudAdmin } from "./family/cloud-admin.js";
+import { registerAuth, type AuthOptions } from "./accounts/auth.js";
+import { registerAccountRoutes } from "./accounts/routes.js";
 export function buildApp(
   pool: Pool,
   options: ServiceOptions = {},
   sseOptions: SseOptions = {},
   familyCloud: FamilyCloudAdmin = githubFamilyAdmin(process.env.HUB_CLOUD_REPOSITORY,process.env.HUB_CLOUD_ADMIN_TOKEN),
+  authOptions: AuthOptions = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 262144 });
+  const auth = registerAuth(app, pool, authOptions);
+  registerAccountRoutes(app, pool, options, auth.throttle);
   const failure = (code: string, message: string): ApiError => ({
     error: { code, message, issues: [] },
   });

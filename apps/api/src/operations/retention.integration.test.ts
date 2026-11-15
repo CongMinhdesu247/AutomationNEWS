@@ -3,7 +3,7 @@ import pg from "pg";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
 import { WorkflowQueue, WorkerRunner } from "../workflows/runtime.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import { fixtureSettings, fixtureClient } from "./fixtures.js";
 import { retainHistory } from "./retention.js";
 const url = process.env.TEST_DATABASE_URL;

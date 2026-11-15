@@ -5,7 +5,7 @@ import pg from "pg";
 import "../env.js";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import { WorkflowQueue, WorkerRunner, DigestNodeExecutor } from "./runtime.js";
 import type { ClaimedJob } from "./queue.js";
 import { defaultSettings, type Settings } from "@hub/contracts";

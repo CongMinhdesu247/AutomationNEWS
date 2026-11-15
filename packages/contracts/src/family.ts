@@ -16,6 +16,13 @@ export const familyTopics = {
   life: { name: "Đời sống", feed: "gia-dinh" },
   education: { name: "Giáo dục", feed: "giao-duc" },
   news: { name: "Thời sự", feed: "thoi-su" },
+  health: { name: "Sức khỏe", feed: "suc-khoe" },
+  travel: { name: "Du lịch", feed: "du-lich" },
+  entertainment: { name: "Giải trí", feed: "giai-tri" },
+  world: { name: "Thế giới", feed: "the-gioi" },
+  law: { name: "Pháp luật", feed: "phap-luat" },
+  vehicles: { name: "Ô tô & xe máy", feed: "oto-xe-may" },
+  property: { name: "Bất động sản", feed: "bat-dong-san" },
 } as const;
 export const familyProfileSchema = z
   .object({
@@ -32,9 +39,16 @@ export const familyProfileSchema = z
           "life",
           "education",
           "news",
+          "health",
+          "travel",
+          "entertainment",
+          "world",
+          "law",
+          "vehicles",
+          "property",
         ]),
       )
-      .max(6)
+      .max(Object.keys(familyTopics).length)
       .refine((v) => new Set(v).size === v.length, "Chủ đề bị trùng."),
     sendTime: z
       .string()

@@ -1,10 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
-import MemberPortal from "./MemberPortal";
+import AccountApp from "./AccountApp";
 import "./index.css";
+// Account styles follow the legacy dashboard base so both entry points share predictable tokens.
+import "./account.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {window.location.hash.startsWith("#/member/") ? <MemberPortal /> : <App />}
+    <AccountApp />
   </StrictMode>,
 );

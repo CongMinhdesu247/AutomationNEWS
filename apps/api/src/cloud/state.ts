@@ -82,6 +82,7 @@ export const cloudStateSchema = z
                     "rss",
                     "weather",
                     "github",
+                    "uv", "holidays", "tasks",
                   ]),
                   status: z.enum(["success", "partial", "failed", "disabled"]),
                   updatedAt: z.iso.datetime().optional(),
@@ -89,7 +90,7 @@ export const cloudStateSchema = z
                 })
                 .strict(),
             )
-            .max(7)
+            .max(10)
             .optional(),
           reportId: z.uuid().optional(),
         })

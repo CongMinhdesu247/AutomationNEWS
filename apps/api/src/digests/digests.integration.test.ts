@@ -4,7 +4,7 @@ import pg from "pg";
 import "../env.js";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import { DigestStore } from "./store.js";
 import { DigestService } from "./service.js";
 import type { HttpClient, HttpResponse } from "../connectors/http.js";
@@ -327,8 +327,8 @@ it("marks ambiguous delivery unknown and never initiates it twice with the same 
   let count = 0;
   const service = new DigestService(new DigestStore(pool), {
     now,
-    http: async () => {
-      count++;
+    http: async (_url, options) => {
+      if (options?.method === "POST") count++;
       throw new Error("socket lost after send secret");
     },
   });

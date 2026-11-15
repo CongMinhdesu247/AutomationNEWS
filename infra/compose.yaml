@@ -36,6 +36,10 @@ services:
       DIGEST_TIMEOUT_MS: ${DIGEST_TIMEOUT_MS:-25000}
       HTTP_TIMEOUT_MS: ${HTTP_TIMEOUT_MS:-6000}
       MAX_CONCURRENT_OPERATIONS: ${MAX_CONCURRENT_OPERATIONS:-2}
+      APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:8088}
+      REGISTRATION_OPEN: ${REGISTRATION_OPEN:-false}
+      MAX_USERS: ${MAX_USERS:-100}
+      ACCOUNT_NTFY_URL: ${ACCOUNT_NTFY_URL:-https://ntfy.sh/}
     command: ["pnpm", "--filter", "@hub/api", "migrate"]
     depends_on:
       db:

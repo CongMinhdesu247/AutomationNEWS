@@ -7,10 +7,9 @@ import { safeHttp, ensureOk, type HttpClient } from "./http.js";
 
 export const goldHistoryUrls = {
   sjc_bar: "https://giavang.pro/gia-vang/sjc/hcm/sjc-1l-10l-1kg?range=60d",
-  sjc_ring: "https://giavang.pro/gia-vang/sjc/hcm/nhan-sjc-99-99-1-chi-2-chi-5-chi?range=60d",
 };
 type GoldCode = keyof typeof goldHistoryUrls;
-const names = { sjc_bar: "Vàng SJC 1L, 10L, 1KG", sjc_ring: "Vàng nhẫn SJC 99,99% 1 chỉ, 2 chỉ, 5 chỉ" };
+const names = { sjc_bar: "Vàng SJC 1L, 10L, 1KG" };
 export function historicalDays(now: Date) {
   return Array.from({ length: 30 }, (_, i) => dateInZone(new Date(+now - (i + 1) * 86400000), "Asia/Ho_Chi_Minh"));
 }
@@ -55,14 +54,14 @@ export function parseUsdHistory(body: string, day: string): MarketDay {
   return { day, prices: { usd: quote.sell }, historical: { usd: usdSourceUrl + "?date=" + day } };
 }
 export async function backfillMarketHistory(history: MarketDay[], options: {
-  gold?: boolean; usd?: boolean; now: Date; signal: AbortSignal; http?: HttpClient;
+  gold?: boolean; usd?: boolean; now: Date; signal: AbortSignal; http?: HttpClient; budgetMs?: number;
 }): Promise<MarketDay[]> {
   let result = pruneMarketHistory(history, options.now);
   const days = historicalDays(options.now);
   const has = (day: string, key: string) => result.some(row => row.day === day && row.prices[key] !== undefined);
   const tasks: (() => Promise<MarketDay[]>)[] = [];
   const http = options.http ?? safeHttp;
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(45000)]);
+  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.budgetMs ?? 45000)]);
   const read = async (url: string) => {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -74,7 +73,7 @@ export async function backfillMarketHistory(history: MarketDay[], options: {
       }
     }
   };
-  if (options.gold) for (const code of ["sjc_bar", "sjc_ring"] as const)
+  if (options.gold) for (const code of ["sjc_bar"] as const)
     if (days.some(day => !has(day, code))) tasks.push(async () => parseGoldHistory(await read(goldHistoryUrls[code]), code, options.now));
   if (options.usd) for (const day of days)
     if (!has(day, "usd")) tasks.push(async () => [parseUsdHistory(await read(usdSourceUrl + "?date=" + day), day)]);

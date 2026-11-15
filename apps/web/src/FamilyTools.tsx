@@ -17,6 +17,7 @@ const sourceNames: Record<string, string> = {
   fuel: "Xăng",
   github: "GitHub",
   rss: "Tin tức",
+  uv: "Chỉ số UV", holidays: "Ngày lễ & kỷ niệm", tasks: "Việc cần làm",
 };
 export function DeliveryPanel({ profile }: { profile: FamilyProfile }) {
   const [health, setHealth] = useState<FamilyHealth | null>(null),

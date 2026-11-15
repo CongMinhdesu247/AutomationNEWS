@@ -3,7 +3,7 @@ import pg from "pg";
 import "../env.js";
 import { createPool } from "../db.js";
 import { migrate } from "../migrate.js";
-import { buildApp } from "../app.js";
+import { buildTestApp as buildApp } from "../test-app.js";
 import type { FamilyCloudAdmin } from "./cloud-admin.js";
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw Error("TEST_DATABASE_URL required");

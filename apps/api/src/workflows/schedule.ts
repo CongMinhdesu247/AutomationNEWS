@@ -1,7 +1,8 @@
-import { settingsSchema, type Settings } from "@hub/contracts";
+import { settingsSchema, hasEnabledSources, type Settings } from "@hub/contracts";
 import { WorkflowQueue } from "./queue.js";
 import { DigestStore } from "../digests/store.js";
 import { checkMarketLows } from "./market-monitor.js";
+import { tickAccounts } from "../accounts/schedule.js";
 import {
   DigestService,
   RequestError,
@@ -57,10 +58,7 @@ export class DigestScheduler {
           ?.config,
       );
       const active =
-        settings.newsletter.enabled &&
-        (settings.rss.some((feed) => feed.enabled) ||
-          settings.weather.enabled ||
-          settings.github.enabled || settings.fuel?.enabled === true || settings.airQuality?.enabled === true || settings.gold?.enabled === true || settings.usd?.enabled === true);
+        settings.newsletter.enabled && hasEnabledSources(settings);
       const configuration = { ...settings.newsletter, active };
       // JSONB key order differs from JS insertion order; compare fields explicitly.
       const changed =
@@ -85,7 +83,7 @@ export class DigestScheduler {
           const day = localDay(next, settings.newsletter.timezone);
           const previous = (
             await client.query(
-              "SELECT id FROM workflow_runs WHERE schedule_day=$1",
+              "SELECT id FROM workflow_runs WHERE schedule_day=$1 AND user_id IS NULL",
               [day],
             )
           ).rows[0];
@@ -112,6 +110,10 @@ export class DigestScheduler {
     });
   }
   async deliver() {
+    await this.queue.pool.query(
+      "UPDATE scheduled_deliveries d SET status='failed',completed_at=clock_timestamp(),error=$1::jsonb FROM digests g JOIN hub_users u ON u.id=g.user_id WHERE d.digest_id=g.id AND d.status='pending' AND u.disabled",
+      [JSON.stringify({ code: "ACCOUNT_DISABLED", message: "Tài khoản đã bị khóa." })],
+    );
     // An interrupted send is ambiguous: never automatically send it a second time.
     await this.queue.transaction(async (client) => {
       const expired = await client.query(
@@ -215,5 +217,8 @@ export class DigestScheduler {
   }
   async checkMarkets() {
     return checkMarketLows(this.queue.pool, this.options);
+  }
+  async tickAccounts() {
+    return tickAccounts(this.queue, this.options.graceMs ?? 15 * 60000);
   }
 }

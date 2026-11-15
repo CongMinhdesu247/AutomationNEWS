@@ -82,7 +82,7 @@ it("sends mom's gold/USD-only profile at 09:00, recovers transient bank errors, 
   expect(bankCalls).toBe(3);
   expect(messages[0]).toContain("Vàng SJC · đ/chỉ");
   expect(messages[0]).toContain("★ Vàng miếng SJC\nMua: 13.600.000\nBán: 13.900.000");
-  expect(messages[0]).toContain("★ Vàng nhẫn SJC 9999\nMua: 13.480.000\nBán: 13.880.000");
+  expect(messages[0]).not.toMatch(/nhẫn/i);
   expect(messages[0]).toContain("Mua tiền mặt: 25.460\nMua chuyển khoản: 25.490");
   expect(messages[0]).toContain("Bán: 25.870");
   expect(Buffer.byteLength(messages[0]!)).toBeLessThanOrEqual(1600);

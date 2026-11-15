@@ -7,6 +7,7 @@ import {
 } from "@hub/contracts";
 import { DigestStore } from "./store.js";
 import { safeHttp, type HttpClient } from "../connectors/http.js";
+import { goldBarItems } from "@hub/contracts";
 import { sendNtfy } from "../connectors/ntfy.js";
 import { createVietnameseSummarizer } from "../connectors/vietnamese.js";
 export class RequestError extends Error {
@@ -65,6 +66,30 @@ export class DigestService {
       ...digest,
       sources: {
         ...digest.sources,
+        ...(digest.sources.gold
+          ? {
+              gold: {
+                ...digest.sources.gold,
+                data:
+                  digest.sources.gold.data &&
+                  goldBarItems(digest.sources.gold.data).length
+                    ? {
+                        ...digest.sources.gold.data,
+                        items: goldBarItems(digest.sources.gold.data),
+                      }
+                    : null,
+                ...(digest.sources.gold.priceHistory
+                  ? {
+                      priceHistory: Object.fromEntries(
+                        Object.entries(digest.sources.gold.priceHistory).filter(
+                          ([key]) => key === "sjc_bar",
+                        ),
+                      ),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
         github: {
           ...digest.sources.github,
           data: await this.summarize(digest.sources.github.data),

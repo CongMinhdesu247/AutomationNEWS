@@ -17,10 +17,16 @@ it("keeps the explicitly declared dong/chi gold quotes and exact SJC product/reg
   expect(result.region).toContain("TP.HCM");
   expect(result.items.map((i) => [i.code, i.buy, i.sell])).toEqual([
     ["sjc_bar", 13600000, 13900000],
-    ["sjc_ring", 13480000, 13880000],
   ]);
   expect(result.sourceUpdatedAt).toBe("2026-11-12T01:45:03.000Z");
   expect(result.previousDay).toBe(false);
+});
+it("ignores rings, requires an actual SJC bar quote, and treats one fresh bar quote as complete", async () => {
+  const http: HttpClient = async () => ({ status: 200, headers: {}, body: goldHtml });
+  const result = await fetchGold({ enabled: true }, { ...context, http });
+  expect(result.status).toBe("success");
+  expect(result.data?.items.map(item => item.code)).toEqual(["sjc_bar"]);
+  expect(() => parseGold(goldHtml.replace("Vàng SJC 1L, 10L, 1KG", "Sản phẩm không hỗ trợ"), marketAt)).toThrow();
 });
 it("does not guess a changed gold unit, decode hidden prices or substitute another ring weight", () => {
   expect(() =>

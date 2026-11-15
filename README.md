@@ -1,4 +1,35 @@
-# Personal Automation Hub — v1.0.0 (bản chuẩn bị phát hành)
+# Personal Automation Hub
+
+Tiện ích mới: **Việc cần làm hôm nay**, **Ngày lễ & kỷ niệm** và **Chỉ số UV** trong Tùy chọn bản tin. Có ô bật/tắt riêng, hiển thị trong bản tin và thông báo buổi sáng. Xem [cách dùng và giới hạn](docs/daily-utilities.md).
+
+Nội dung mới: chỉ giữ **vàng miếng SJC**, bổ sung **sức khỏe, du lịch, giải trí, thế giới, pháp luật, ô tô/xe máy và bất động sản** trong Tùy chọn bản tin. Người dùng tự chọn và lưu; không tự bật các mục mới. Xem [nguồn nội dung và phạm vi cập nhật](docs/content-topics.md).
+
+> **Bản làm việc mới: tài khoản và triển khai tại nhà.** Entry point web/API bình thường hiện yêu cầu đăng nhập. Mỗi người có cấu hình, lịch, lịch sử và topic thông báo riêng trong PostgreSQL. Dashboard gia đình/cloud cũ nằm trong khu vực quản trị. Các mục “single-user/chưa có xác thực” bên dưới mô tả bản portfolio v1.0; không còn đúng với entry point mới. Demo fixture vẫn chạy riêng, không có xác thực và chỉ được dùng cục bộ.
+
+**Máy chủ Ubuntu / public qua Cloudflare Tunnel:** làm theo [hướng dẫn triển khai tại nhà](docs/home-server.md). Bộ cấu hình dùng project `automationnews`, port loopback `8091`, tách khỏi BankingPrj ở port `8090`. Tên miền dự kiến `news.020407.xyz`; cần tên miền Active và named tunnel trước khi có URL ổn định.
+
+**Chạy bản tài khoản trên máy hiện tại:** giữ `.env`/volume, bổ sung các biến từ `.env.example` (không ghi đè secret), chạy migration/build như hướng dẫn Docker. `APP_ORIGIN` phải khớp origin trình duyệt, ví dụ `http://127.0.0.1:8088` cho Docker hoặc `http://127.0.0.1:5173` cho Vite. Giữ `REGISTRATION_OPEN=false` trước khi tạo admin.
+
+Để tạo admin cục bộ, thêm `OWNER_EMAIL` vào `.env`, tạo thư mục `secrets`, dùng trình soạn thảo tạo file `secrets/owner_password` chứa mật khẩu 12–128 ký tự, sau đó chạy:
+
+```powershell
+docker compose --env-file .env -f infra/compose.yaml -f infra/compose.home.yaml run --rm --build owner
+Remove-Item -LiteralPath secrets/owner_password
+```
+
+Đăng nhập tại origin đã cấu hình. Chỉ tài khoản tạo qua CLI mới có quyền quản trị; đăng ký thông thường luôn là thành viên. Có thể bật `REGISTRATION_OPEN=true` và recreate API khi muốn người khác đăng ký. Tùy chọn bản tin cho phép chọn nội dung, địa điểm, giờ/ngày/múi giờ và giao diện sáng/tối. Tạo bản tin để xem trước rồi gửi thử từ trang chi tiết; lịch tự gửi qua ntfy sau khi đã bật nhận thông báo.
+
+Kiểm thử tài khoản bằng PostgreSQL riêng:
+
+```powershell
+docker compose -f tests/accounts/compose.yaml up -d --wait db
+$env:TEST_DATABASE_URL = 'postgresql://accounts_test:fixture_only@127.0.0.1:54369/accounts_test'
+pnpm test:accounts
+Remove-Item Env:TEST_DATABASE_URL
+docker compose -f tests/accounts/compose.yaml stop
+```
+
+Chưa triển khai lên HP EliteDesk trong phiên làm việc này: thiếu khóa SSH và không kết nối được Tailscale từ môi trường thực hiện. Chưa có xác minh email/reset qua email, chưa cấp credential ntfy riêng, chưa đo tải nhiều người thực tế. Xem [giới hạn và nghiệm thu public](docs/home-server.md#4-nghiệm-thu-rồi-mở-đăng-ký).
 
 Dashboard cá nhân cho bản tin buổi sáng, tự host và không phụ thuộc dịch vụ trả phí.
 
@@ -55,7 +86,7 @@ Bước 1: chỉnh năm nhóm cấu hình, validate hai phía, lưu nguyên tử
 
 Bước 2: lấy RSS/thời tiết/GitHub và lưu bản tin. Bước 3: DAG thuần TypeScript và PostgreSQL queue, API trả 202/run ID, worker riêng có lease/heartbeat/phục hồi, dashboard theo dõi tiến độ. Bước 4: retry với backoff/jitter, DLQ và scheduler hằng ngày theo múi giờ, tự gửi ntfy cho run theo lịch. Bước 5: event store PostgreSQL và SSE có cursor/replay, timeline và reconnect. Bước 6: kiểm chứng toàn hệ thống, benchmark fixture tái lập, backup/restore, retention và portfolio. Chưa có Cron expression tùy ý hoặc webhook.
 
-**Chỉ dùng trên localhost. Chưa có xác thực hoặc TLS; không đưa trực tiếp lên Internet, không mở port qua router/tunnel.**
+**Compose mặc định chỉ bind localhost.** Entry point mới có xác thực; để public qua HTTPS, dùng [bộ triển khai home server](docs/home-server.md). Demo portfolio không có xác thực vẫn chỉ dành cho localhost.
 
 ## Yêu cầu
 
@@ -175,7 +206,7 @@ Mặc định: bản tin bật, 07:00 Asia/Ho_Chi_Minh; tích hợp tắt, RSS r
 
 ## Giới hạn
 
-Single-user, chưa có xác thực, chỉ localhost. Worker khôi phục job mất lease; node đã commit thành công không chạy lại. Job có thể thực thi lại sau sự cố nên chỉ đảm bảo at-least-once. ntfy hỗ trợ gửi thủ công và gửi sau run theo lịch; gửi lỗi/unknown không tự gửi lại.
+Entry point mới có tài khoản và dữ liệu riêng; các API legacy dành cho admin. Compose mặc định vẫn chỉ localhost. Worker khôi phục job mất lease; node đã commit thành công không chạy lại. Job có thể thực thi lại sau sự cố nên chỉ đảm bảo at-least-once. ntfy hỗ trợ gửi thủ công và gửi sau run theo lịch; gửi lỗi/unknown không tự gửi lại.
 
 Hai tab sửa settings dùng lần lưu cuối thắng; run đã tạo giữ cấu hình snapshot riêng. Có backup/restore PowerShell và retention theo batch/dry-run; chưa tự chạy các tác vụ này. Image theo tag ổn định có thể nhận bản vá, dependency pnpm khóa trong lockfile.
 

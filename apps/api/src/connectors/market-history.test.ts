@@ -2,34 +2,119 @@ import { expect, it } from "vitest";
 import type { MarketDay, DigestSources } from "@hub/contracts";
 import { priceLow30Text, priceLow30Notice } from "@hub/contracts";
 import { parseGold, parseUsd } from "./markets.js";
-import { compareMarketHistory, recordMarketHistory } from "./market-history.js";
+import {
+  compareMarketHistory,
+  recordMarketHistory,
+  lowestMarketLabels,
+} from "./market-history.js";
+import { marketSignals } from "../cloud/alerts.js";
 import { marketAt, goldHtml, usdJson } from "./test-support/market-fixtures.js";
 import { dateInZone } from "./weather.js";
 
-export const history30 = (): MarketDay[] => Array.from({ length: 30 }, (_, i) => ({
-  day: dateInZone(new Date(+marketAt - (i + 1) * 86400000), "Asia/Ho_Chi_Minh"),
-  prices: { sjc_bar: 14000000 + i, sjc_ring: 13900000 + i, usd: 25900 + i },
-}));
+export const history30 = (): MarketDay[] =>
+  Array.from({ length: 30 }, (_, i) => ({
+    day: dateInZone(
+      new Date(+marketAt - (i + 1) * 86400000),
+      "Asia/Ho_Chi_Minh",
+    ),
+    prices: { sjc_bar: 14000000 + i, sjc_ring: 13900000 + i, usd: 25900 + i },
+  }));
 const sources = () => ({
-  gold: { status: "success" as const, fetchedAt: marketAt.toISOString(), errors: [], data: parseGold(goldHtml, marketAt) },
-  usd: { status: "success" as const, fetchedAt: marketAt.toISOString(), errors: [], data: parseUsd(usdJson, marketAt) },
+  gold: {
+    status: "success" as const,
+    fetchedAt: marketAt.toISOString(),
+    errors: [],
+    data: parseGold(goldHtml, marketAt),
+  },
+  usd: {
+    status: "success" as const,
+    fetchedAt: marketAt.toISOString(),
+    errors: [],
+    data: parseUsd(usdJson, marketAt),
+  },
+});
+it("does not revive ring alerts or prices from legacy saved snapshots", () => {
+  const data = sources();
+  data.gold.data.items.push({
+    code: "sjc_ring",
+    name: "Nhẫn cũ",
+    buy: 13000000,
+    sell: 13100000,
+    low30: { minimum: 14000000, days: 30, isLowest: true },
+  });
+  expect(lowestMarketLabels(data)).not.toContain("Nhẫn SJC 9999");
+  expect(
+    Object.keys(
+      marketSignals({
+        ...data,
+        rss: {
+          status: "disabled",
+          fetchedAt: marketAt.toISOString(),
+          errors: [],
+          data: {
+            items: [],
+            feedsSucceeded: 0,
+            feedsTotal: 0,
+            skippedInvalidDate: 0,
+            skippedInvalidItem: 0,
+          },
+        },
+        weather: {
+          status: "disabled",
+          fetchedAt: marketAt.toISOString(),
+          errors: [],
+          data: null,
+        },
+        github: {
+          status: "disabled",
+          fetchedAt: marketAt.toISOString(),
+          errors: [],
+          data: {
+            rising: [],
+            newNotable: [],
+            candidates: 0,
+            withoutBaseline: 0,
+            comparisonWindowHours: [20, 28],
+            rateLimits: [],
+          },
+        },
+      }),
+    ),
+  ).not.toContain("sjc_ring_sell");
+  const history = recordMarketHistory(
+    [{ day: "2026-11-11", prices: { sjc_ring: 12000000, sjc_bar: 14000000 } }],
+    data,
+    marketAt,
+  );
+  expect(history.every((row) => row.prices.sjc_ring === undefined)).toBe(true);
 });
 it("compares each sell price against the previous 30 VN days, excluding today, future and expired lows", () => {
   const data = sources();
-  const history = [...history30(),
+  const history = [
+    ...history30(),
     { day: "2026-11-12", prices: { usd: 25870 } },
     { day: "2026-11-13", prices: { usd: 1000 } },
     { day: "2026-10-12", prices: { usd: 1000 } },
   ];
-  data.gold.data.items[1]!.sell = 15000000;
+
   compareMarketHistory(data, history, marketAt);
-  expect(data.usd.data.low30).toEqual({ minimum: 25900, days: 30, isLowest: true });
+  expect(data.usd.data.low30).toEqual({
+    minimum: 25900,
+    days: 30,
+    isLowest: true,
+  });
   expect(data.gold.data.items[0]!.low30?.isLowest).toBe(true);
-  expect(data.gold.data.items[1]!.low30?.isLowest).toBe(false);
+
   data.usd.data.sell = 25900;
-  compareMarketHistory(data, history.filter(row => row.day !== "2026-11-12"), marketAt);
+  compareMarketHistory(
+    data,
+    history.filter((row) => row.day !== "2026-11-12"),
+    marketAt,
+  );
   expect(data.usd.data.low30?.isLowest).toBe(true);
-  expect(priceLow30Notice(data.usd.data.low30)).toContain("🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.");
+  expect(priceLow30Notice(data.usd.data.low30)).toContain(
+    "🎉 Chúc mừng! Giá bán hôm nay thấp nhất 30 ngày.",
+  );
 });
 it("shows partial history without claiming a 30-day low, and never alerts for old quotes", () => {
   const data = sources();
@@ -37,7 +122,9 @@ it("shows partial history without claiming a 30-day low, and never alerts for ol
   expect(data.usd.data.low30?.isLowest).toBe(false);
   expect(priceLow30Text(data.usd.data.low30)).toContain("29/30");
   expect(priceLow30Notice(data.usd.data.low30)).toContain("Chúc mừng!");
-  expect(priceLow30Notice(data.usd.data.low30)).toContain("trong dữ liệu hiện có");
+  expect(priceLow30Notice(data.usd.data.low30)).toContain(
+    "trong dữ liệu hiện có",
+  );
   expect(priceLow30Notice(data.usd.data.low30)).not.toContain("KHẨN");
   data.usd.data.previousDay = true;
   compareMarketHistory(data, history30(), marketAt);
@@ -49,26 +136,53 @@ it("shows partial history without claiming a 30-day low, and never alerts for ol
 });
 it("does not announce a new low when a quote rebounds above an earlier intraday low", () => {
   const data = sources();
-  compareMarketHistory(data, [...history30(), { day: "2026-11-12", prices: { usd: 25800 } }], marketAt);
-  expect(data.usd.data.low30).toEqual({ minimum: 25900, days: 30, isLowest: false });
+  compareMarketHistory(
+    data,
+    [...history30(), { day: "2026-11-12", prices: { usd: 25800 } }],
+    marketAt,
+  );
+  expect(data.usd.data.low30).toEqual({
+    minimum: 25900,
+    days: 30,
+    isLowest: false,
+  });
   expect(priceLow30Notice(data.usd.data.low30)).toBe("");
 });
 it("keeps historical comparisons available without alerting when live sources fail", () => {
-  const failed = { status: "failed" as const, fetchedAt: marketAt.toISOString(), data: null, errors: [] };
-  const data: Pick<DigestSources, "gold" | "usd"> = { gold: { ...failed }, usd: { ...failed } };
+  const failed = {
+    status: "failed" as const,
+    fetchedAt: marketAt.toISOString(),
+    data: null,
+    errors: [],
+  };
+  const data: Pick<DigestSources, "gold" | "usd"> = {
+    gold: { ...failed },
+    usd: { ...failed },
+  };
   compareMarketHistory(data, history30(), marketAt);
-  expect(data.gold?.priceHistory?.sjc_bar).toEqual({ minimum: 14000000, days: 30, isLowest: false });
-  expect(data.usd?.priceHistory?.usd).toEqual({ minimum: 25900, days: 30, isLowest: false });
+  expect(data.gold?.priceHistory?.sjc_bar).toEqual({
+    minimum: 14000000,
+    days: 30,
+    isLowest: false,
+  });
+  expect(data.usd?.priceHistory?.usd).toEqual({
+    minimum: 25900,
+    days: 30,
+    isLowest: false,
+  });
 });
 it("keeps intraday minima, counts duplicate days once, normalizes legacy units and preserves independent products", () => {
   const data = sources();
   data.gold.data.unit = "VND/lượng";
-  for (const item of data.gold.data.items) { item.buy *= 10; item.sell *= 10; }
+  for (const item of data.gold.data.items) {
+    item.buy *= 10;
+    item.sell *= 10;
+  }
   let history = recordMarketHistory(history30(), data, marketAt);
   data.usd.data.sell = 26000;
   history = recordMarketHistory(history, data, marketAt);
   expect(history).toHaveLength(31);
-  expect(history.at(-1)?.prices).toEqual({ sjc_bar: 13900000, sjc_ring: 13880000, usd: 25870 });
+  expect(history.at(-1)?.prices).toEqual({ sjc_bar: 13900000, usd: 25870 });
   const next = new Date(+marketAt + 86400000);
   compareMarketHistory(data, history.concat(history), next);
   expect(data.usd.data.low30?.days).toBe(30);
