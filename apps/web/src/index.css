@@ -254,91 +254,87 @@ h3 {
 }
 .latest-brief {
   border: 1px solid var(--line);
-  background: white;
+  background: var(--surface, white);
   border-radius: 14px;
-  margin-bottom: 33px;
+  margin-bottom: 24px;
   overflow: hidden;
 }
 .brief-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 22px 26px;
-  border-bottom: 1px solid var(--line);
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 15px clamp(15px, 3vw, 24px);
+}
+.brief-heading .text-link {
+  min-height: 44px;
 }
 .section-kicker {
   display: block;
   color: var(--muted);
-  font-size: 12px;
-  margin-bottom: 4px;
+  font-size: 13px;
 }
 .brief-heading h2 {
+  margin: 2px 0 0;
   font-size: 18px;
+  line-height: 1.35;
 }
 .brief-overview {
   display: grid;
-  grid-template-columns: minmax(190px, 0.8fr) minmax(0, 1.6fr);
+  gap: 8px;
+  padding: 10px clamp(15px, 3vw, 24px);
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft, #f1f5fd);
 }
-.brief-weather {
-  padding: 27px;
-  background: #f1f5fd;
-  border-right: 1px solid var(--line);
-}
-.brief-weather svg {
-  color: #4b72b6;
-  margin-bottom: 14px;
-}
-.brief-weather p {
-  margin: 5px 0;
-  color: #50637e;
+.brief-weather,
+.brief-topics,
+.brief-market {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--muted);
   font-size: 13px;
-}
-.brief-weather > strong {
-  display: block;
-  font-size: 39px;
-  letter-spacing: -1.6px;
-  line-height: 1.5;
-  font-weight: 650;
-}
-.brief-highlights {
-  padding: 22px 27px;
-}
-.brief-highlights h3 {
-  margin: 0 0 10px;
-  color: #65758a;
-  font-size: 12px;
-  font-weight: 600;
-}
-.brief-highlights ul {
-  padding: 0;
-  list-style: none;
-  margin: 0;
-}
-.brief-highlights li {
-  padding: 11px 0;
-  border-bottom: 1px solid #edf0f5;
-}
-.brief-highlights li:last-child {
-  border: 0;
-  padding-bottom: 0;
-}
-.brief-highlights strong {
-  font-size: 13px;
-  color: #2b486e;
-  font-weight: 650;
   overflow-wrap: anywhere;
 }
-.brief-highlights p {
-  margin: 4px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.6;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.brief-weather svg {
+  flex: none;
+  color: var(--accent);
 }
+.brief-weather strong,
+.brief-topics strong,
+.brief-market :is(h3, strong) {
+  color: var(--ink);
+}
+.brief-markets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: 10px 16px;
+}
+.brief-market {
+  align-content: start;
+  padding-block: 3px;
+}
+.brief-market h3 {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.brief-market small {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.brief-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.brief-topics:empty {
+  display: none;
+}
+
 .section-heading {
   display: flex;
   align-items: center;
@@ -962,12 +958,6 @@ footer {
   .page-heading {
     align-items: flex-start;
   }
-  .brief-weather {
-    padding: 22px;
-  }
-  .brief-highlights {
-    padding: 20px;
-  }
 }
 @media (max-width: 760px) {
   .app-shell {
@@ -1030,28 +1020,6 @@ footer {
   .page-heading p {
     font-size: 13px;
   }
-  .brief-overview {
-    grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1.2fr);
-  }
-  .brief-weather {
-    padding: 20px 17px;
-  }
-  .brief-weather > strong {
-    font-size: 30px;
-  }
-  .brief-heading {
-    padding: 18px 20px;
-  }
-  .brief-heading h2 {
-    font-size: 16px;
-  }
-  .brief-highlights {
-    padding: 18px;
-  }
-  .brief-highlights p {
-    -webkit-line-clamp: 2;
-    font-size: 11px;
-  }
   .settings-tabs {
     gap: 23px;
   }
@@ -1097,35 +1065,6 @@ footer {
   }
   h1 {
     font-size: 26px;
-  }
-  .brief-overview {
-    grid-template-columns: 1fr;
-  }
-  .brief-weather {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    padding: 19px 22px;
-    position: relative;
-  }
-  .brief-weather svg {
-    float: right;
-    margin: 6px 0 0;
-  }
-  .brief-weather > strong {
-    font-size: 36px;
-  }
-  .brief-highlights {
-    padding: 18px 22px;
-  }
-  .brief-highlights p {
-    font-size: 12px;
-  }
-  .brief-heading {
-    padding: 17px 20px;
-  }
-  .brief-heading .text-link {
-    font-size: 11px;
-    white-space: nowrap;
   }
   .digest-history strong {
     font-size: 13px;

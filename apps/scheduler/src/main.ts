@@ -11,6 +11,7 @@ const scheduler = new DigestScheduler(
   }),
   {
     ntfyToken: process.env.NTFY_TOKEN,
+    ntfyDestinationOrigins: [process.env.ACCOUNT_NTFY_URL ?? "https://ntfy.sh/",...(process.env.NTFY_ALLOWED_ORIGINS ?? "").split(",").filter(v=>v.trim())].map(v=>new URL(v.trim()).origin),
     publicBaseUrl: process.env.PUBLIC_BASE_URL,
     ntfyAllowedOrigins: (process.env.NTFY_ALLOWED_ORIGINS ?? "")
       .split(",")
@@ -38,6 +39,7 @@ try {
       if (!controller.signal.aborted) await scheduler.tickAccounts();
       if (!controller.signal.aborted) await scheduler.deliver();
       if (!controller.signal.aborted) await scheduler.checkMarkets();
+      if (!controller.signal.aborted) await scheduler.tickCustom();
     } catch {
       console.error("Scheduler chưa xử lý được công việc; sẽ kiểm tra lại.");
     }

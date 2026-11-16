@@ -1,3 +1,4 @@
+import { requestSignal } from "./request-signal";
 import { useEffect, useState, useRef } from "react";
 import { applyRunEvent, eventLabels } from "./telemetry-state";
 import type {
@@ -16,6 +17,7 @@ const labels: Record<string, string> = {
   skipped: "Bỏ qua",
 };
 const titles: Record<string, string> = {
+  premium_task: "Cập nhật theo dõi tùy chỉnh",
   start: "Bắt đầu",
   fetch_rss: "Lấy tin RSS",
   fetch_weather: "Lấy thời tiết",
@@ -39,7 +41,9 @@ const order = [
   "fetch_air_quality",
   "fetch_gold",
   "fetch_usd",
-  "fetch_uv", "fetch_holidays", "fetch_tasks",
+  "fetch_uv",
+  "fetch_holidays",
+  "fetch_tasks",
   "compose_digest",
   "persist_digest",
 ];
@@ -58,9 +62,11 @@ function duration(start: string | null, end: string | null, now: number) {
 export default function RunDashboard({
   hash,
   listUrl = "/api/runs",
+  showDiagnostics = true,
 }: {
   hash: string;
   listUrl?: string;
+  showDiagnostics?: boolean;
 }) {
   const id = hash.startsWith("#/runs/") ? hash.slice("#/runs/".length) : null;
   const [run, setRun] = useState<WorkflowRun | null>(null);
@@ -70,10 +76,10 @@ export default function RunDashboard({
   } | null>(null);
   const [elapsedNow, setElapsedNow] = useState(Date.now());
   useEffect(() => {
-    if (run?.status !== "running") return;
+    if (!showDiagnostics || run?.status !== "running") return;
     const timer = setInterval(() => setElapsedNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [run?.status]);
+  }, [run?.status, showDiagnostics]);
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -185,10 +191,7 @@ export default function RunDashboard({
             ? "/api/runs/" + encodeURIComponent(id)
             : listUrl + "?page=" + page + "&pageSize=10",
           {
-            signal: AbortSignal.any([
-              controller.signal,
-              AbortSignal.timeout(10000),
-            ]),
+            signal: requestSignal(10000, controller.signal),
           },
         );
         const body = await response.json();
@@ -226,18 +229,13 @@ export default function RunDashboard({
       <div className="page-heading">
         <div>
           <h1>{id ? "Tiến độ tạo bản tin" : "Hoạt động"}</h1>
-          <p>
-            {id
-              ? "Theo dõi từng bước khi bản tin được tạo."
-              : "Theo dõi những bản tin đã tạo và trạng thái xử lý."}
-          </p>
         </div>
       </div>
       <div className="digest-toolbar">
         <a href="#/digests" className="text-link">
           Bản tin
         </a>
-        {id && <a href="#/runs">Tất cả lần tạo bản tin</a>}
+        {id && showDiagnostics && <a href="#/runs">Tất cả lần tạo bản tin</a>}
         {(!id || error || connection === "reconnecting") && (
           <button
             onClick={() => setRevision((value) => value + 1)}
@@ -255,146 +253,179 @@ export default function RunDashboard({
       {loading && <p role="status">Đang tải tiến độ…</p>}
       {run && (
         <>
-          <p className={"stream-connection " + connection} role="status">
-            {connection === "connecting"
-              ? "Đang kết nối…"
-              : connection === "live"
-                ? "Trực tiếp"
-                : connection === "reconnecting"
-                  ? "Đang kết nối lại…"
-                  : "Đã đồng bộ sự kiện mới nhất"}
-          </p>
-          <div className="digest-meta">
+          {(showDiagnostics || connection === "reconnecting") && (
+            <p className={"stream-connection " + connection} role="status">
+              {connection === "connecting"
+                ? "Đang kết nối…"
+                : connection === "live"
+                  ? "Trực tiếp"
+                  : connection === "reconnecting"
+                    ? "Đang kết nối lại…"
+                    : "Đã đồng bộ sự kiện mới nhất"}
+            </p>
+          )}
+          <div className="digest-meta" role="status">
             <strong className={"result-badge " + run.status}>
               {labels[run.status]}
             </strong>
-            <span>{run.workflowVersion}</span>
-            <details>
-              <summary>Thông tin lần chạy</summary>
-              <small>ID: {run.id}</small>
-            </details>
-            <small>
-              Tạo {date(run.createdAt)} · Bắt đầu {date(run.startedAt)} · Kết
-              thúc {date(run.completedAt)}
-            </small>
+            {showDiagnostics && (
+              <>
+                <span>{run.workflowVersion}</span>
+                <details>
+                  <summary>Thông tin lần chạy</summary>
+                  <small>ID: {run.id}</small>
+                </details>
+                <small>
+                  Tạo {date(run.createdAt)} · Bắt đầu {date(run.startedAt)} ·
+                  Kết thúc {date(run.completedAt)}
+                </small>
+              </>
+            )}
           </div>
           {run.status === "completed" && (
             <p className="status success">
-              Đã xử lý xong. Mở bản tin để xem nội dung và tình trạng từng
-              nguồn.
+              {showDiagnostics
+                ? "Đã xử lý xong. Mở bản tin để xem nội dung và tình trạng từng nguồn."
+                : "Bản tin đã sẵn sàng."}
             </p>
           )}
-          {run.error && <p className="status error">{run.error.message}</p>}
+          {run.error && (
+            <p className="status error">
+              {showDiagnostics
+                ? run.error.message
+                : "Chưa tạo được bản tin. Hãy quay lại và thử tạo lại."}
+            </p>
+          )}
           {run.digestId && (
             <a className="open-digest" href={"#/digests/" + run.digestId}>
               Mở bản tin đã lưu
             </a>
           )}
-          <details className="run-timeline" aria-label="Timeline sự kiện">
-            <summary>Nhật ký xử lý trực tiếp</summary>
-            <p className="muted">
-              Tối đa 100 sự kiện gần nhất. Lịch sử trong PostgreSQL có thể được
-              dọn theo chính sách lưu trữ; trạng thái workflow vẫn được giữ.
-            </p>
-            {run.eventsTruncated && (
-              <p className="muted">Đang hiển thị phần cuối lịch sử sự kiện.</p>
-            )}
-            <div
-              className="timeline-scroll"
-              ref={timelineRef}
-              onScroll={() => {
-                const element = timelineRef.current;
-                if (element)
-                  nearEnd.current =
-                    element.scrollHeight -
-                      element.scrollTop -
-                      element.clientHeight <
-                    64;
-              }}
-            >
-              <ol>
-                {run.recentEvents.map((event) => (
-                  <li
-                    key={event.id}
-                    data-event-id={event.id}
-                    data-event-at={event.timestamp}
-                  >
-                    <time dateTime={event.timestamp}>
-                      {date(event.timestamp)}
-                    </time>
-                    <strong>
-                      {eventLabels[event.type]}
-                      {event.nodeId
-                        ? " · " + (titles[event.nodeId] ?? event.nodeId)
-                        : ""}
-                    </strong>
-                    {event.payload.node?.error && (
-                      <p>{event.payload.node.error.message}</p>
-                    )}
-                    {event.type === "node.retry_scheduled" &&
-                      event.payload.node?.availableAt && (
-                        <small>
-                          Thử lại từ {date(event.payload.node.availableAt)}
-                        </small>
-                      )}
-                    <small>Sự kiện #{event.sequence}</small>
-                  </li>
-                ))}
-              </ol>
-              {run.recentEvents.length === 0 && (
-                <p>Chưa có sự kiện telemetry được lưu cho run này.</p>
-              )}
-            </div>
-          </details>
-          <ol className="run-nodes">
-            {[...run.nodes]
-              .sort((a, b) => order.indexOf(a.nodeId) - order.indexOf(b.nodeId))
-              .map((node) => (
-                <li key={node.nodeId}>
-                  <div className="run-node-heading">
-                    <div>
-                      <strong>{titles[node.nodeId] ?? node.nodeId}</strong>
-                    </div>
-                    <span className={"result-badge " + node.status}>
-                      {node.retryCount > 0 && node.status === "running"
-                        ? "Đang thử lại"
-                        : node.retryCount > 0 && node.status === "queued"
-                          ? "Chờ thử lại"
-                          : labels[node.status]}
-                    </span>
-                    <span>
-                      {duration(node.startedAt, node.completedAt, elapsedNow)}
-                    </span>
-                  </div>
-                  <details>
-                    <summary>Chi tiết thực thi</summary>
-                    <small>
-                      {node.attempts} attempt · {node.recoveries} lần phục hồi ·{" "}
-                      {node.retryCount} lần lên lịch thử lại
-                      {node.workerId ? " · Worker " + node.workerId : ""}
-                    </small>
-                    {node.status === "queued" &&
-                      node.retryCount > 0 &&
-                      node.availableAt && (
-                        <small>Được thử lại từ {date(node.availableAt)}</small>
-                      )}
-                    {node.leaseUntil && (
-                      <small>Lease đến {date(node.leaseUntil)}</small>
-                    )}
-                  </details>
-                  {node.error && (
-                    <p
-                      className={
-                        ["skipped", "queued", "running"].includes(node.status) ? "muted" : "field-error"
-                      }
-                    >
-                      {["queued", "running"].includes(node.status) && "Lần thử trước: "}
-                      {node.error.code}: {node.error.message}
-                    </p>
+          {showDiagnostics && (
+            <>
+              <details className="run-timeline" aria-label="Timeline sự kiện">
+                <summary>Nhật ký xử lý trực tiếp</summary>
+                <p className="muted">
+                  Tối đa 100 sự kiện gần nhất. Lịch sử trong PostgreSQL có thể
+                  được dọn theo chính sách lưu trữ; trạng thái workflow vẫn được
+                  giữ.
+                </p>
+                {run.eventsTruncated && (
+                  <p className="muted">
+                    Đang hiển thị phần cuối lịch sử sự kiện.
+                  </p>
+                )}
+                <div
+                  className="timeline-scroll"
+                  ref={timelineRef}
+                  onScroll={() => {
+                    const element = timelineRef.current;
+                    if (element)
+                      nearEnd.current =
+                        element.scrollHeight -
+                          element.scrollTop -
+                          element.clientHeight <
+                        64;
+                  }}
+                >
+                  <ol>
+                    {run.recentEvents.map((event) => (
+                      <li
+                        key={event.id}
+                        data-event-id={event.id}
+                        data-event-at={event.timestamp}
+                      >
+                        <time dateTime={event.timestamp}>
+                          {date(event.timestamp)}
+                        </time>
+                        <strong>
+                          {eventLabels[event.type]}
+                          {event.nodeId
+                            ? " · " + (titles[event.nodeId] ?? event.nodeId)
+                            : ""}
+                        </strong>
+                        {event.payload.node?.error && (
+                          <p>{event.payload.node.error.message}</p>
+                        )}
+                        {event.type === "node.retry_scheduled" &&
+                          event.payload.node?.availableAt && (
+                            <small>
+                              Thử lại từ {date(event.payload.node.availableAt)}
+                            </small>
+                          )}
+                        <small>Sự kiện #{event.sequence}</small>
+                      </li>
+                    ))}
+                  </ol>
+                  {run.recentEvents.length === 0 && (
+                    <p>Chưa có sự kiện telemetry được lưu cho run này.</p>
                   )}
-                </li>
-              ))}
-          </ol>
+                </div>
+              </details>
+              <ol className="run-nodes">
+                {[...run.nodes]
+                  .sort(
+                    (a, b) => order.indexOf(a.nodeId) - order.indexOf(b.nodeId),
+                  )
+                  .map((node) => (
+                    <li key={node.nodeId}>
+                      <div className="run-node-heading">
+                        <div>
+                          <strong>{titles[node.nodeId] ?? node.nodeId}</strong>
+                        </div>
+                        <span className={"result-badge " + node.status}>
+                          {node.retryCount > 0 && node.status === "running"
+                            ? "Đang thử lại"
+                            : node.retryCount > 0 && node.status === "queued"
+                              ? "Chờ thử lại"
+                              : labels[node.status]}
+                        </span>
+                        <span>
+                          {duration(
+                            node.startedAt,
+                            node.completedAt,
+                            elapsedNow,
+                          )}
+                        </span>
+                      </div>
+                      <details>
+                        <summary>Chi tiết thực thi</summary>
+                        <small>
+                          {node.attempts} attempt · {node.recoveries} lần phục
+                          hồi · {node.retryCount} lần lên lịch thử lại
+                          {node.workerId ? " · Worker " + node.workerId : ""}
+                        </small>
+                        {node.status === "queued" &&
+                          node.retryCount > 0 &&
+                          node.availableAt && (
+                            <small>
+                              Được thử lại từ {date(node.availableAt)}
+                            </small>
+                          )}
+                        {node.leaseUntil && (
+                          <small>Lease đến {date(node.leaseUntil)}</small>
+                        )}
+                      </details>
+                      {node.error && (
+                        <p
+                          className={
+                            ["skipped", "queued", "running"].includes(
+                              node.status,
+                            )
+                              ? "muted"
+                              : "field-error"
+                          }
+                        >
+                          {["queued", "running"].includes(node.status) &&
+                            "Lần thử trước: "}
+                          {node.error.code}: {node.error.message}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+              </ol>
+            </>
+          )}
         </>
       )}
       {!id && list && !loading && (

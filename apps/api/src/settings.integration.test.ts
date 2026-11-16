@@ -109,7 +109,7 @@ it("persists all five groups, survives API restart, rejects invalid writes, reru
   expect(
     (await pool.query("SELECT count(*)::int AS count FROM schema_migrations"))
       .rows[0].count,
-  ).toBe(10);
+  ).toBe(16);
   expect((await app.inject("/api/settings")).json()).toEqual(expected);
   // Force a real database write failure after UPDATE and ensure transaction rollback.
   await pool.query(

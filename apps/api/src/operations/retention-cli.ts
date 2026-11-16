@@ -1,8 +1,9 @@
 import { createPool } from "../db.js";
 import { databaseUrl } from "../env.js";
 import { retainHistory } from "./retention.js";
+import { retainPremium } from "../premium/retention.js";
 const args = process.argv.slice(2);
-const accepted = /^(--apply|--event-days=\d+|--attempt-days=\d+|--batch=\d+)$/;
+const accepted = /^(--apply|--premium|--result-days=\d+|--content-days=\d+|--event-days=\d+|--attempt-days=\d+|--batch=\d+)$/;
 if (args.some((arg) => !accepted.test(arg)))
   throw new Error(
     "Usage: retention [--apply] [--event-days=30] [--attempt-days=90] [--batch=500]",
@@ -13,6 +14,7 @@ const number = (name: string, fallback: number) =>
   );
 const pool = createPool(databaseUrl());
 try {
+  if(args.includes("--premium")) console.log(JSON.stringify(await retainPremium(pool,args.includes("--apply"),number("--content-days",30),number("--batch",500),number("--result-days",365))));
   console.log(
     JSON.stringify(
       await retainHistory(pool, {

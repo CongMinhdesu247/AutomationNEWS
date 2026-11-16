@@ -1,3 +1,4 @@
+import { requestSignal } from "./request-signal";
 import RunDashboard from "./RunDashboard";
 import AutomationDashboard from "./AutomationDashboard";
 import FamilyDashboard from "./FamilyDashboard";
@@ -235,7 +236,7 @@ export default function App() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parsed.data),
-          signal: AbortSignal.timeout(15000),
+          signal: requestSignal(15000),
         }),
       );
       setDraft(toDraft(saved));

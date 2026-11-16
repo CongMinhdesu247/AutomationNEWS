@@ -11,6 +11,7 @@ function positiveEnv(name: string, fallback: number, max: number) {
 const app = buildApp(pool, {
   githubToken: process.env.GITHUB_TOKEN,
   ntfyToken: process.env.NTFY_TOKEN,
+  ntfyDestinationOrigins: [process.env.ACCOUNT_NTFY_URL ?? "https://ntfy.sh/",...(process.env.NTFY_ALLOWED_ORIGINS ?? "").split(",").filter(v=>v.trim())].map(v=>new URL(v.trim()).origin),
   publicBaseUrl: process.env.PUBLIC_BASE_URL,
   ntfyAllowedOrigins: (process.env.NTFY_ALLOWED_ORIGINS ?? "")
     .split(",")

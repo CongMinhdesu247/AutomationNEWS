@@ -50,6 +50,7 @@ export function formatDigestNotification(
   const sources = digest.sources;
   if (!sources) return "Bản tin đang được chuẩn bị. Vui lòng thử lại sau.";
   const blocks: string[] = [];
+  if (sources.custom?.data.items.length) blocks.push(["🔎 Theo dõi tùy chỉnh",...sources.custom.data.items.slice(0,full?10:3).map(item => "• "+clip(oneLine(item.title),180)+"\n"+oneLine(item.source)+" · "+clip(oneLine(item.reason),160)+"\n"+item.url)].join("\n"));
   const money = (value: number | null) =>
     value === null
       ? "chưa có"

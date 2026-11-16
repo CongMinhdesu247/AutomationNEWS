@@ -3,6 +3,7 @@ import { WorkflowQueue } from "./queue.js";
 import { DigestStore } from "../digests/store.js";
 import { checkMarketLows } from "./market-monitor.js";
 import { tickAccounts } from "../accounts/schedule.js";
+import { tickCustom } from "../premium/runtime.js";
 import {
   DigestService,
   RequestError,
@@ -221,4 +222,5 @@ export class DigestScheduler {
   async tickAccounts() {
     return tickAccounts(this.queue, this.options.graceMs ?? 15 * 60000);
   }
+  async tickCustom() { return tickCustom(this.queue); }
 }

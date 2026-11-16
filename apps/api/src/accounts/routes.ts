@@ -163,7 +163,7 @@ export function registerAccountRoutes(
       if (previous) return previous.id as string;
       const count = (
         await client.query(
-          "SELECT count(*) FROM workflow_runs WHERE user_id=$1 AND created_at>now()-interval '1 day' AND scheduled_at IS NULL",
+          "SELECT count(*) FROM workflow_runs WHERE user_id=$1 AND workflow->>'version'='digest.v1' AND created_at>now()-interval '1 day' AND scheduled_at IS NULL",
           [userId],
         )
       ).rows[0];

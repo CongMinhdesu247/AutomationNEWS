@@ -1,3 +1,4 @@
+import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import {
   familyCities,
@@ -25,7 +26,7 @@ export default function MemberPortal() {
   async function request(method = "GET", body?: unknown) {
     const response = await fetch("/api/member", {
       method,
-      signal: AbortSignal.timeout(45000),
+      signal: requestSignal(45000),
       headers: {
         Authorization: "Bearer " + token,
         ...(body ? { "Content-Type": "application/json" } : {}),

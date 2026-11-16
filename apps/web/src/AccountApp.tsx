@@ -1,4 +1,13 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { requestSignal } from "./request-signal";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   familyCities,
   familyTopics,
@@ -11,6 +20,7 @@ import DigestDashboard from "./DigestDashboard";
 import RunDashboard from "./RunDashboard";
 import { Icon } from "./Icons";
 const AdminApp = lazy(() => import("./App"));
+const PremiumPortal = lazy(() => import("./PremiumPortal"));
 type User = {
   id: string;
   name: string;
@@ -35,7 +45,7 @@ async function api<T>(
   const response = await fetch(path, {
     method: body === undefined ? "GET" : method,
     credentials: "same-origin",
-    signal: AbortSignal.timeout(30000),
+    signal: requestSignal(30000),
     ...(body !== undefined
       ? {
           headers: { "Content-Type": "application/json" },
@@ -71,12 +81,34 @@ function AccountBrand() {
     </>
   );
 }
+function MemberGreeting() {
+  const [premium, setPremium] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void api<{ plan: { premium: boolean } }>("/api/account/plan")
+        .then(({ plan }) => {
+          if (active) setPremium(plan.premium);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
+  if (premium === null) return <h2>Chào bạn</h2>;
+  return <h2>{premium ? "Chào Thành viên Premium" : "Chào Thành viên"}</h2>;
+}
 export default function AccountApp() {
   const [config, setConfig] = useState<Config | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [booting, setBooting] = useState(true);
   const [error, setError] = useState("");
   const [hash, setHash] = useState(window.location.hash);
+  const isRunHistory = hash === "#/runs" || hash === "#/runs/";
   const [adminMode, setAdminMode] = useState(
     window.location.hash === "#/admin",
   );
@@ -86,6 +118,10 @@ export default function AccountApp() {
     return () => window.removeEventListener("hashchange", change);
   }, []);
   useEffect(() => {
+    if (account?.user.role === "member" && isRunHistory)
+      window.location.replace("#/digests");
+  }, [account?.user.role, isRunHistory]);
+  useEffect(() => {
     let active = true;
     void api<Config>("/api/auth/config")
       .then(async (value) => {
@@ -93,7 +129,7 @@ export default function AccountApp() {
         setConfig(value);
         if (value.enabled) {
           const response = await fetch("/api/account", {
-            signal: AbortSignal.timeout(10000),
+            signal: requestSignal(10000),
           });
           if (response.status !== 401 && !response.ok)
             throw new Error("Chưa tải được tài khoản. Hãy tải lại trang.");
@@ -133,6 +169,8 @@ export default function AccountApp() {
       </Suspense>
     );
   if (!account) return <Login config={config} onLogin={setAccount} />;
+  const isAdmin = account.user.role === "admin";
+  const isRunDetail = hash.startsWith("#/runs/") && hash.length > "#/runs/".length;
   function endSession() {
     setAccount(null);
     setAdminMode(false);
@@ -181,12 +219,19 @@ export default function AccountApp() {
         </details>
       </header>
       <div className="account-shell">
-        <nav className="account-nav" aria-label="Điều hướng tài khoản">
+        <nav
+          className={account.user.role === "admin" ? "account-nav account-nav-admin" : "account-nav"}
+          aria-label="Điều hướng tài khoản"
+        >
+          <a href="#/custom" onClick={() => setAdminMode(false)} aria-current={hash === "#/custom" ? "page" : undefined}><Icon name="brief" /><span>Gói & theo dõi</span></a>
+          {account.user.role === "admin" && <a href="#/premium-admin" onClick={() => setAdminMode(false)} aria-current={hash === "#/premium-admin" ? "page" : undefined}><Icon name="settings" /><span>Premium & AI</span></a>}
           <a
             href="#/digests"
             onClick={() => setAdminMode(false)}
             aria-current={
-              !hash || hash.startsWith("#/digests") ? "page" : undefined
+              !hash || hash.startsWith("#/digests") || (!isAdmin && isRunDetail)
+                ? "page"
+                : undefined
             }
           >
             <Icon name="brief" />
@@ -204,14 +249,14 @@ export default function AccountApp() {
             <Icon name="settings" />
             <span>Tùy chọn bản tin</span>
           </a>
-          <a
+          {isAdmin && <a
             href="#/runs"
             onClick={() => setAdminMode(false)}
             aria-current={hash.startsWith("#/runs") ? "page" : undefined}
           >
             <Icon name="activity" />
             <span>Lịch sử xử lý</span>
-          </a>
+          </a>}
           <a
             href="#/password"
             onClick={() => setAdminMode(false)}
@@ -246,6 +291,14 @@ export default function AccountApp() {
           <Suspense fallback={<p>Đang tải…</p>}>
             <AdminApp />
           </Suspense>
+        ) : hash === "#/custom" || (hash === "#/premium-admin" && account.user.role === "admin") ? (
+          <Suspense fallback={<p role="status">Đang tải…</p>}>
+            <PremiumPortal
+              key={hash}
+              admin={hash === "#/premium-admin"}
+              email={account.user.email}
+            />
+          </Suspense>
         ) : hash === "#/users" && account.user.role === "admin" ? (
           <Users />
         ) : hash === "#/password" ? (
@@ -256,8 +309,8 @@ export default function AccountApp() {
             account={account}
             onSaved={setAccount}
           />
-        ) : hash.startsWith("#/runs") ? (
-          <RunDashboard hash={hash} listUrl="/api/account/runs" />
+        ) : isRunDetail || (isAdmin && isRunHistory) ? (
+          <RunDashboard hash={hash} listUrl="/api/account/runs" showDiagnostics={isAdmin} />
         ) : (
           <>
             {!hash.startsWith("#/digests/") && (
@@ -271,18 +324,17 @@ export default function AccountApp() {
                       timeZone: account.settings.newsletter.timezone,
                     })}
                   </p>
-                  <h2>Chào {account.user.name}.</h2>
-                  <p>Một chút cập nhật, một ngày chủ động hơn.</p>
-                  <div className="account-interest-tags">
+                  {isAdmin ? (
+                    <h2>Chào {account.user.name}.</h2>
+                  ) : (
+                    <MemberGreeting key={account.user.id} />
+                  )}
+                  {account.settings.weather.location && <div className="account-interest-tags">
                     <span>
                       <Icon name="sun" size={16} />
-                      {account.settings.weather.location ||
-                        "Chọn địa điểm của bạn"}
+                      {account.settings.weather.location}
                     </span>
-                    <a href="#/preferences">
-                      Điều chỉnh nội dung <Icon name="arrow" size={15} />
-                    </a>
-                  </div>
+                  </div>}
                 </div>
                 <div className="account-schedule-preview">
                   <span>
@@ -297,17 +349,6 @@ export default function AccountApp() {
                         )
                       : "Chưa đặt lịch nhận"}
                   </strong>
-                  <p>
-                    {account.nextRunAt
-                      ? "Bản tin sẽ được tạo theo lựa chọn đã lưu."
-                      : "Chọn giờ thuận tiện để bắt đầu mỗi ngày."}
-                  </p>
-                  <a href="#/preferences">
-                    {account.nextRunAt
-                      ? "Chỉnh lịch nhận"
-                      : "Thiết lập lịch nhận"}
-                    <Icon name="arrow" size={16} />
-                  </a>
                 </div>
               </section>
             )}
@@ -534,6 +575,48 @@ function Login({
     </div>
   );
 }
+function PreferenceCheckbox({
+  label,
+  checked,
+  onChange,
+  children,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpId = useId();
+
+  return (
+    <div>
+      <div className="account-check-help">
+        <label className="account-check">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(event) => onChange(event.target.checked)}
+          />
+          {label}
+        </label>
+        <button
+          type="button"
+          className="account-help-toggle"
+          aria-label={`Hướng dẫn về “${label}”`}
+          aria-expanded={helpOpen}
+          aria-controls={helpId}
+          onClick={() => setHelpOpen((open) => !open)}
+        >
+          <span aria-hidden="true">!</span>
+        </button>
+      </div>
+      <div id={helpId} className="account-check-guidance" hidden={!helpOpen}>
+        {children}
+      </div>
+    </div>
+  );
+}
 function Preferences({
   account,
   onSaved,
@@ -605,9 +688,6 @@ function Preferences({
   return (
     <section className="account-preferences">
       <h1>Tùy chọn bản tin</h1>
-      <p>
-        Chọn điều bạn quan tâm. Bản tin sẽ theo lịch và sở thích của riêng bạn.
-      </p>
       <form onSubmit={save}>
         <fieldset disabled={busy}>
           <section className="account-card">
@@ -615,21 +695,15 @@ function Preferences({
               <Icon name="calendar" />
               Thời gian nhận
             </h2>
-            <p className="account-section-note">
-              Một khung giờ dễ chịu, những ngày bạn muốn cập nhật.
-            </p>
-            <label className="account-check">
-              <input
-                type="checkbox"
-                checked={s.newsletter.enabled}
-                onChange={(e) =>
-                  patch({
-                    newsletter: { ...s.newsletter, enabled: e.target.checked },
-                  })
-                }
-              />
-              Tự động tạo bản tin theo lịch
-            </label>
+            <PreferenceCheckbox
+              label="Tự động tạo bản tin theo lịch"
+              checked={s.newsletter.enabled}
+              onChange={(enabled) =>
+                patch({ newsletter: { ...s.newsletter, enabled } })
+              }
+            >
+              <p>Lưu lựa chọn để lịch có hiệu lực, kể cả khi bạn đã đóng trang.</p>
+            </PreferenceCheckbox>
             <div className="account-grid">
               <label>
                 Giờ nhận
@@ -701,9 +775,6 @@ function Preferences({
               <Icon name="brief" />
               Tiện ích buổi sáng
             </h2>
-            <p className="account-section-note">
-              Bật những mục hữu ích và chọn chủ đề tin yêu thích.
-            </p>
             <label>
               Địa điểm
               <select
@@ -760,23 +831,11 @@ function Preferences({
                 </label>
               ))}
             </div>
-            {s.uv?.enabled && (
-              <p className="account-section-note">
-                UV lấy theo địa điểm bên trên, độc lập với mục Thời tiết.
-              </p>
-            )}
-            {s.holidays?.enabled && (
-              <p className="account-section-note">
-                Hiển thị các ngày lễ, kỷ niệm dương lịch sắp tới và số ngày còn
-                lại.
-              </p>
-            )}
             {s.tasks?.enabled && (
               <div className="account-task-editor">
                 <h3>Việc cần làm của bạn</h3>
                 <p>
-                  Việc đến hạn hoặc quá hạn, chưa hoàn thành sẽ có trong bản
-                  tin. Đây là nhắc việc theo lịch bản tin buổi sáng.
+                  Việc đến hạn sẽ xuất hiện trong bản tin nếu chưa hoàn thành.
                 </p>
                 <label>
                   Tên việc
@@ -874,11 +933,6 @@ function Preferences({
               </div>
             )}
             <h3>Chủ đề tin tức</h3>
-            <p className="account-section-note">
-              Thêm những điều hữu ích mỗi ngày: sức khỏe, du lịch, giải trí, xe
-              cộ và nhiều chủ đề khác. Chỉ những mục được chọn mới có trong bản
-              tin.
-            </p>
             <div className="account-choices">
               {Object.entries(familyTopics).map(([key, v]) => {
                 const url = `https://vnexpress.net/rss/${v.feed}.rss`;
@@ -957,37 +1011,23 @@ function Preferences({
                 </label>
               </div>
             )}
-            <p>
-              {hasSource
-                ? "Bản tin sẽ tổng hợp các mục đã chọn."
-                : "Chọn ít nhất một nội dung trước khi tạo hoặc bật lịch."}
-            </p>
+            {!hasSource && <p>Chọn ít nhất một nội dung để tạo bản tin hoặc bật lịch.</p>}
           </section>
           <section className="account-card">
             <h2>
               <Icon name="send" />
               Thông báo trên điện thoại
             </h2>
-            <label className="account-check">
-              <input
-                type="checkbox"
-                checked={s.notifications.enabled}
-                onChange={(e) =>
-                  patch({
-                    notifications: {
-                      ...s.notifications,
-                      enabled: e.target.checked,
-                    },
-                  })
-                }
-              />
-              Gửi thông báo qua ntfy sau bản tin theo lịch
-            </label>
-            <p>
-              Trong ứng dụng ntfy trên điện thoại, đăng ký một kênh mới tại{" "}
-              <strong>{s.notifications.serverUrl}</strong> bằng topic bên dưới.
-              Giữ kín topic để tránh người khác nhận thông báo của bạn.
-            </p>
+            <PreferenceCheckbox
+              label="Gửi thông báo qua ntfy sau bản tin theo lịch"
+              checked={s.notifications.enabled}
+              onChange={(enabled) =>
+                patch({ notifications: { ...s.notifications, enabled } })
+              }
+            >
+              <p>Bật lịch bản tin rồi lưu lựa chọn. Trong ntfy, đăng ký tại <strong>{s.notifications.serverUrl}</strong> bằng topic bên dưới. Giữ kín topic.</p>
+              <p>Để thử, mở bản tin đã tạo và bấm <strong>Gửi đến điện thoại</strong>.</p>
+            </PreferenceCheckbox>
             <label>
               Topic riêng
               <input
@@ -996,10 +1036,6 @@ function Preferences({
                 onFocus={(e) => e.target.select()}
               />
             </label>
-            <p>
-              Sau khi lưu, mở một bản tin đã tạo và chọn “Gửi đến điện thoại” để
-              thử thông báo.
-            </p>
           </section>
           <section className="account-card">
             <h2>

@@ -1,0 +1,118 @@
+// Local fixture only. Each run creates its own member account.
+async (page) => {
+  const base="http://127.0.0.1:5186",email="ux-"+Date.now()+"@fixture.invalid";
+  const signup=await page.request.post(base+"/api/auth/register",{headers:{Origin:base},data:{email,name:"Người dùng thử giao diện",password:"premium-fixture-password"}});
+  if(signup.status()!==201)throw new Error("Fixture registration failed");
+  await page.goto(base+"/?ux="+Date.now()+"#/digests");
+  await page.getByRole("heading",{name:"Chào Thành viên",exact:true}).waitFor();
+  await page.goto(base+"/?ux="+Date.now()+"#/custom");
+  await page.getByRole("heading",{name:"Gói & theo dõi",exact:true}).waitFor();
+  if(await page.getByRole("button",{name:"Tạo theo dõi",exact:true}).isVisible())throw new Error("Free custom access");
+  await page.getByRole("button",{name:"Xem gói Premium",exact:true}).click();
+  await page.getByRole("heading",{name:"Free",exact:true}).waitFor();
+  await page.setViewportSize({width:390,height:844});
+  await page.getByText("20.000 ₫",{exact:true}).waitFor();
+  const paymentQr=page.getByRole("img",{name:"Mã QR chuyển khoản Agribank",exact:true});
+  await paymentQr.scrollIntoViewIfNeeded();
+  await paymentQr.evaluate(img=>img.decode());
+  await page.locator(".custom-payment-email").filter({hasText:email}).waitFor();
+  await page.screenshot({path:"output/playwright/premium-signup-mobile.png",fullPage:true});
+  await page.getByText("Thêm ghi chú (tùy chọn)",{exact:true}).click();
+  await page.getByRole("textbox",{name:"Ghi chú cho quản trị viên",exact:true}).fill("Theo dõi tin về dữ liệu");
+  await page.getByRole("button",{name:"Đã chuyển khoản",exact:true}).click();
+  await page.getByText("Đăng ký đang chờ duyệt",{exact:true}).waitFor();
+  const own=await page.request.get(base+"/api/account/plan");
+  if((await own.json()).plan.premium)throw new Error("Signup auto upgraded");
+  const adminContext=await page.context().browser().newContext();
+  try {
+    const reviewer=await adminContext.newPage();
+    const login=await reviewer.request.post(base+"/api/auth/login",{headers:{Origin:base},data:{email:"admin@fixture.invalid",password:"premium-fixture-password"}});
+    if(!login.ok())throw new Error("Admin login failed");
+    await reviewer.goto(base+"/#/premium-admin");
+    const request=reviewer.locator(".custom-pending-requests li").filter({hasText:email});
+    await request.getByRole("button",{name:"Duyệt và cấp 30 ngày",exact:true}).click();
+    await request.waitFor({state:"detached"});
+    await reviewer.screenshot({path:"output/playwright/premium-signup-admin.png",fullPage:true});
+  } finally {await adminContext.close();}
+  await page.goto(base+"/#/digests");
+  await page.getByRole("heading",{name:"Chào Thành viên Premium",exact:true}).waitFor();
+  await page.goto(base+"/#/custom");
+  await page.getByRole("button",{name:"Tạo theo dõi",exact:true}).click();
+  await page.getByRole("textbox",{name:"Tên theo dõi",exact:true}).fill("Theo dõi bản tin fixture");
+  await page.getByRole("textbox",{name:"Bạn muốn theo dõi điều gì?",exact:true}).fill("tin tự động");
+  const include=page.getByRole("textbox",{name:"Tin cần có những từ nào?",exact:true});
+  await include.fill("bản tin,tự động");
+  await page.getByText("Trang khác",{exact:true}).click();
+  await page.getByRole("checkbox",{name:"RSS thử nghiệm công khai",exact:true}).check();
+  await page.getByRole("button",{name:"Xem trước",exact:true}).click();
+  const save=page.getByRole("button",{name:"Xác nhận và lưu",exact:true});
+  if(!await save.isDisabled())throw new Error("Confirmation required");
+  if(await page.getByRole("textbox",{name:"Tên theo dõi",exact:true}).isVisible())throw new Error("Editor should be hidden during preview");
+  await page.getByRole("checkbox",{name:"Tôi đã kiểm tra trang lấy tin và lịch theo dõi",exact:true}).focus();
+  await page.keyboard.press("Space");await page.keyboard.press("Tab");
+  if(!await save.evaluate(el=>el===document.activeElement))throw new Error("Save focus missing");
+  await page.keyboard.press("Enter");
+  await page.getByText("Đã lưu theo dõi.",{exact:false}).waitFor();
+  await page.screenshot({path:"output/playwright/premium-simplified-watches-mobile.png",fullPage:true});
+  await page.getByRole("button",{name:"Kết quả",exact:true}).click();
+  const article=page.getByRole("link",{name:"[DEMO FIXTURE] Bản tin tự động",exact:true}).first();
+  for(let i=0;i<30;i++){if(await article.count())break;await page.getByRole("button",{name:"Cập nhật kết quả",exact:true}).click();await page.waitForTimeout(200);}
+  await article.waitFor();
+  await page.getByText("Chi tiết tin",{exact:true}).first().click();
+  await page.getByText("Theo dõi bản tin fixture",{exact:true}).first().waitFor();
+  const dimensions=[];
+  for(const width of [1440,390,320]){
+    await page.setViewportSize({width,height:900});
+    const size=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
+    if(size.scroll>size.width)throw new Error("Mobile overflow");dimensions.push(size);
+    if(width<=390 && !await page.getByRole("navigation",{name:"Điều hướng tài khoản"}).evaluate(nav=>nav.scrollWidth<=nav.clientWidth))throw new Error("Member navigation is clipped");
+    if(await page.getByRole("button",{name:"Trang sau",exact:true}).isVisible())throw new Error("Pagination unnecessary on a single page");
+    await page.screenshot({path:"output/playwright/premium-simplified-results-"+width+".png",fullPage:true});
+  }
+  await page.getByRole("button",{name:"Theo dõi của tôi",exact:true}).click();
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:"output/playwright/premium-simplified-watches-desktop.png",fullPage:true});
+  await page.getByRole("button",{name:"Tạo theo dõi",exact:true}).click();
+  await page.getByRole("textbox",{name:"Tên theo dõi",exact:true}).fill("AI chưa xác nhận");
+  await page.getByRole("textbox",{name:"Bạn muốn theo dõi điều gì?",exact:true}).fill("tin tự động");
+  await page.getByText("Trang khác",{exact:true}).click();
+  await page.getByRole("checkbox",{name:"RSS thử nghiệm công khai",exact:true}).check();
+  await page.screenshot({path:"output/playwright/premium-simplified-editor-desktop.png",fullPage:true});
+  await page.getByRole("button",{name:"Gợi ý điều kiện bằng trợ lý",exact:true}).click();
+  const check=page.getByRole("button",{name:"Kiểm tra kết quả",exact:true}),preview=page.getByRole("heading",{name:"Xem trước theo dõi",exact:true});
+  await check.or(preview).first().waitFor();
+  for(let i=0;i<20;i++){if(await preview.count())break;await check.click();await page.waitForTimeout(100);}
+  await preview.waitFor();
+  if(await page.getByRole("checkbox",{name:"Tôi đã kiểm tra trang lấy tin và lịch theo dõi",exact:true}).isChecked())throw new Error("AI auto confirmation");
+  await page.getByRole("button",{name:"Hủy",exact:true}).click();
+  await page.route("**/api/account/plan",async route=>{
+    const response=await route.fetch();
+    await route.fulfill({response,json:{...await response.json(),aiEnabled:false,searchEnabled:false}});
+  });
+  await page.setViewportSize({width:320,height:850});
+  await page.reload();
+  await page.getByRole("button",{name:"Tạo theo dõi",exact:true}).click();
+  const name=page.getByRole("textbox",{name:"Tên theo dõi",exact:true});
+  await name.fill("Theo dõi không dùng trợ lý");
+  await include.fill("bản tin");
+  if(await page.getByRole("textbox",{name:"Ghi chú cho theo dõi này",exact:true}).isVisible())throw new Error("Optional notes should be collapsed with AI off");
+  await page.getByRole("button",{name:"Thêm nguồn RSS",exact:true}).click();
+  const proposal=page.getByRole("dialog",{name:"Thêm nguồn RSS",exact:true});
+  await proposal.getByRole("textbox",{name:"Tên nguồn",exact:true}).fill("Nguồn kiểm thử trình duyệt");
+  await proposal.getByRole("textbox",{name:"Đường dẫn RSS hoặc Atom",exact:true}).fill("http://127.0.0.1/rss");
+  await proposal.getByRole("button",{name:"Gửi để duyệt",exact:true}).click();
+  await proposal.getByRole("alert").waitFor();
+  await proposal.getByRole("button",{name:"Quay lại",exact:true}).click();
+  if(await name.inputValue()!=="Theo dõi không dùng trợ lý")throw new Error("Source dialog reset watch draft");
+  await page.getByRole("checkbox",{name:"VnExpress · Tin mới",exact:true}).check();
+  await page.getByRole("combobox",{name:"Kiểm tra tin bao lâu một lần?",exact:true}).selectOption("custom");
+  const interval=page.getByRole("spinbutton",{name:"Số phút giữa hai lần kiểm tra",exact:true});
+  const originalInterval=await interval.inputValue();
+  await interval.fill("0");
+  await page.getByRole("button",{name:"Xem trước",exact:true}).click();
+  await page.getByRole("alert").filter({hasText:"lịch"}).waitFor();
+  await interval.fill(originalInterval);
+  await page.getByRole("button",{name:"Xem trước",exact:true}).click();
+  await preview.waitFor();
+  return {freeSignup:true,manualApproval:true,noAutoUpgrade:true,createdByKeyboard:true,matched:true,aiConfirmationRequired:true,manualTracking:true,catalogSelection:true,viewports:dimensions};
+}

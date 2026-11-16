@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Bản tin mỗi sáng",
+  "short_name": "Bản tin sáng",
+  "lang": "vi",
+  "start_url": "/#/digests",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f7f6",
+  "theme_color": "#f3f7f6",
+  "icons": [
+    {
+      "src": "/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

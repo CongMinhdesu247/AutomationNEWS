@@ -11,6 +11,7 @@ import {
   ensureOk,
   cleanError,
   checkUrl,
+  ConnectorError,
   type HttpClient,
 } from "./http.js";
 export function dashboardLink(
@@ -54,6 +55,7 @@ export async function sendNtfy(
     token,
     publicBaseUrl,
     allowedOrigins = [],
+    destinationOrigins,
     signal,
     message: customMessage,
     clickUrl,
@@ -65,6 +67,7 @@ export async function sendNtfy(
     token?: string;
     publicBaseUrl?: string;
     allowedOrigins?: string[];
+    destinationOrigins?: string[];
     signal: AbortSignal;
     message?: string;
     clickUrl?: string;
@@ -85,6 +88,8 @@ export async function sendNtfy(
       ? checkUrl(clickUrl).toString()
       : dashboardLink(publicBaseUrl, digest.id);
     const url = checkUrl(config.serverUrl);
+    if (destinationOrigins && !destinationOrigins.includes(url.origin))
+      throw new ConnectorError("NTFY_ORIGIN", "Địa chỉ ntfy chưa có trong danh sách cho phép của server.");
     url.search = "";
     url.hash = "";
     if (!url.pathname.endsWith("/")) url.pathname += "/";

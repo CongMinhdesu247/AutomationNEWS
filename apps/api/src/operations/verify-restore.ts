@@ -22,6 +22,12 @@ const tables = [
   "digest_schedule",
   "scheduled_deliveries",
   "run_events",
+  "hub_users","user_sessions","user_settings","account_rate_limits",
+  "news_plans","news_entitlements","news_audit","news_sources","news_watches",
+  "news_watch_sources","news_articles","news_source_articles","news_matches",
+  "news_preferences","news_digest_items","news_ai_control","news_tasks","news_usage","news_enrichment",
+  "news_discovery_cache",
+  "news_plan_requests",
 ];
 try {
   for (const table of tables) {

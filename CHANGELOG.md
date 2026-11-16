@@ -1,5 +1,19 @@
 # Changelog
 
+## Chuẩn bị phát hành — premium-beta-20261116-r2 (2026-11-16)
+
+- Thanh điều hướng trên điện thoại cho phép nhãn xuống dòng và hiển thị bánh răng cân đối hơn.
+- Hai dấu chấm than mở hướng dẫn về lịch và thông báo ntfy ngay cạnh ô chọn.
+- Gói cho HP đi kèm Premium beta và các migration 011–013 từ bản r1.
+
+## Chưa phát hành — Premium beta (2026-11-15)
+
+- Gói/entitlement Free và Premium tách admin/member; admin cấp/gia hạn/thu hồi có audit, không miễn quota cho admin. Migration 011–012 bổ sung, không sửa migrations cũ hay lịch/settings.
+- Theo dõi tùy chỉnh: form/preview/xác nhận, nguồn RSS công khai chờ duyệt, cache dùng chung, matching deterministic, kết quả riêng tư có lưu/ẩn, section trong bản tin/ntfy hiện tại.
+- Tác vụ Premium dùng queue/lease/recovery hiện có. Giữ riêng hạn mức bản tin thường, không tính AI/search vào giới hạn tạo digest thủ công.
+- Adapter Gemini/disabled/fake và Brave Search/disabled/fake, quota và budget reservation atomic, không retry call chưa rõ phí. Mặc định AI/search tắt, budget 0, FREE_ONLY bật; search yêu cầu xác minh quyền lưu/cache.
+- Giao diện user/admin, CI fixture, retention, migration có dữ liệu cũ, restore cô lập, runbook HP. Chưa triển khai Premium lên HP, chưa gọi provider trả phí hoặc gửi thông báo điện thoại thật.
+
 ## Chưa phát hành — tài khoản và máy chủ tại nhà (2026-11-15)
 
 - Đăng ký có thể bật/tắt, đăng nhập, đổi mật khẩu, phiên cookie HttpOnly/Secure, hash mật khẩu scrypt và giới hạn yêu cầu lưu trong PostgreSQL.

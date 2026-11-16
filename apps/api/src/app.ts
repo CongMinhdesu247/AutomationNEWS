@@ -19,9 +19,11 @@ import { registerFamilyRoutes } from "./family/routes.js";
 import { githubFamilyAdmin, type FamilyCloudAdmin } from "./family/cloud-admin.js";
 import { registerAuth, type AuthOptions } from "./accounts/auth.js";
 import { registerAccountRoutes } from "./accounts/routes.js";
+import { registerPremiumRoutes } from "./premium/routes.js";
+import type { HttpClient } from "./connectors/http.js";
 export function buildApp(
   pool: Pool,
-  options: ServiceOptions = {},
+  options: ServiceOptions & { premiumSourceHttp?: HttpClient } = {},
   sseOptions: SseOptions = {},
   familyCloud: FamilyCloudAdmin = githubFamilyAdmin(process.env.HUB_CLOUD_REPOSITORY,process.env.HUB_CLOUD_ADMIN_TOKEN),
   authOptions: AuthOptions = {},
@@ -29,6 +31,7 @@ export function buildApp(
   const app = Fastify({ logger: false, bodyLimit: 262144 });
   const auth = registerAuth(app, pool, authOptions);
   registerAccountRoutes(app, pool, options, auth.throttle);
+  registerPremiumRoutes(app, pool, auth.throttle, options.premiumSourceHttp);
   const failure = (code: string, message: string): ApiError => ({
     error: { code, message, issues: [] },
   });

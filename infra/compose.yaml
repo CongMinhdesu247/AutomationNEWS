@@ -40,6 +40,9 @@ services:
       REGISTRATION_OPEN: ${REGISTRATION_OPEN:-false}
       MAX_USERS: ${MAX_USERS:-100}
       ACCOUNT_NTFY_URL: ${ACCOUNT_NTFY_URL:-https://ntfy.sh/}
+      NEWS_AI_KILL_SWITCH: ${NEWS_AI_KILL_SWITCH:-false}
+      NEWS_SEARCH_KILL_SWITCH: ${NEWS_SEARCH_KILL_SWITCH:-false}
+      NEWS_FREE_ONLY: ${NEWS_FREE_ONLY:-true}
     command: ["pnpm", "--filter", "@hub/api", "migrate"]
     depends_on:
       db:
@@ -91,6 +94,11 @@ services:
       WORKER_RETRY_BASE_MS: ${WORKER_RETRY_BASE_MS:-1000}
       WORKER_RETRY_MAX_MS: ${WORKER_RETRY_MAX_MS:-60000}
       WORKER_SHUTDOWN_MS: ${WORKER_SHUTDOWN_MS:-10000}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
+      NEWS_SEARCH_KILL_SWITCH: ${NEWS_SEARCH_KILL_SWITCH:-false}
+      NEWS_AI_KILL_SWITCH: ${NEWS_AI_KILL_SWITCH:-false}
+      NEWS_FREE_ONLY: ${NEWS_FREE_ONLY:-true}
     depends_on:
       db:
         condition: service_healthy

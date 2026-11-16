@@ -76,6 +76,7 @@ export type GithubData = {
   }[];
 };
 export type DigestSources = {
+  custom?: SourceResult<{items:(NewsItem & {reason:string})[]}>;
   uv?: SourceResult<UvData | null>;
   holidays?: SourceResult<HolidayData | null>;
   tasks?: SourceResult<TaskData | null>;
@@ -115,10 +116,10 @@ export function priceLow30Notice(low?: PriceLow30): string {
   return "";
 }
 export type MarketDay = { day: string; prices: Record<string, number>; historical?: Record<string, string> };
-export function priceLow30Text(low?: PriceLow30): string {
+export function priceLow30Text(low?: PriceLow30, showSource = true): string {
   if (!low || low.minimum === null) return "Đáy bán 30 ngày trước: chưa có lịch sử (0/30 ngày)";
   return `Đáy bán 30 ngày trước: ${low.minimum.toLocaleString("vi-VN")} (ghi nhận ${low.days}/30 ngày)` +
-    (low.historySource ? ` · ${low.historySource}${low.historySource === "giavang.pro" ? ", giá chốt phiên" : ""}` : "") +
+    (showSource && low.historySource ? ` · ${low.historySource}${low.historySource === "giavang.pro" ? ", giá chốt phiên" : ""}` : "") +
     (priceLow30Notice(low) ? "\n" + priceLow30Notice(low) : "");
 }
 export type AirQualityData = {

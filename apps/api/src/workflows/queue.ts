@@ -24,6 +24,7 @@ import {
 import { RequestError, aggregateStatus } from "../digests/service.js";
 import { digestWorkflow } from "./definition.js";
 import { isRetryable, retryDelay } from "./retry.js";
+import { attachCustomDigest } from "../premium/store.js";
 export type ClaimedJob = {
   id: string;
   runId: string;
@@ -85,6 +86,27 @@ export class WorkflowQueue {
       status: run.status,
       statusUrl: "/api/runs/" + run.id,
     };
+  }
+  async enqueueTask(client: PoolClient, key: string, userId: string, kind: "watch" | "interpret" | "enrich" | "discover", payload: unknown, watchId?: string) {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [key]);
+    const previous = (await client.query("SELECT r.id,t.payload,t.kind,t.watch_id FROM workflow_runs r JOIN news_tasks t ON t.run_id=r.id WHERE r.idempotency_key=$1 AND r.user_id=$2", [key,userId])).rows[0];
+    if (previous) {
+      if (JSON.stringify(previous.payload) !== JSON.stringify(JSON.parse(JSON.stringify(payload))) || previous.kind !== kind || previous.watch_id !== (watchId ?? null)) {
+        // Compare JSONB structurally (key order is not stable).
+        const same = await client.query("SELECT 1 FROM news_tasks WHERE run_id=$1 AND payload=$2::jsonb AND kind=$3 AND watch_id IS NOT DISTINCT FROM $4::uuid", [previous.id,JSON.stringify(payload),kind,watchId ?? null]);
+        if (!same.rowCount) throw new RequestError(409,"IDEMPOTENCY_CONFLICT","Khóa yêu cầu đã dùng cho nội dung khác.");
+      }
+      return previous.id as string;
+    }
+    const settings = settingsSchema.parse((await client.query("SELECT config FROM user_settings WHERE user_id=$1", [userId])).rows[0]?.config);
+    const id = crypto.randomUUID();
+    const workflow: Workflow = { version:"premium.v1",concurrency:1,nodes:[{id:"premium_task",type:"premium_task",config:{},policy:"all_success"}],edges:[] };
+    await client.query("INSERT INTO workflow_runs(id,idempotency_key,request_payload,workflow,settings_snapshot,status,user_id) VALUES($1,$2,'{}',$3::jsonb,$4::jsonb,'queued',$5)", [id,key,JSON.stringify(workflow),JSON.stringify(settings),userId]);
+    await client.query("INSERT INTO news_tasks(run_id,user_id,watch_id,kind,payload) VALUES($1,$2,$3,$4,$5::jsonb)", [id,userId,watchId ?? null,kind,JSON.stringify(payload)]);
+    await client.query("INSERT INTO node_runs(run_id,node_id,type,status) VALUES($1,'premium_task','premium_task','pending')", [id]);
+    await appendEvent(client,id,"run.created");
+    await this.advance(client,{id,workflow,settings_snapshot:settings,status:"queued",digest_id:null});
+    return id;
   }
   async enqueue(
     client: PoolClient,
@@ -228,7 +250,7 @@ export class WorkflowQueue {
       states[ready.id] = { status: "queued", output: null, error: null };
     }
     if (Object.values(states).every((state) => isTerminal(state.status))) {
-      const success = states.persist_digest?.status === "succeeded";
+      const success = (run.workflow.version === "premium.v1" ? states.premium_task : states.persist_digest)?.status === "succeeded";
       await client.query(
         "UPDATE workflow_runs SET status=$2,completed_at=clock_timestamp(),error=$3::jsonb WHERE id=$1",
         [
@@ -379,6 +401,15 @@ export class WorkflowQueue {
           "UPDATE workflow_runs SET digest_id=$2 WHERE id=$1",
           [run.id, digestId],
         );
+        // An optional custom section must not invalidate a normal newsletter.
+        await client.query("SAVEPOINT custom_digest");
+        try {
+          const owner = (await client.query("SELECT user_id FROM workflow_runs WHERE id=$1",[run.id])).rows[0]?.user_id;
+          await attachCustomDigest(client,digestId,owner ?? null);
+          await client.query("RELEASE SAVEPOINT custom_digest");
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT custom_digest");
+        }
         output = { digestId };
         await client.query(
           "INSERT INTO scheduled_deliveries(id,digest_id) SELECT $1,$2 FROM workflow_runs WHERE id=$2 AND scheduled_at IS NOT NULL AND settings_snapshot->'notifications'->>'enabled'='true' ON CONFLICT(digest_id) DO NOTHING",

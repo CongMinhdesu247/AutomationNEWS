@@ -1,0 +1,13 @@
+# Release 20261116-r3. Keep the existing Compose project, network and volume.
+# Use after compose.yaml + compose.home.yaml; always load the matching image archive.
+services:
+  api:
+    image: automationnews-api:20261116-r3
+  migrate:
+    image: automationnews-api:20261116-r3
+  worker:
+    image: automationnews-worker:20261116-r3
+  scheduler:
+    image: automationnews-scheduler:20261116-r3
+  web:
+    image: automationnews-web:20261116-r3

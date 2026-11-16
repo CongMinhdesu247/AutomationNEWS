@@ -1,0 +1,35 @@
+# Built-image smoke only. Uses the isolated fixture database, no worker/scheduler.
+name: automationnews-premium-smoke
+services:
+  api:
+    image: automationnews-api:${RELEASE_TAG:?Set RELEASE_TAG}
+    environment:
+      DATABASE_URL: postgresql://accounts_test:fixture_only@db:5432/${SMOKE_DATABASE:?Set SMOKE_DATABASE}
+      HOST: 0.0.0.0
+      PORT: 3001
+      APP_ORIGIN: https://fixture.invalid
+      REGISTRATION_OPEN: "false"
+      NEWS_FREE_ONLY: "true"
+      NEWS_AI_KILL_SWITCH: "true"
+      NEWS_SEARCH_KILL_SWITCH: "true"
+    networks: [fixture]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+  web:
+    image: automationnews-web:${RELEASE_TAG:?Set RELEASE_TAG}
+    networks: [fixture]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, --spider, -q, "http://127.0.0.1/api/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+networks:
+  fixture:
+    external: true
+    name: ${SMOKE_NETWORK:?Set SMOKE_NETWORK}

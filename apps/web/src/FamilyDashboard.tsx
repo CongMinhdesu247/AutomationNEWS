@@ -1,3 +1,4 @@
+import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import {
   familyCities,
@@ -14,7 +15,7 @@ import { DeliveryPanel, FamilyBackup, MemberAccess } from "./FamilyTools";
 async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(url, {
     method,
-    signal: AbortSignal.timeout(45000),
+    signal: requestSignal(45000),
     ...(body === undefined
       ? {}
       : {

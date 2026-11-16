@@ -1,5 +1,7 @@
 # Kiến trúc Personal Automation Hub, bước 1–6
 
+Phần mở rộng Premium beta, migrations 011–012, workflow nội bộ premium.v1, entitlement và ngân sách được mô tả tại [premium-design.md](premium-design.md). Queue/worker/scheduler và digest.v1 hiện tại tiếp tục được tái sử dụng. Trạng thái ứng dụng đã public theo chủ dự án; chưa cập nhật HP trong tác vụ này.
+
 ## Thành phần và ranh giới
 
 - **packages/engine**: TypeScript thuần, không HTTP/pg. Định nghĩa node/edge/config JSON, Kahn topo validation, plan các node ready/skipped theo concurrency và dependency policy. Output dependency luôn có status/output/error; thiếu dữ liệu là null và lỗi rõ ràng.

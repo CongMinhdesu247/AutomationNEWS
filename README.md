@@ -1,5 +1,9 @@
 # Personal Automation Hub
 
+**Premium beta (source local, chưa cập nhật HP):** gói Free/Premium độc lập role, theo dõi RSS tùy chỉnh có xác nhận, kết quả riêng, tích hợp bản tin/ntfy, Gemini và khám phá nguồn qua adapter có ngân sách. Mặc định AI/search tắt, ngân sách 0 và FREE_ONLY bật. Xem [kiến trúc/API](docs/premium-design.md), [kiểm thử](docs/verification-premium.md) và [backup/cập nhật/rollback HP](docs/premium-release.md). Migration mới 011–012 không sửa dữ liệu/lịch/role cũ.
+
+**Trạng thái triển khai:** theo chủ dự án, AutomationNEWS đã public trên HP. Những đoạn “dự kiến/Pending/chưa triển khai” bên dưới là tài liệu lịch sử; chưa xác minh cấu hình HP trực tiếp trong tác vụ Premium. Với app đang public, dùng runbook cập nhật, không chạy lại bootstrap/tạo owner hoặc thay tunnel.
+
 Tiện ích mới: **Việc cần làm hôm nay**, **Ngày lễ & kỷ niệm** và **Chỉ số UV** trong Tùy chọn bản tin. Có ô bật/tắt riêng, hiển thị trong bản tin và thông báo buổi sáng. Xem [cách dùng và giới hạn](docs/daily-utilities.md).
 
 Nội dung mới: chỉ giữ **vàng miếng SJC**, bổ sung **sức khỏe, du lịch, giải trí, thế giới, pháp luật, ô tô/xe máy và bất động sản** trong Tùy chọn bản tin. Người dùng tự chọn và lưu; không tự bật các mục mới. Xem [nguồn nội dung và phạm vi cập nhật](docs/content-topics.md).

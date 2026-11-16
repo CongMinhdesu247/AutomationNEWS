@@ -17,6 +17,7 @@ import { fetchWeather } from "../connectors/weather.js";
 import { fetchUv, collectHolidays, collectTasks } from "../connectors/daily-utilities.js";
 import { createGithubConnector, emptyGithub } from "../connectors/github.js";
 import { safeHttp } from "../connectors/http.js";
+import { executeCustom } from "../premium/runtime.js";
 import {
   WorkflowQueue,
   LeaseLost,
@@ -86,7 +87,7 @@ export class DigestNodeExecutor {
   private http: typeof safeHttp;
   private now: () => Date;
   constructor(
-    queue: WorkflowQueue,
+    private queue: WorkflowQueue,
     private options: ServiceOptions = {},
   ) {
     this.store = new DigestStore(queue.pool);
@@ -101,6 +102,15 @@ export class DigestNodeExecutor {
     });
   }
   async execute(job: ClaimedJob, signal: AbortSignal): Promise<NodeResult> {
+    if (job.workflow.version === "premium.v1" && job.type === "premium_task")
+      return executeCustom(
+        this.queue.pool,
+        job,
+        signal,
+        this.options.premiumFeedHttp ?? this.options.http,
+        this.options.aiAdapter,
+        this.options.searchAdapter,
+      );
     if (job.workflow.version !== "digest.v1")
       throw new Error("Unsupported workflow version.");
     if (job.type === "start")

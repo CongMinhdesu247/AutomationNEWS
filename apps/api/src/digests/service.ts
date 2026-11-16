@@ -21,7 +21,10 @@ export class RequestError extends Error {
   }
 }
 export type ServiceOptions = {
+  aiAdapter?: import("../premium/ai.js").AiAdapter;
+  searchAdapter?: import("../premium/search.js").SearchAdapter;
   http?: HttpClient;
+  premiumFeedHttp?: HttpClient;
   now?: () => Date;
   totalTimeoutMs?: number;
   requestTimeoutMs?: number;
@@ -30,6 +33,7 @@ export type ServiceOptions = {
   ntfyToken?: string;
   publicBaseUrl?: string;
   ntfyAllowedOrigins?: string[];
+  ntfyDestinationOrigins?: string[];
 };
 export function aggregateStatus(sources: DigestSources) {
   const active = Object.values(sources).filter(
@@ -153,6 +157,7 @@ export class DigestService {
           token: this.options.ntfyToken,
           publicBaseUrl: this.options.publicBaseUrl,
           allowedOrigins: this.options.ntfyAllowedOrigins,
+          destinationOrigins: this.options.ntfyDestinationOrigins,
           signal: AbortSignal.timeout(this.options.requestTimeoutMs ?? 6000),
         },
       );

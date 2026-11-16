@@ -1,5 +1,7 @@
 # Đưa AutomationNEWS lên HP EliteDesk / Ubuntu Server
 
+> Cập nhật 15/11/2026: chủ dự án xác nhận ứng dụng đã public. Các bước Pending/Quick Tunnel/khởi tạo dưới đây là tài liệu lịch sử; không áp dụng lại mù cho server đang chạy. Phát hành Premium dùng [runbook cập nhật có backup và rollback](premium-release.md), giữ project/network/volume/domain/tunnel thực tế. Cấu hình và tài nguyên HP chưa được đo lại trong tác vụ local này.
+
 Bản này dùng tài khoản PostgreSQL, phiên đăng nhập bằng cookie HttpOnly, cấu hình/lịch/lịch sử riêng. Web, API, worker và scheduler tiếp tục dùng Docker Compose. Không cần máy Windows bật sau khi triển khai.
 
 Máy đích: Ubuntu Server 24.04 x86_64, Docker Engine + Compose. Dùng thư mục `/home/congminh/apps/AutomationNEWS`, Compose project **automationnews**, web **127.0.0.1:8091**, volume **automationnews_hub_data**. BankingPrj và port 8090 giữ nguyên. Không chạy lệnh trong thư mục BankingPrj và không thay service cloudflared đang phục vụ dự án đó.

@@ -1,3 +1,4 @@
+import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import type { SourceError } from "@hub/contracts";
 import { Icon } from "./Icons";
@@ -35,7 +36,7 @@ const deliveryLabels: Record<string, string> = {
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    signal: init.signal ?? AbortSignal.timeout(10000),
+    signal: init.signal ?? requestSignal(10000),
   });
   const body = await response.json();
   if (!response.ok)
