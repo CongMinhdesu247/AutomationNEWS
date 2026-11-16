@@ -103,3 +103,14 @@ Chạy lại: 148/148 unit, 73/73 integration, typecheck/build đạt. Backup/re
 - Cấu hình Compose của HP đã kiểm tra cú pháp. .env.premium riêng được tạo từ khóa đã cung cấp trên PC, không nằm trong source archive hoặc image frontend.
 - HP chưa được cập nhật. SSH bằng homeserver_new đến địa chỉ Tailscale cũ báo Permission denied (publickey), nên tình trạng HP mới nhất cần kiểm tra tại máy.
 - Luồng AI và search production dùng hàng đợi thật. Test tích hợp dùng adapter giả. Cần đối chiếu model, giá, hạn mức và thử một truy vấn thật trên HP sau cài đặt.
+
+## Cập nhật HP r3 — 17/11/2026 (giờ Việt Nam)
+
+- Đã triển khai 20261116-r3 trên homeserver, project automationnews. Bốn service api/worker/scheduler/web dùng image r3.
+- Backup ngay trước rollout tại /home/congminh/apps/AutomationNEWS/backups/pre_r3_20261116T171320Z.
+- Lần chạy kiểm tra phục hồi đầu lỗi do Node tìm tsx từ /app. Đã tự khởi động lại r2, sửa thư mục công cụ thành /app/apps/api rồi chạy lại từ backup mới.
+- Phục hồi thử 34/34 bảng fingerprint khớp. Migration đã chạy thành công trên database phục hồi trước khi áp dụng production.
+- Production đã có migrations 001–016. Đối chiếu 5 tài khoản, tùy chọn bản tin, 4 bản tin cũ, quyền Premium và cấu hình theo dõi đều khớp backup.
+- API/web healthy, worker/scheduler running. /api/ready trả ready cả localhost và URL HTTPS đang dùng. Browser đăng nhập hiển thị đúng, 401 /api/account cho khách chưa đăng nhập là trạng thái dự kiến.
+- Khóa provider đã có trong worker và NEWS_FREE_ONLY=false. AI/search vẫn disabled theo cấu hình quản trị hiện hữu, model trống và ngân sách 0. Chưa thực hiện lượt gọi provider thật qua queue production.
+- URL hiện tại là https://vsnet-number-president-promoting.trycloudflare.com. BankingPrj vẫn healthy sau cập nhật.
