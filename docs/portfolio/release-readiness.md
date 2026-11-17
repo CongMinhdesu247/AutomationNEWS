@@ -115,4 +115,4 @@ Không còn lỗi cài mới hoặc kiểm thử cốt lõi đã tái hiện mà
 - [ ] Dùng đúng ba CV bullet trong [portfolio.md](portfolio.md); benchmark chỉ là fixture 12 mẫu/concurrency, không bổ sung số liệu chưa đo.
 - [ ] Sau khi chốt nội dung, tự quyết định commit/tag v1.0.0/release/push hoặc public repository; chạy lại audit cho các commit mới trước khi public.
 
-Artifact cục bộ: [README](../README.md), [CHANGELOG](../CHANGELOG.md), [kiến trúc](architecture.md), [vận hành](operations.md), [demo/video](demo.md), [CV và GitHub description](portfolio.md), [checklist ba sáng](morning-checklist.md). Không có feature lớn mới, dịch vụ trả phí hoặc thao tác public nào được thực hiện.
+Artifact cục bộ: [README](../archive/project-notes.md), [CHANGELOG](../../CHANGELOG.md), [kiến trúc](../architecture/architecture.md), [vận hành](../guides/operations.md), [demo/video](demo.md), [CV và GitHub description](portfolio.md), [checklist ba sáng](morning-checklist.md). Không có feature lớn mới, dịch vụ trả phí hoặc thao tác public nào được thực hiện.

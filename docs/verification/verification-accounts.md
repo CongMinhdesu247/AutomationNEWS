@@ -32,4 +32,4 @@ Các kiểm thử dữ liệu dùng database/container riêng trên máy phát t
 - Tên miền `020407.xyz` đang Pending theo thông tin chủ dự án. `news.020407.xyz` là hostname dự kiến, chưa phải URL hoạt động.
 - Quick Tunnel không được bật trong nghiệm thu để tránh public dữ liệu fixture; khi dùng tạm, tiến độ cần tải lại vì Quick Tunnel không hỗ trợ SSE.
 
-Triển khai và nghiệm thu tiếp theo theo [home-server.md](home-server.md), bằng PC có kết nối Tailscale và khóa SSH được server cho phép. Gói source chứa migration mới và hướng dẫn backup; không có dữ liệu/secret cá nhân.
+Triển khai và nghiệm thu tiếp theo theo [home-server.md](../guides/home-server.md), bằng PC có kết nối Tailscale và khóa SSH được server cho phép. Gói source chứa migration mới và hướng dẫn backup; không có dữ liệu/secret cá nhân.

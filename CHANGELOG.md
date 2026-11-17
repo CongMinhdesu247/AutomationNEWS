@@ -52,6 +52,6 @@ Chưa công khai repository, tạo Git tag hoặc GitHub Release. Đây là nộ
 
 - Typecheck/build, frozen lockfile, 61 unit test và 40 integration test PostgreSQL thật đã qua trong lần kiểm tra v1.0.0; browser fixture/SSE qua Nginx cũng qua.
 - Benchmark cũ được giữ nguyên và chỉ diễn giải như kết quả fixture; không có tuyên bố hiệu năng production mới.
-- Nguồn live, push điện thoại, lịch qua ba buổi sáng và baseline GitHub live chưa xác minh. Xem [release-readiness](docs/release-readiness.md).
+- Nguồn live, push điện thoại, lịch qua ba buổi sáng và baseline GitHub live chưa xác minh. Xem [release-readiness](docs/portfolio/release-readiness.md).
 - Chỉ localhost, single-user; chưa auth/TLS/public hosting, Cron tùy ý, webhook/editor DAG, HA hoặc quota GitHub dùng chung nhiều worker.
 - At-least-once execution; không hứa exactly-once HTTP/push. Retention/backup chưa tự chạy. Video chưa quay và giấy phép phân phối chưa được chủ repository chọn.

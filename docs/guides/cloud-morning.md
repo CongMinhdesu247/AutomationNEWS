@@ -1,6 +1,6 @@
 # Nhận bản tin khi PC tắt
 
-GitHub-hosted runner chạy bản tin theo lịch của từng hồ sơ; không gọi dashboard localhost, không cần PostgreSQL hoặc Docker trên PC. iPhone nhận qua ntfy như trước. Quản lý hồ sơ và đồng bộ cấu hình tại mục **Gia đình**; xem [hướng dẫn gia đình](family-profiles.md). Lịch sử cloud chưa được nhập về dashboard local.
+GitHub-hosted runner chạy bản tin theo lịch của từng hồ sơ; không gọi dashboard localhost, không cần PostgreSQL hoặc Docker trên PC. iPhone nhận qua ntfy như trước. Quản lý hồ sơ và đồng bộ cấu hình tại mục **Gia đình**; xem [hướng dẫn gia đình](../features/family-profiles.md). Lịch sử cloud chưa được nhập về dashboard local.
 
 ## Kích hoạt chế độ cũ (một người)
 

@@ -1,6 +1,6 @@
 # Benchmark bước 6 — fixture, không phải hiệu năng production
 
-Đo ngày 12/11/2026, Asia/Saigon. Dữ liệu thô: [workflow samples](benchmarks/step6.json), [UI event samples](benchmarks/ui-latency-step6.json).
+Đo ngày 12/11/2026, Asia/Saigon. Dữ liệu thô: [workflow samples](../benchmarks/step6.json), [UI event samples](../benchmarks/ui-latency-step6.json).
 
 ## Phương pháp
 

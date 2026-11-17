@@ -24,4 +24,4 @@
 
 ## Giới hạn
 
-Đã thử workflow_dispatch trên runner thật; chưa chờ lượt schedule tự nhiên sáng 13/11/2026. GitHub có thể trễ/bỏ lịch khi tải cao và tắt schedule public repo sau 60 ngày không hoạt động. Không bảo đảm đúng giây 07:00 hoặc exactly-once push. Sửa settings trong dashboard local không tự cập nhật secret cloud; xem [hướng dẫn](cloud-morning.md).
+Đã thử workflow_dispatch trên runner thật; chưa chờ lượt schedule tự nhiên sáng 13/11/2026. GitHub có thể trễ/bỏ lịch khi tải cao và tắt schedule public repo sau 60 ngày không hoạt động. Không bảo đảm đúng giây 07:00 hoặc exactly-once push. Sửa settings trong dashboard local không tự cập nhật secret cloud; xem [hướng dẫn](../guides/cloud-morning.md).

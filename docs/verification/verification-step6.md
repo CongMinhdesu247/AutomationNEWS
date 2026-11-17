@@ -56,7 +56,7 @@ Browser recovery bỏ heartbeat của claim để tạo lease hết hạn, khôn
 
 ## Benchmark và restore
 
-[Benchmark đầy đủ](benchmark-step6.md) có dữ liệu thô, máy, phiên bản và cách đo: mỗi concurrency 12 mẫu + 2 warm-up loại bỏ, HTTP fixture 200 ms/request, cùng DAG; concurrency 1 median/p95 910,89/924,27 ms, concurrency 3 486,01/500,40 ms. Throughput tuần tự tương ứng 1,095 và 2,055 run/s. Không phải production hoặc stress test nhiều run.
+[Benchmark đầy đủ](../portfolio/benchmark-step6.md) có dữ liệu thô, máy, phiên bản và cách đo: mỗi concurrency 12 mẫu + 2 warm-up loại bỏ, HTTP fixture 200 ms/request, cùng DAG; concurrency 1 median/p95 910,89/924,27 ms, concurrency 3 486,01/500,40 ms. Throughput tuần tự tương ứng 1,095 và 2,055 run/s. Không phải production hoặc stress test nhiều run.
 
 UI: 53 event từ 3 run success riêng, 600 ms/request, SSE poll 500 ms qua proxy; median 334 ms, p95 499 ms từ timestamp trước commit tới DOM. Bản JSON đo đầu được lưu trong docs/benchmarks; chạy lại ghi output riêng, không thay số liệu đã công bố.
 
@@ -73,7 +73,7 @@ docker compose -f tests/portfolio/compose.yaml up -d --build --wait
 docker compose -f tests/portfolio/compose.yaml exec -T api sh -c 'TEST_DATABASE_URL="$DATABASE_URL" pnpm test:integration'
 ```
 
-Browser/proxy và kịch bản video: [demo.md](demo.md). Benchmark: [benchmark-step6.md](benchmark-step6.md). Backup/restore, retention dry-run/apply: [operations.md](operations.md). Dừng demo bằng `docker compose -f tests/portfolio/compose.yaml stop`; giữ volume và các database restore để người dùng xem lại.
+Browser/proxy và kịch bản video: [demo.md](../portfolio/demo.md). Benchmark: [benchmark-step6.md](../portfolio/benchmark-step6.md). Backup/restore, retention dry-run/apply: [operations.md](../guides/operations.md). Dừng demo bằng `docker compose -f tests/portfolio/compose.yaml stop`; giữ volume và các database restore để người dùng xem lại.
 
 ## Chưa kiểm chứng
 

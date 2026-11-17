@@ -77,7 +77,7 @@ Docker Desktop linux/x86_64 đã hoạt động trở lại. Bốn image api/wor
 - Chưa đo CPU/RAM/HDD/IO/load HP, hiện trạng PostgreSQL/Compose thực, tài khoản billing/provider, quyền lưu kết quả search, email verification/reset email, ntfy auth/ACL và điện thoại nhận thật.
 - Hạn chót deterministic chỉ nhận nhãn/ngày ISO rõ ràng, region/type dựa từ khóa; chưa có suy luận địa lý/đồng nghĩa đầy đủ. Custom hiện hỗ trợ RSS/Atom đã duyệt; không hỗ trợ tự crawl URL bất kỳ.
 
-AI/search mặc định tắt, ngân sách 0, FREE_ONLY bật. Các kiểm chứng trên không cấp quyền triển khai production. Dùng [runbook phát hành](premium-release.md) sau khi đã chốt gói và được chủ dự án cho phép.
+AI/search mặc định tắt, ngân sách 0, FREE_ONLY bật. Các kiểm chứng trên không cấp quyền triển khai production. Dùng [runbook phát hành](../guides/premium-release.md) sau khi đã chốt gói và được chủ dự án cho phép.
 
 
 ## Kiểm chứng bổ sung 16/11/2026 — UI và đăng ký beta
