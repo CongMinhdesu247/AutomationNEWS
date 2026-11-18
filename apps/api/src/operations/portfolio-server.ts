@@ -44,7 +44,8 @@ function resume() {
     { http },
   ).run(workerAbort.signal);
 }
-const app = buildApp(pool, { http });
+import { githubFamilyAdmin } from "../family/cloud-admin.js";
+const app = buildApp(pool, { http }, {}, githubFamilyAdmin(undefined, undefined));
 const scheduler = new DigestScheduler(queue, { http });
 app.get("/api/demo/status", async () => ({
   label: "DEMO FIXTURE — dữ liệu mô phỏng, không gọi dịch vụ thật",
@@ -113,7 +114,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const)
         process.exit(0);
       })(),
   );
-await app.listen({ host: "0.0.0.0", port: 3001 });
+await app.listen({ host: process.env.HOST ?? "127.0.0.1", port: 3001 });
 console.log(
   "DEMO FIXTURE ONLY: all HTTP is synthetic; no external notifications.",
 );

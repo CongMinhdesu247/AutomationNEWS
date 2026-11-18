@@ -1,4 +1,4 @@
-import { appendEvent, eventDto } from "../telemetry/store.js";
+import { appendEvent, eventDto, telemetryError } from "../telemetry/store.js";
 import { cursor } from "@hub/contracts";
 import type { Pool, PoolClient } from "pg";
 import {
@@ -28,6 +28,7 @@ import { attachCustomDigest } from "../premium/store.js";
 export type ClaimedJob = {
   id: string;
   runId: string;
+  userId: string | null;
   nodeId: string;
   type: string;
   token: string;
@@ -44,6 +45,7 @@ export type NodeResult = {
 };
 type RunRow = {
   id: string;
+  user_id?: string | null;
   workflow: Workflow;
   settings_snapshot: Settings;
   status: RunSummary["status"];
@@ -250,19 +252,25 @@ export class WorkflowQueue {
       states[ready.id] = { status: "queued", output: null, error: null };
     }
     if (Object.values(states).every((state) => isTerminal(state.status))) {
-      const success = (run.workflow.version === "premium.v1" ? states.premium_task : states.persist_digest)?.status === "succeeded";
+      const terminalNode =
+        run.workflow.version === "premium.v1"
+          ? states.premium_task
+          : states.persist_digest;
+      const success = terminalNode?.status === "succeeded";
+      const terminalError =
+        run.workflow.version === "premium.v1" && terminalNode?.error
+          ? terminalNode.error
+          : {
+              code: "WORKFLOW_FAILED",
+              message:
+                "Workflow không thể lưu bản tin. Xem trạng thái từng node.",
+            };
       await client.query(
         "UPDATE workflow_runs SET status=$2,completed_at=clock_timestamp(),error=$3::jsonb WHERE id=$1",
         [
           run.id,
           success ? "completed" : "failed",
-          success
-            ? null
-            : JSON.stringify({
-                code: "WORKFLOW_FAILED",
-                message:
-                  "Workflow không thể lưu bản tin. Xem trạng thái từng node.",
-              }),
+          success ? null : JSON.stringify(terminalError),
         ],
       );
       await appendEvent(
@@ -314,6 +322,7 @@ export class WorkflowQueue {
       return {
         id: job.id,
         runId: run.id,
+        userId: run.user_id ?? null,
         nodeId: job.node_id,
         type: definition.type,
         token,
@@ -346,6 +355,10 @@ export class WorkflowQueue {
         [job.id, job.token, job.workerId],
       );
       if (!owned.rowCount) return false;
+      const maxRetryWaitMs = Math.max(
+        5 * 60000,
+        (this.options.retryMaxMs ?? 60000) * 5,
+      );
       if (
         result.status === "failed" &&
         isRetryable(result.error) &&
@@ -355,23 +368,25 @@ export class WorkflowQueue {
           baseMs: this.options.retryBaseMs ?? 1000,
           maxMs: this.options.retryMaxMs ?? 60000,
         });
-        await client.query(
-          "UPDATE execution_attempts SET status='failed',completed_at=clock_timestamp(),error=$2::jsonb WHERE claim_token=$1",
-          [job.token, JSON.stringify(result.error)],
-        );
-        await client.query(
-          "UPDATE node_runs SET status='queued',error=$3::jsonb,output=NULL,completed_at=NULL WHERE run_id=$1 AND node_id=$2",
-          [run.id, job.nodeId, JSON.stringify(result.error)],
-        );
-        const retried = await client.query(
-          "UPDATE workflow_jobs SET status='queued',retry_count=retry_count+1,available_at=clock_timestamp()+$4*interval '1 millisecond'," +
-            released +
-            " WHERE id=$1 AND claim_token=$2 AND worker_id=$3 AND lease_until>clock_timestamp() RETURNING id",
-          [job.id, job.token, job.workerId, delay],
-        );
-        if (!retried.rowCount) throw new LeaseLost();
-        await appendEvent(client, run.id, "node.retry_scheduled", job.nodeId);
-        return true;
+        if (delay <= maxRetryWaitMs) {
+          await client.query(
+            "UPDATE execution_attempts SET status='failed',completed_at=clock_timestamp(),error=$2::jsonb WHERE claim_token=$1",
+            [job.token, JSON.stringify(result.error)],
+          );
+          await client.query(
+            "UPDATE node_runs SET status='queued',error=$3::jsonb,output=NULL,completed_at=NULL WHERE run_id=$1 AND node_id=$2",
+            [run.id, job.nodeId, JSON.stringify(result.error)],
+          );
+          const retried = await client.query(
+            "UPDATE workflow_jobs SET status='queued',retry_count=retry_count+1,available_at=clock_timestamp()+$4*interval '1 millisecond'," +
+              released +
+              " WHERE id=$1 AND claim_token=$2 AND worker_id=$3 AND lease_until>clock_timestamp() RETURNING id",
+            [job.id, job.token, job.workerId, delay],
+          );
+          if (!retried.rowCount) throw new LeaseLost();
+          await appendEvent(client, run.id, "node.retry_scheduled", job.nodeId);
+          return true;
+        }
       }
       let output = result.output;
       if (job.type === "persist_digest" && result.status === "succeeded") {
@@ -549,8 +564,15 @@ export class WorkflowQueue {
   async replay(id: string) {
     return this.transaction(async (client) => {
       const row = (
-        await client.query(
-          "SELECT d.*,r.settings_snapshot,r.user_id FROM dead_letters d JOIN workflow_jobs j ON j.id=d.job_id JOIN workflow_runs r ON r.id=j.run_id WHERE d.id=$1 FOR UPDATE OF d",
+        await client.query<{
+          replay_run_id: string | null;
+          settings_snapshot: unknown;
+          user_id: string | null;
+          user_disabled: boolean | null;
+          workflow_version: string;
+          run_id: string;
+        }>(
+          "SELECT d.replay_run_id,r.settings_snapshot,r.user_id,u.disabled AS user_disabled,r.workflow->>'version' AS workflow_version,r.id AS run_id FROM dead_letters d JOIN workflow_jobs j ON j.id=d.job_id JOIN workflow_runs r ON r.id=j.run_id LEFT JOIN hub_users u ON u.id=r.user_id WHERE d.id=$1 FOR UPDATE OF d",
           [id],
         )
       ).rows[0];
@@ -560,16 +582,57 @@ export class WorkflowQueue {
           "DEAD_LETTER_NOT_FOUND",
           "Không tìm thấy tác vụ lỗi.",
         );
-      if (row.replay_run_id) return { runId: row.replay_run_id as string };
-      // Replay creates a new manual run; never edits already consumed outputs or sends automatically.
-      const runId = await this.enqueue(
-        client,
-        crypto.randomUUID(),
-        {},
-        undefined,
-        settingsSchema.parse(row.settings_snapshot),
-        row.user_id ?? undefined,
-      );
+      if (row.user_disabled)
+        throw new RequestError(
+          409,
+          "ACCOUNT_DISABLED",
+          "Tài khoản của tác vụ này đang bị khóa; không tự chạy lại.",
+        );
+      if (row.replay_run_id) return { runId: row.replay_run_id };
+      let runId: string;
+      if (row.workflow_version === "premium.v1" && row.user_id) {
+        const task = (
+          await client.query<{
+            kind: "watch" | "interpret" | "enrich" | "discover";
+            payload: unknown;
+            watch_id: string | null;
+          }>(
+            "SELECT kind,payload,watch_id FROM news_tasks WHERE run_id=$1",
+            [row.run_id],
+          )
+        ).rows[0];
+        if (!task)
+          throw new RequestError(
+            409,
+            "TASK_MISSING",
+            "Không tìm thấy cấu hình tác vụ Premium gốc.",
+          );
+        if (task.kind !== "watch") {
+          throw new RequestError(
+            409,
+            "AI_NOT_REPLAYED",
+            "Tác vụ trợ lý không tự chạy lại từ dead-letter để tránh phát sinh chi phí trùng lặp.",
+          );
+        }
+        runId = await this.enqueueTask(
+          client,
+          crypto.randomUUID(),
+          row.user_id,
+          task.kind,
+          task.payload,
+          task.watch_id ?? undefined,
+        );
+      } else {
+        // Replay creates a new manual run; never edits already consumed outputs or sends automatically.
+        runId = await this.enqueue(
+          client,
+          crypto.randomUUID(),
+          {},
+          undefined,
+          settingsSchema.parse(row.settings_snapshot),
+          row.user_id ?? undefined,
+        );
+      }
       await client.query(
         "UPDATE dead_letters SET replay_run_id=$2 WHERE id=$1",
         [id, runId],
@@ -577,11 +640,11 @@ export class WorkflowQueue {
       return { runId };
     });
   }
-  async get(id: string): Promise<WorkflowRun | undefined> {
+  async get(id: string, sanitize = false): Promise<WorkflowRun | undefined> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
-      const result = await this.readSnapshot(client, id);
+      const result = await this.readSnapshot(client, id, sanitize);
       await client.query("COMMIT");
       return result;
     } catch (error) {
@@ -594,6 +657,7 @@ export class WorkflowQueue {
   private async readSnapshot(
     client: PoolClient,
     id: string,
+    sanitize = false,
   ): Promise<WorkflowRun | undefined> {
     const result = await client.query(
       'SELECT event_sequence,id,status,workflow->>\'version\' AS "workflowVersion",digest_id AS "digestId",created_at AS "createdAt",started_at AS "startedAt",completed_at AS "completedAt",error FROM workflow_runs WHERE id=$1',
@@ -614,6 +678,7 @@ export class WorkflowQueue {
       value ? new Date(value as string).toISOString() : null;
     return {
       ...summary,
+      error: sanitize ? telemetryError(summary.error) : summary.error,
       eventCursor: cursor(summary.id, String(event_sequence)),
       recentEvents: history.rows.map(eventDto),
       eventsTruncated: BigInt(event_sequence) > BigInt(history.rows.length),
@@ -622,9 +687,11 @@ export class WorkflowQueue {
       completedAt: iso(row.completedAt),
       nodes: nodes.rows.map((node) => ({
         ...node,
+        error: sanitize ? telemetryError(node.error) : node.error,
         startedAt: iso(node.startedAt),
         completedAt: iso(node.completedAt),
-        leaseUntil: iso(node.leaseUntil),
+        workerId: sanitize ? null : node.workerId,
+        leaseUntil: sanitize ? null : iso(node.leaseUntil),
         recoveries: node.recoveries ?? 0,
         attempts: node.attempts ?? 0,
         retryCount: node.retryCount ?? 0,
@@ -632,7 +699,7 @@ export class WorkflowQueue {
       })),
     };
   }
-  async list(page: number, pageSize: number, userId?: string) {
+  async list(page: number, pageSize: number, userId?: string, sanitize = true) {
     const result = await this.pool.query(
       'SELECT id,status,workflow->>\'version\' AS "workflowVersion",digest_id AS "digestId",created_at AS "createdAt",started_at AS "startedAt",completed_at AS "completedAt",error FROM workflow_runs WHERE ($3::uuid IS NULL OR user_id=$3) ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2',
       [pageSize + 1, (page - 1) * pageSize, userId ?? null],
@@ -640,6 +707,7 @@ export class WorkflowQueue {
     return {
       items: result.rows.slice(0, pageSize).map((row) => ({
         ...row,
+        error: sanitize ? telemetryError(row.error) : row.error,
         createdAt: row.createdAt.toISOString(),
         startedAt: row.startedAt?.toISOString() ?? null,
         completedAt: row.completedAt?.toISOString() ?? null,

@@ -88,10 +88,16 @@ try {
       );
     }
   }
-} catch {
-  // Never print exceptions: upstream config/network errors could contain secrets.
+} catch (error) {
+  // Log only sanitized error category/code, never raw tokens or secrets.
+  const code =
+    error instanceof Error && "code" in error && typeof error.code === "string"
+      ? error.code
+      : error instanceof Error
+        ? error.name
+        : "UNKNOWN";
   console.error(
-    "Cloud digest failed. Check configuration, API availability and cloud-state delivery status. No automatic resend after reservation.",
+    `Cloud digest failed (${code}). Check configuration, API availability and cloud-state delivery status. No automatic resend after reservation.`,
   );
   process.exitCode = 1;
 }

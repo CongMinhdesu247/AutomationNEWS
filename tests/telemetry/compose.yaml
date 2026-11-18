@@ -24,15 +24,13 @@ services:
       DATABASE_URL: postgresql://step5:fixture_only@db:5432/step5
     command:
       [
-        "pnpm",
-        "--filter",
-        "@hub/api",
-        "exec",
+        "node",
+        "--import",
         "tsx",
-        "src/telemetry/fixture-server.ts",
+        "/app/tests/telemetry/server.ts",
       ]
     volumes:
-      - ./server.ts:/app/apps/api/src/telemetry/fixture-server.ts:ro
+      - ./server.ts:/app/tests/telemetry/server.ts:ro
     ports:
       - "127.0.0.1:3002:3001"
     depends_on:

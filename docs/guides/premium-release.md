@@ -2,15 +2,15 @@
 
 > Bản `20261116-r3` gồm migrations 001–016, danh sách nguồn chọn sẵn, đề nghị RSS của thành viên để admin duyệt, lời chào theo gói và đăng ký Premium bằng QR 20.000 ₫. Dùng trọn bộ source, image và `SHA256SUMS` trong cùng thư mục release.
 
-Runbook cập nhật ngày 16/11/2026. **Chưa áp dụng bản r3 trên HP. SSH từ PC hiện báo Permission denied (publickey), cần kiểm tra trực tiếp trên HP.** Giữ BankingPrj/8090, domain, tunnel, cấu hình mạng và volume hiện tại.
+Runbook phát hành và cập nhật. Giữ nguyên các dịch vụ chạy song song, tên miền, tunnel, cấu hình mạng và volume hiện tại.
 
-## Kiểm tra HP trước khi cài
+## Kiểm tra máy chủ trước khi cài
 
-Chạy scripts/check-home-server.sh bằng Bash trên HP để đối chiếu thư mục, kiến trúc x86_64, project automationnews, volume automationnews_hub_data, cổng 8091 và APP_ORIGIN thực tế. Script chỉ đọc trạng thái và in việc đã có khóa hay chưa. Địa chỉ Tailscale theo tài liệu cũ là 100.95.33.63. Khóa homeserver_new trên PC hiện chưa được HP chấp nhận. Cần thiết lập lại quyền SSH nếu muốn chuyển gói trực tiếp từ PC.
+Chạy `scripts/check-home-server.sh` bằng Bash trên máy chủ để đối chiếu thư mục, kiến trúc x86_64, project `automationnews`, volume `automationnews_hub_data`, cổng 8091 và `APP_ORIGIN` thực tế. Script chỉ đọc trạng thái và in việc đã cấu hình khóa API hay chưa.
 
-## 1. PC Windows — review, kiểm thử, đóng gói
+## 1. Máy phát triển — review, kiểm thử, đóng gói
 
-Thư mục PowerShell: `C:\Users\ADMIN\AutomationNEWS`.
+Tại thư mục gốc của repository:
 
 ```powershell
 git status --short
@@ -51,25 +51,25 @@ Có thể chuyển các tệp đã đóng gói nếu dùng nguyên bản r3. Th�
 ```powershell
 $release = '20261116-r3'
 $releaseDir = "output/$release"
-$hp = 'congminh@100.95.33.63'
-$key = "$env:USERPROFILE\.ssh\homeserver_new"
+$hp = '<ssh-user>@<server-tailscale-ip>'
+$key = "$env:USERPROFILE\.ssh\id_ed25519"
 ssh -i $key $hp "mkdir -p ~/$release"
-if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the HP release directory' }
-scp -i $key "$releaseDir/automationnews-home.tar.gz" "$releaseDir/automationnews-premium-images.tar" "$releaseDir/SHA256SUMS" "$releaseDir/.env.premium" "${hp}:/home/congminh/$release/"
+if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the release directory' }
+scp -i $key "$releaseDir/automationnews-home.tar.gz" "$releaseDir/automationnews-premium-images.tar" "$releaseDir/SHA256SUMS" "$releaseDir/.env.premium" "${hp}:~/$release/"
 if ($LASTEXITCODE -ne 0) { throw 'Could not copy the release archive' }
 ssh -i $key $hp "chmod 700 ~/$release; chmod 600 ~/$release/.env.premium"
 ```
 
-Đường dẫn/host này lấy từ tài liệu hiện có, cần đối chiếu hạ tầng thực tế trước dùng; không mặc định thông tin cũ còn đúng.
+Đối chiếu hạ tầng thực tế trước khi chạy lệnh chuyển gói.
 
-## 2. HP Ubuntu — chỉ đọc trước khi cập nhật
+## 2. Máy chủ Ubuntu — chỉ đọc trước khi cập nhật
 
-Trong `/home/congminh/apps/AutomationNEWS`, kiểm tra project thật trước đặt biến `dc`. Nếu `docker compose ls` hoặc mount không khớp, dừng bước cập nhật và đối chiếu; không sửa tên project để ép khớp.
+Trong `~/apps/AutomationNEWS`, kiểm tra project thật trước khi đặt biến `dc`. Nếu `docker compose ls` hoặc mount không khớp, dừng bước cập nhật và đối chiếu; không sửa tên project để ép khớp.
 
 ```bash
 release_dir="$HOME/20261116-r3"
 (cd "$release_dir" && sha256sum -c SHA256SUMS) || exit 1
-cd /home/congminh/apps/AutomationNEWS || exit 1
+cd "$HOME/apps/AutomationNEWS" || exit 1
 docker compose ls
 dc=(docker compose -p automationnews --env-file .env.home -f infra/compose.yaml -f infra/compose.home.yaml)
 "${dc[@]}" config --quiet
@@ -160,7 +160,7 @@ Mong đợi các service healthy/running, không lỗi migration/queue. Không r
 - Premium beta không AI: đề nghị RSS công khai có quyền sử dụng, admin kiểm tra feed/điều khoản trước duyệt. Tạo nhu cầu, xem preview rồi xác nhận. Kiểm tra kết quả và section bản tin.
 - Tài khoản B không đọc/sửa nhu cầu/kết quả/job của A. Thử revoke/expiry, giữ kết quả và ngừng chạy; gia hạn và lựa chọn kích hoạt lại.
 - Chỉ gửi thử ntfy khi chủ tài khoản đã đồng ý nhận một thông báo. Kiểm tra topic/server/allowlist hiện tại trước gửi; không gửi hàng loạt. Không coi healthcheck là bằng chứng điện thoại nhận được.
-- Đo RAM/CPU/IO/queue và lịch gửi ít nhất một buổi sáng; so sánh BankingPrj trước/sau mà không sửa dự án đó. Không khẳng định capacity/uptime từ kết quả PC.
+- Đo RAM/CPU/IO/queue và lịch gửi ít nhất một buổi sáng; đối chiếu tài nguyên các dịch vụ chạy song song mà không can thiệp dự án đó. Không khẳng định capacity/uptime từ kết quả PC.
 
 ## 7. Rollback code sau migrations 011–016
 

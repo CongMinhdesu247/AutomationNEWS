@@ -4,10 +4,14 @@ import { safeHttp, ensureOk, cleanError, ConnectorError, type HttpClient } from 
 
 // Hanoi city-centre default; family profiles override the location and coordinates.
 export const airQualityUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=21.0285&longitude=105.8542&current=us_aqi,pm2_5&domains=cams_global&timezone=Asia%2FHo_Chi_Minh&timeformat=unixtime&forecast_days=1";
-export function airQualityRequestUrl(config: Settings["airQuality"]) {
+export function airQualityRequestUrl(
+  config: Settings["airQuality"],
+  timezone?: string,
+) {
   const url = new URL(airQualityUrl);
   if (config?.latitude !== undefined) url.searchParams.set("latitude", String(config.latitude));
   if (config?.longitude !== undefined) url.searchParams.set("longitude", String(config.longitude));
+  if (timezone && timezone !== "Asia/Ho_Chi_Minh") url.searchParams.set("timezone", timezone);
   return url.toString();
 }
 const schema = z.object({
@@ -28,12 +32,12 @@ export function usAqiCategory(value: number): string {
   return "Nguy hại";
 }
 export async function fetchAirQuality(config: Settings["airQuality"], {
-  http = safeHttp, now = () => new Date(), signal,
-}: { http?: HttpClient; now?: () => Date; signal: AbortSignal }): Promise<SourceResult<AirQualityData | null>> {
+  http = safeHttp, now = () => new Date(), signal, timezone,
+}: { http?: HttpClient; now?: () => Date; signal: AbortSignal; timezone?: string }): Promise<SourceResult<AirQualityData | null>> {
   const fetchedAt = now().toISOString();
   if (!config?.enabled) return { status: "disabled", fetchedAt, data: null, errors: [] };
   try {
-    const response = await http(airQualityRequestUrl(config), { signal, maxBytes: 100000 });
+    const response = await http(airQualityRequestUrl(config, timezone), { signal, maxBytes: 100000 });
     ensureOk(response);
     const current = schema.parse(JSON.parse(response.body)).current;
     const timestamp = current.time * 1000;

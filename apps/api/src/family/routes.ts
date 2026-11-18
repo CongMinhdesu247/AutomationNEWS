@@ -20,33 +20,47 @@ export function registerFamilyRoutes(
   app: FastifyInstance,
   pool: Pool,
   cloud: FamilyCloudAdmin,
+  configuredOrigin?: string,
 ) {
   let syncing = false;
   const adminRequest = async (request: FastifyRequest) => {
     const origin = request.headers.origin;
-    const allowed = [
-      process.env.APP_ORIGIN ?? process.env.HUB_ADMIN_ORIGIN ?? "http://127.0.0.1:8088",
-      "http://localhost:8088",
-    ];
+    const primaryOrigin =
+      configuredOrigin ??
+      process.env.APP_ORIGIN ??
+      process.env.HUB_ADMIN_ORIGIN ??
+      "http://127.0.0.1:8088";
+    const allowed = primaryOrigin.startsWith("https://")
+      ? [primaryOrigin]
+      : [primaryOrigin, "http://localhost:8088", "http://127.0.0.1:5173"];
     if (origin && !allowed.includes(origin))
       throw new RequestError(
         403,
         "ADMIN_ORIGIN",
-        "Chỉ quản lý hồ sơ từ dashboard trên máy.",
+        "Chỉ quản lý hồ sơ từ dashboard hợp lệ.",
       );
     if (!request.headers["content-type"]?.startsWith("application/json"))
       throw new RequestError(415, "JSON_REQUIRED", "Yêu cầu phải dùng JSON.");
   };
+
   async function read(): Promise<FamilyDocument> {
     let row = (
-      await pool.query(
+      await pool.query<{
+        config: unknown;
+        revision: number;
+        synced_revision: number | null;
+        synced_at: Date | null;
+      }>(
         "SELECT config,revision,synced_revision,synced_at FROM family_configuration WHERE id=1",
       )
     ).rows[0];
     if (!row) {
       const settings = settingsSchema.parse(
-        (await pool.query("SELECT config FROM settings WHERE id=1")).rows[0]
-          ?.config,
+        (
+          await pool.query<{ config: unknown }>(
+            "SELECT config FROM settings WHERE id=1",
+          )
+        ).rows[0]?.config,
       );
       const profile = familyProfileSchema.parse({
         id: "personal",
@@ -80,10 +94,15 @@ export function registerFamilyRoutes(
         [JSON.stringify({ version: 1, profiles: [profile] })],
       );
       row = (
-        await pool.query(
+        await pool.query<{
+          config: unknown;
+          revision: number;
+          synced_revision: number | null;
+          synced_at: Date | null;
+        }>(
           "SELECT config,revision,synced_revision,synced_at FROM family_configuration WHERE id=1",
         )
-      ).rows[0];
+      ).rows[0]!;
     }
     return {
       config: familyConfigSchema.parse(row.config),
@@ -93,6 +112,7 @@ export function registerFamilyRoutes(
       cloudConfigured: cloud.configured,
     };
   }
+
   async function sync(config: FamilyConfig, revision: number) {
     if (syncing)
       throw new RequestError(
@@ -111,6 +131,7 @@ export function registerFamilyRoutes(
       syncing = false;
     }
   }
+
   async function saveConfig(config: FamilyConfig, revision: number) {
     if (syncing)
       throw new RequestError(
@@ -118,29 +139,42 @@ export function registerFamilyRoutes(
         "SYNC_BUSY",
         "Đang đồng bộ; vui lòng thử lại.",
       );
-    const updated = await pool.query(
-      "UPDATE family_configuration SET config=$1::jsonb,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision",
-      [JSON.stringify(config), revision],
-    );
-    if (!updated.rowCount)
-      throw new RequestError(
-        409,
-        "REVISION_CONFLICT",
-        "Hồ sơ đã thay đổi. Tải lại trước khi lưu.",
+    const client = await pool.connect();
+    let newRevision: number;
+    try {
+      await client.query("BEGIN");
+      const updated = await client.query<{ revision: number }>(
+        "UPDATE family_configuration SET config=$1::jsonb,revision=revision+1,updated_at=now() WHERE id=1 AND revision=$2 RETURNING revision",
+        [JSON.stringify(config), revision],
       );
-    await pool.query(
-      "DELETE FROM member_access WHERE NOT (profile_id = ANY($1::text[]))",
-      [config.profiles.map((p) => p.id)],
-    );
+      if (!updated.rowCount)
+        throw new RequestError(
+          409,
+          "REVISION_CONFLICT",
+          "Hồ sơ đã thay đổi. Tải lại trước khi lưu.",
+        );
+      newRevision = updated.rows[0]!.revision;
+      await client.query(
+        "DELETE FROM member_access WHERE NOT (profile_id = ANY($1::text[]))",
+        [config.profiles.map((p) => p.id)],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
     let syncError: string | undefined;
     try {
-      await sync(config, updated.rows[0].revision);
+      await sync(config, newRevision!);
     } catch {
       syncError =
         "Đã lưu trên máy nhưng chưa đồng bộ cloud. Lịch cloud vẫn dùng cấu hình trước đó; bấm Đồng bộ lại.";
     }
     return { ...(await read()), ...(syncError ? { syncError } : {}) };
   }
+
   app.get("/api/family/status", async (): Promise<FamilyHealth> => {
     const document = await read();
     if (!cloud.state)
@@ -183,6 +217,7 @@ export function registerFamilyRoutes(
       }),
     };
   });
+
   app.post<{ Params: { id: string } }>(
     "/api/family/:id/access",
     { preHandler: adminRequest },
@@ -211,7 +246,6 @@ export function registerFamilyRoutes(
         ],
       );
       const base = process.env.MEMBER_PUBLIC_URL;
-      // In Docker the container IP is not usable by a phone; the dashboard asks for the PC's LAN address.
       return {
         path: "/#/member/" + token,
         expiresAt,
@@ -220,6 +254,7 @@ export function registerFamilyRoutes(
       };
     },
   );
+
   app.delete<{ Params: { id: string } }>(
     "/api/family/:id/access",
     { preHandler: adminRequest },
@@ -236,6 +271,7 @@ export function registerFamilyRoutes(
       return { revoked: true };
     },
   );
+
   async function member(request: FastifyRequest) {
     const token = request.headers.authorization?.match(
       /^Bearer ([A-Za-z0-9_-]{43})$/,
@@ -247,7 +283,7 @@ export function registerFamilyRoutes(
         "Liên kết không hợp lệ hoặc đã hết hạn.",
       );
     const access = (
-      await pool.query(
+      await pool.query<{ profile_id: string }>(
         "SELECT profile_id FROM member_access WHERE token_hash=$1 AND expires_at>now()",
         [createHash("sha256").update(token).digest("hex")],
       )
@@ -270,6 +306,7 @@ export function registerFamilyRoutes(
       );
     return { document, profile };
   }
+
   app.get("/api/member", async (request) => {
     const { document, profile } = await member(request);
     return {
@@ -285,6 +322,7 @@ export function registerFamilyRoutes(
       synced: document.revision === document.syncedRevision,
     };
   });
+
   app.put("/api/member", async (request) => {
     const { document, profile } = await member(request);
     const parsed = z
@@ -319,6 +357,7 @@ export function registerFamilyRoutes(
       ...(result.syncError ? { syncError: result.syncError } : {}),
     };
   });
+
   app.get("/api/family", read);
   app.put("/api/family", { preHandler: adminRequest }, async (request) => {
     const parsed = z
@@ -337,6 +376,7 @@ export function registerFamilyRoutes(
       );
     return saveConfig(parsed.data.config, parsed.data.revision);
   });
+
   app.post(
     "/api/family/sync",
     { preHandler: adminRequest },
@@ -361,6 +401,7 @@ export function registerFamilyRoutes(
       return read();
     },
   );
+
   app.post<{ Params: { id: string } }>(
     "/api/family/:id/test",
     { preHandler: adminRequest },

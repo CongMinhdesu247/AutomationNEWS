@@ -15,6 +15,7 @@ import {
   ConnectorError,
   type HttpClient,
 } from "./http.js";
+
 export function articleUrl(value: string): string {
   const url = checkUrl(value);
   for (const key of [...url.searchParams.keys()])
@@ -33,6 +34,7 @@ export function articleUrl(value: string): string {
       url.searchParams.delete(key);
   return normalizeUrl(url.toString());
 }
+
 export function plainText(value: string, max = 400): string {
   return convert(value, {
     wordwrap: false,
@@ -48,13 +50,24 @@ export function plainText(value: string, max = 400): string {
     .trim()
     .slice(0, max);
 }
+
 export async function fetchRss(
   config: Settings["rss"],
   {
     http = safeHttp,
     now = () => new Date(),
     signal,
-  }: { http?: HttpClient; now?: () => Date; signal: AbortSignal },
+    maxItems = 10,
+    maxAgeMs = 86400000,
+    futureSkewMs = 0,
+  }: {
+    http?: HttpClient;
+    now?: () => Date;
+    signal: AbortSignal;
+    maxItems?: number;
+    maxAgeMs?: number;
+    futureSkewMs?: number;
+  },
 ): Promise<SourceResult<RssData>> {
   const feeds = config.filter((feed) => feed.enabled);
   const data: RssData = {
@@ -67,7 +80,9 @@ export async function fetchRss(
   const errors: SourceResult<RssData>["errors"] = [];
   const results: NewsItem[][] = Array.from({ length: feeds.length }, () => []);
   let next = 0;
-  const cutoff = now().getTime() - 86400000;
+  const nowMs = now().getTime();
+  const cutoff = nowMs - maxAgeMs;
+  const maxFuture = nowMs + futureSkewMs;
   const parser = new Parser();
   await Promise.all(
     Array.from({ length: Math.min(3, feeds.length) }, async () => {
@@ -94,13 +109,19 @@ export async function fetchRss(
             );
           const parsed = await parser.parseString(response.body);
           data.feedsSucceeded++;
+          const candidates: Array<{ raw: Parser.Item; published: number }> = [];
           for (const item of parsed.items) {
             const published = Date.parse(item.isoDate ?? item.pubDate ?? "");
             if (!Number.isFinite(published)) {
               data.skippedInvalidDate++;
               continue;
             }
-            if (published < cutoff || published > now().getTime()) continue;
+            if (published < cutoff || published > maxFuture) continue;
+            candidates.push({ raw: item, published });
+          }
+          candidates.sort((a, b) => b.published - a.published);
+          const perFeedCap = Math.max(maxItems * 4, 80);
+          for (const { raw: item, published } of candidates.slice(0, perFeedCap)) {
             try {
               const title = plainText(item.title ?? "", 240);
               const url = articleUrl(item.link ?? "");
@@ -110,7 +131,7 @@ export async function fetchRss(
                 title,
                 source: feed.name,
                 url,
-                publishedAt: new Date(published).toISOString(),
+                publishedAt: new Date(Math.min(published, nowMs)).toISOString(),
                 description: plainText(
                   item.content ?? item.summary ?? item.contentSnippet ?? "",
                 ),
@@ -136,7 +157,7 @@ export async function fetchRss(
       urls.add(item.url);
       return true;
     })
-    .slice(0, 10);
+    .slice(0, maxItems);
   return {
     status: !feeds.length
       ? "disabled"

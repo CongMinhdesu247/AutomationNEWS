@@ -1,21 +1,23 @@
-import { requestSignal } from "./request-signal";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { applyRunEvent, eventLabels } from "./telemetry-state";
 import type {
   RunEvent,
+  RunSummary,
   StreamSync,
   WorkflowRun,
-  RunSummary,
 } from "@hub/contracts";
+import { apiRequest } from "./lib/api-client";
+
 const labels: Record<string, string> = {
   queued: "Chờ xử lý",
   running: "Đang chạy",
   completed: "Hoàn tất",
   failed: "Thất bại",
-  pending: "Chờ dependency",
+  pending: "Chờ bước trước",
   succeeded: "Thành công",
   skipped: "Bỏ qua",
 };
+
 const titles: Record<string, string> = {
   premium_task: "Cập nhật theo dõi tùy chỉnh",
   start: "Bắt đầu",
@@ -32,8 +34,10 @@ const titles: Record<string, string> = {
   compose_digest: "Gộp bản tin",
   persist_digest: "Lưu bản tin",
 };
+
 const order = [
   "start",
+  "premium_task",
   "fetch_rss",
   "fetch_weather",
   "fetch_github",
@@ -47,9 +51,12 @@ const order = [
   "compose_digest",
   "persist_digest",
 ];
+
 const date = (value: string | null) =>
   value ? new Date(value).toLocaleString("vi-VN") : "—";
+
 const terminal = (status: string) => ["completed", "failed"].includes(status);
+
 function duration(start: string | null, end: string | null, now: number) {
   if (!start) return "—";
   return (
@@ -59,6 +66,9 @@ function duration(start: string | null, end: string | null, now: number) {
     ).toFixed(1) + " giây"
   );
 }
+
+const MAX_AUTO_RESETS = 8;
+
 export default function RunDashboard({
   hash,
   listUrl = "/api/runs",
@@ -75,11 +85,13 @@ export default function RunDashboard({
     hasMore: boolean;
   } | null>(null);
   const [elapsedNow, setElapsedNow] = useState(Date.now());
+
   useEffect(() => {
     if (!showDiagnostics || run?.status !== "running") return;
     const timer = setInterval(() => setElapsedNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [run?.status, showDiagnostics]);
+
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -89,29 +101,59 @@ export default function RunDashboard({
   >("connecting");
   const timelineRef = useRef<HTMLDivElement>(null);
   const nearEnd = useRef(true);
+  const autoResetCount = useRef(0);
+
+  // Reset auto-retry counter whenever viewing a different run.
+  useEffect(() => {
+    autoResetCount.current = 0;
+  }, [id]);
+
   useEffect(() => {
     const element = timelineRef.current;
     if (element && nearEnd.current) element.scrollTop = element.scrollHeight;
   }, [run?.eventCursor]);
+
   useEffect(() => {
     const controller = new AbortController();
     let source: EventSource | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
     let current: WorkflowRun | null = null;
     let synchronized = false;
+
     setLoading(true);
     setRun(null);
     setError("");
     setConnection("connecting");
     nearEnd.current = true;
-    const reset = () => {
+
+    const scheduleReset = () => {
       source?.close();
-      if (!disposed) {
-        setConnection("connecting");
-        setRevision((value) => value + 1);
+      source = undefined;
+      if (disposed) return;
+      if (autoResetCount.current >= MAX_AUTO_RESETS) {
+        setConnection("reconnecting");
+        setError(
+          "Luồng sự kiện trực tiếp bị gián đoạn nhiều lần. Bấm Tải lại tiến độ để đồng bộ lại.",
+        );
+        return;
       }
+      const attempt = autoResetCount.current;
+      autoResetCount.current += 1;
+      // Immediate first resync for genuine cursor reset, then exponential backoff.
+      const delayMs =
+        attempt === 0 ? 100 : Math.min(10000, 1200 * 2 ** (attempt - 1));
+      setConnection("reconnecting");
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        if (!disposed) {
+          setConnection("connecting");
+          setRevision((value) => value + 1);
+        }
+      }, delayMs);
     };
+
     function connect() {
       if (disposed || !id || !current || synchronized) return;
       if (!navigator.onLine) {
@@ -127,7 +169,9 @@ export default function RunDashboard({
       );
       const active = source;
       active.onopen = () => {
-        if (!disposed && active === source) setConnection("live");
+        if (!disposed && active === source) {
+          setConnection("live");
+        }
       };
       active.addEventListener("run-event", (message) => {
         if (disposed || !current || active !== source) return;
@@ -136,10 +180,11 @@ export default function RunDashboard({
           const next = applyRunEvent(current, event);
           if (next !== current) {
             current = next;
+            autoResetCount.current = 0;
             setRun(next);
           }
         } catch {
-          reset();
+          scheduleReset();
         }
       });
       active.addEventListener("sync", (message) => {
@@ -147,29 +192,34 @@ export default function RunDashboard({
         try {
           const sync = JSON.parse((message as MessageEvent).data) as StreamSync;
           if (sync.cursor !== current.eventCursor) throw new Error("Sync gap");
+          autoResetCount.current = 0;
           if (sync.terminal) {
-            if (!terminal(current.status))
+            if (!terminal(current.status)) {
               throw new Error("Invalid terminal sync");
+            }
             synchronized = true;
             setConnection("synced");
             active.close();
-          } else setConnection("live");
+          } else {
+            setConnection("live");
+          }
         } catch {
-          reset();
+          scheduleReset();
         }
       });
       active.addEventListener("reset", () => {
-        if (!disposed && active === source) reset();
+        if (!disposed && active === source) scheduleReset();
       });
       active.onerror = () => {
         if (disposed || active !== source || synchronized) return;
         setConnection("reconnecting");
         if (active.readyState === EventSource.CLOSED) {
           clearTimeout(timer);
-          timer = setTimeout(connect, 2000);
+          scheduleReset();
         }
       };
     }
+
     const offline = () => {
       if (!disposed && current && !synchronized) {
         source?.close();
@@ -184,46 +234,55 @@ export default function RunDashboard({
         connect();
       }
     };
+
     async function load() {
       try {
-        const response = await fetch(
-          id
-            ? "/api/runs/" + encodeURIComponent(id)
-            : listUrl + "?page=" + page + "&pageSize=10",
-          {
-            signal: requestSignal(10000, controller.signal),
-          },
-        );
-        const body = await response.json();
-        if (!response.ok)
-          throw new Error(body.error?.message ?? "Không tải được tiến độ.");
-        if (disposed) return;
         if (id) {
-          current = body as WorkflowRun;
+          const body = await apiRequest<WorkflowRun>(
+            "/api/runs/" + encodeURIComponent(id),
+            { signal: controller.signal, timeoutMs: 10000 },
+          );
+          if (disposed) return;
+          current = body;
           setRun(current);
           connect();
-        } else setList(body);
-      } catch (error) {
-        if (!disposed)
+        } else {
+          const body = await apiRequest<{
+            items: RunSummary[];
+            hasMore: boolean;
+          }>(listUrl + "?page=" + page + "&pageSize=10", {
+            signal: controller.signal,
+            timeoutMs: 10000,
+          });
+          if (disposed) return;
+          setList(body);
+        }
+      } catch (err) {
+        if (!disposed) {
           setError(
-            error instanceof Error ? error.message : "Không tải được tiến độ.",
+            err instanceof Error ? err.message : "Không tải được tiến độ.",
           );
+        }
       } finally {
         if (!disposed) setLoading(false);
       }
     }
+
     window.addEventListener("online", online);
     window.addEventListener("offline", offline);
     void load();
+
     return () => {
       disposed = true;
       controller.abort();
       source?.close();
       clearTimeout(timer);
+      clearTimeout(resetTimer);
       window.removeEventListener("online", online);
       window.removeEventListener("offline", offline);
     };
   }, [id, page, revision, listUrl]);
+
   return (
     <div className="runs-dashboard">
       <div className="page-heading">
@@ -235,10 +294,18 @@ export default function RunDashboard({
         <a href="#/digests" className="text-link">
           Bản tin
         </a>
-        {id && showDiagnostics && <a href="#/runs">Tất cả lần tạo bản tin</a>}
+        {id && showDiagnostics && (
+          <a href="#/runs" className="text-link">
+            Tất cả lần tạo bản tin
+          </a>
+        )}
         {(!id || error || connection === "reconnecting") && (
           <button
-            onClick={() => setRevision((value) => value + 1)}
+            type="button"
+            onClick={() => {
+              autoResetCount.current = 0;
+              setRevision((value) => value + 1);
+            }}
             disabled={loading}
           >
             Tải lại tiến độ
@@ -266,7 +333,7 @@ export default function RunDashboard({
           )}
           <div className="digest-meta" role="status">
             <strong className={"result-badge " + run.status}>
-              {labels[run.status]}
+              {labels[run.status] ?? run.status}
             </strong>
             {showDiagnostics && (
               <>
@@ -301,14 +368,47 @@ export default function RunDashboard({
               Mở bản tin đã lưu
             </a>
           )}
+          {!showDiagnostics && run.nodes.length > 0 && (
+            <section className="member-run-progress" aria-label="Các bước tổng hợp">
+              <div className="member-progress-bar" aria-hidden="true">
+                <span
+                  style={{
+                    width: `${Math.round(
+                      (run.nodes.filter((n) =>
+                        ["succeeded", "skipped", "failed"].includes(n.status),
+                      ).length /
+                        Math.max(1, run.nodes.length)) *
+                        100,
+                    )}%`,
+                  }}
+                />
+              </div>
+              <ul className="member-step-list">
+                {[...run.nodes]
+                  .filter((n) => n.status !== "skipped")
+                  .sort((a, b) => order.indexOf(a.nodeId) - order.indexOf(b.nodeId))
+                  .map((node) => (
+                    <li key={node.nodeId}>
+                      <span>{titles[node.nodeId] ?? node.nodeId}</span>
+                      <span className={"result-badge " + node.status}>
+                        {labels[node.status] ?? node.status}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </section>
+          )}
           {showDiagnostics && (
             <>
-              <details className="run-timeline" aria-label="Timeline sự kiện">
+              <details
+                className="run-timeline"
+                aria-label="Dòng thời gian sự kiện"
+              >
                 <summary>Nhật ký xử lý trực tiếp</summary>
                 <p className="muted">
                   Tối đa 100 sự kiện gần nhất. Lịch sử trong PostgreSQL có thể
-                  được dọn theo chính sách lưu trữ; trạng thái workflow vẫn được
-                  giữ.
+                  được dọn theo chính sách lưu trữ; trạng thái quy trình vẫn
+                  được giữ.
                 </p>
                 {run.eventsTruncated && (
                   <p className="muted">
@@ -320,12 +420,13 @@ export default function RunDashboard({
                   ref={timelineRef}
                   onScroll={() => {
                     const element = timelineRef.current;
-                    if (element)
+                    if (element) {
                       nearEnd.current =
                         element.scrollHeight -
                           element.scrollTop -
                           element.clientHeight <
                         64;
+                    }
                   }}
                 >
                   <ol>
@@ -358,7 +459,7 @@ export default function RunDashboard({
                     ))}
                   </ol>
                   {run.recentEvents.length === 0 && (
-                    <p>Chưa có sự kiện telemetry được lưu cho run này.</p>
+                    <p>Chưa có sự kiện nào được lưu cho lần chạy này.</p>
                   )}
                 </div>
               </details>
@@ -378,7 +479,7 @@ export default function RunDashboard({
                             ? "Đang thử lại"
                             : node.retryCount > 0 && node.status === "queued"
                               ? "Chờ thử lại"
-                              : labels[node.status]}
+                              : (labels[node.status] ?? node.status)}
                         </span>
                         <span>
                           {duration(
@@ -391,7 +492,7 @@ export default function RunDashboard({
                       <details>
                         <summary>Chi tiết thực thi</summary>
                         <small>
-                          {node.attempts} attempt · {node.recoveries} lần phục
+                          {node.attempts} lượt thử · {node.recoveries} lần phục
                           hồi · {node.retryCount} lần lên lịch thử lại
                           {node.workerId ? " · Worker " + node.workerId : ""}
                         </small>
@@ -403,7 +504,7 @@ export default function RunDashboard({
                             </small>
                           )}
                         {node.leaseUntil && (
-                          <small>Lease đến {date(node.leaseUntil)}</small>
+                          <small>Giữ quyền xử lý đến {date(node.leaseUntil)}</small>
                         )}
                       </details>
                       {node.error && (
@@ -434,23 +535,24 @@ export default function RunDashboard({
             {list.items.map((item) => (
               <li key={item.id}>
                 <a href={"#/runs/" + item.id}>
-                  <strong>Workflow {date(item.createdAt)}</strong>
+                  <strong>Lần chạy {date(item.createdAt)}</strong>
                   <small>{item.workflowVersion}</small>
                 </a>
                 <span className={"result-badge " + item.status}>
-                  {labels[item.status]}
+                  {labels[item.status] ?? item.status}
                 </span>
               </li>
             ))}
           </ul>
           {list.items.length === 0 && (
             <p className="empty-state">
-              Chưa có workflow. Vào bản tin đã lưu để tạo bản tin đầu tiên.
+              Chưa có lần chạy nào. Vào mục Bản tin để tạo bản tin đầu tiên.
             </p>
           )}
           {(page > 1 || list.hasMore) && (
             <div className="pagination">
               <button
+                type="button"
                 disabled={page === 1}
                 onClick={() => setPage((value) => value - 1)}
               >
@@ -458,6 +560,7 @@ export default function RunDashboard({
               </button>
               <span>Trang {page}</span>
               <button
+                type="button"
                 disabled={!list.hasMore}
                 onClick={() => setPage((value) => value + 1)}
               >

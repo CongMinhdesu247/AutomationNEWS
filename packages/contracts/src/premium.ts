@@ -82,3 +82,11 @@ export const enrichmentSchema = z
 export const topicSummarySchema = z
   .object({ summary: z.string().trim().min(1).max(2000) })
   .strict();
+
+export type PaymentConfig = {
+  priceText: string;
+  bankName: string;
+  accountName: string | null;
+  accountNumber: string | null;
+  qrUrl: string | null;
+};

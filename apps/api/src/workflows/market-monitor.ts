@@ -8,17 +8,16 @@ import type { ServiceOptions } from "../digests/service.js";
 
 export async function checkMarketLows(pool: Pool, options: ServiceOptions = {}) {
   const at = (options.now ?? (() => new Date()))();
-  // Atomic claim across scheduler replicas. Leave the 30-minute claim in place
-  // on network/ambiguous delivery failures to avoid retry storms.
-  const claimed = await pool.query(
-    "UPDATE market_monitor SET checked_at=$1 WHERE id=1 AND (checked_at IS NULL OR checked_at <= $1::timestamptz - interval '30 minutes') RETURNING id", [at],
-  );
-  if (!claimed.rowCount) return;
   const config = (await pool.query("SELECT config FROM settings WHERE id=1")).rows[0]?.config;
   if (!config) return;
   const settings = settingsSchema.parse(config);
   if (!settings.newsletter.enabled || !settings.notifications.enabled ||
       (!settings.gold?.enabled && !settings.usd?.enabled)) return;
+  // Atomic claim across scheduler replicas only after verifying monitoring is enabled.
+  const claimed = await pool.query(
+    "UPDATE market_monitor SET checked_at=$1 WHERE id=1 AND (checked_at IS NULL OR checked_at <= $1::timestamptz - interval '30 minutes') RETURNING id", [at],
+  );
+  if (!claimed.rowCount) return;
   const state: CloudStateStore = {
     async load() {
       const row = (await pool.query("SELECT state,revision::text FROM market_monitor WHERE id=1")).rows[0];
@@ -44,6 +43,7 @@ export async function checkMarketLows(pool: Pool, options: ServiceOptions = {}) 
     alertsOnly: true,
     signalNamespace: "0000000000000001",
     ntfyToken: options.ntfyToken,
+    ntfyDestinationOrigins: options.ntfyDestinationOrigins,
     http: (url, request = {}) => http(url, {
       ...request,
       ...(request.method === "POST" ? { allowedOrigins: options.ntfyAllowedOrigins ?? [] } : {}),

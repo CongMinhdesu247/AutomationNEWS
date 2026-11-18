@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+export function foldVi(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase();
+}
+export function isValidMonthDay(value: string): boolean {
+  const match = value.match(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+  if (!match) return false;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const maxDays = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month] ?? 0;
+  return day >= 1 && day <= maxDays;
+}
 export function normalizeUrl(value: string): string {
   const url = new URL(value.trim());
   url.hash = "";
@@ -7,23 +22,25 @@ export function normalizeUrl(value: string): string {
   if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/+$/, "");
   return url.toString();
 }
-const httpUrl = z
+export function safeExternalHref(value: string | null | undefined): string | undefined {
+  if (!value || typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value.trim());
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+export const safeHttpUrlSchema = z
   .string()
   .trim()
+  .min(1, "URL không được để trống.")
   .max(2048, "URL tối đa 2048 ký tự.")
-  .refine((value) => {
-    try {
-      const url = new URL(value);
-      return (
-        ["http:", "https:"].includes(url.protocol) &&
-        !url.username &&
-        !url.password
-      );
-    } catch {
-      return false;
-    }
-  }, "Nhập URL HTTP/HTTPS hợp lệ, không chứa thông tin đăng nhập.")
-  .transform(normalizeUrl);
+  .refine((value) => safeExternalHref(value) !== undefined, "Nhập URL HTTP/HTTPS hợp lệ, không chứa thông tin đăng nhập.");
+const httpUrl = safeHttpUrlSchema.transform(normalizeUrl);
 const text = z
   .string()
   .trim()
@@ -44,7 +61,33 @@ const tags = z
 export const settingsSchema = z
   .object({
     uv: z.object({ enabled: z.boolean() }).strict().optional(),
-    holidays: z.object({ enabled: z.boolean() }).strict().optional(),
+    holidays: z
+      .object({
+        enabled: z.boolean(),
+        items: z
+          .array(
+            z
+              .object({
+                id: z.uuid(),
+                title: z.string().trim().min(1).max(120),
+                monthDay: z
+                  .string()
+                  .regex(
+                    /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+                    "Ngày kỷ niệm cần định dạng MM-DD.",
+                  )
+                  .refine(
+                    isValidMonthDay,
+                    "Ngày kỷ niệm không hợp lệ theo lịch dương.",
+                  ),
+              })
+              .strict(),
+          )
+          .max(30)
+          .optional(),
+      })
+      .strict()
+      .optional(),
     tasks: z.object({
       enabled: z.boolean(),
       items: z.array(z.object({ id: z.uuid(), title: z.string().trim().min(1).max(120), date: z.iso.date(), done: z.boolean() }).strict()).max(20)
@@ -174,6 +217,27 @@ export function calendarDate(date: Date, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const part = (key: string) => parts.find(p => p.type === key)!.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+export function formatDateTime(
+  value: string | null | undefined,
+  timezone?: string,
+  fallback = "Chưa ghi nhận",
+): string {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (!Number.isFinite(+date)) return fallback;
+  try {
+    return date.toLocaleString("vi-VN", {
+      ...(timezone ? { timeZone: timezone } : {}),
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return date.toLocaleString("vi-VN");
+  }
 }
 export type FieldIssue = { path: (string | number)[]; message: string };
 export type ApiError = {

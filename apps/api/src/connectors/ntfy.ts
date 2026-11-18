@@ -23,13 +23,17 @@ export function dashboardLink(
     const url = checkUrl(base);
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     const address = host.replace(/^\[|\]$/g, "");
-    if (
-      isIP(address) &&
-      !["unicast", "private", "uniqueLocal"].includes(
-        ipaddr.process(address).range(),
-      )
-    )
-      return;
+    if (isIP(address)) {
+      const parsed = ipaddr.process(address);
+      const allowedRange =
+        parsed.kind() === "ipv6"
+          ? ["private", "uniqueLocal"].includes(parsed.range()) ||
+            (parsed.range() === "unicast" &&
+              (parsed as ipaddr.IPv6).match(ipaddr.IPv6.parse("2000::"), 3))
+          : ["unicast", "private", "uniqueLocal"].includes(parsed.range()) &&
+            parsed.toString() !== "168.63.129.16";
+      if (!allowedRange) return;
+    }
     if (
       host === "localhost" ||
       host.endsWith(".localhost") ||
@@ -53,6 +57,7 @@ export async function sendNtfy(
     http = safeHttp,
     now = () => new Date(),
     token,
+    tokenOrigins,
     publicBaseUrl,
     allowedOrigins = [],
     destinationOrigins,
@@ -65,6 +70,7 @@ export async function sendNtfy(
     http?: HttpClient;
     now?: () => Date;
     token?: string;
+    tokenOrigins?: string[];
     publicBaseUrl?: string;
     allowedOrigins?: string[];
     destinationOrigins?: string[];
@@ -93,13 +99,17 @@ export async function sendNtfy(
     url.search = "";
     url.hash = "";
     if (!url.pathname.endsWith("/")) url.pathname += "/";
+    const sendToken =
+      token && (!tokenOrigins || tokenOrigins.includes(url.origin))
+        ? token
+        : undefined;
     const response = await http(url.toString(), {
       method: "POST",
       signal,
       allowedOrigins,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        ...(token ? { Authorization: "Bearer " + token } : {}),
+        ...(sendToken ? { Authorization: "Bearer " + sendToken } : {}),
       },
       body: JSON.stringify({
         topic: config.topic,

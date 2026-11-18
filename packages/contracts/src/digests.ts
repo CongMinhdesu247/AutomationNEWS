@@ -150,10 +150,43 @@ export type Digest = {
   sources: DigestSources | null;
   notifications: NotificationAttempt[];
 };
+export type DigestHighlights = {
+  articleCount: number;
+  repoCount: number;
+  headline: string | null;
+  temperature: string | null;
+  location: string | null;
+  sjcSell: number | null;
+  usdSell: number | null;
+};
 export type DigestSummary = Pick<
   Digest,
   "id" | "createdAt" | "completedAt" | "status"
->;
+> & {
+  readAt?: string | null;
+  highlights?: DigestHighlights;
+};
+export type BookmarkKind = "rss" | "github" | "custom";
+export type BookmarkItem = {
+  id: string;
+  url: string;
+  title: string;
+  source: string;
+  summary: string;
+  kind: BookmarkKind;
+  digestId: string | null;
+  createdAt: string;
+};
+export const bookmarkInputSchema = z
+  .object({
+    url: z.string().trim().min(1).max(2048),
+    title: z.string().trim().min(1).max(300),
+    source: z.string().trim().min(1).max(160),
+    summary: z.string().trim().max(600).default(""),
+    kind: z.enum(["rss", "github", "custom"]).default("rss"),
+    digestId: z.uuid().nullable().optional(),
+  })
+  .strict();
 export type NotificationAttempt = {
   id: string;
   digestId: string;

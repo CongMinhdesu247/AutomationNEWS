@@ -108,23 +108,35 @@ export function collectHolidays(
     return { status: "disabled", fetchedAt, data: null, errors: [] };
   const date = calendarDate(now, settings.newsletter.timezone);
   const year = Number(date.slice(0, 4));
-  const events = [year, year + 1]
+  const customObservances = (settings.holidays.items ?? []).map(
+    (item) => [item.monthDay, item.title] as const,
+  );
+  const allObservances = [...observances, ...customObservances];
+  const limit = customObservances.length > 0 ? 5 : 3;
+  const events = [year, year + 1, year + 2, year + 3, year + 4]
     .flatMap((y) =>
-      observances.map(([day, name]) => {
+      allObservances.flatMap(([day, name]) => {
         const eventDate = `${y}-${day}`;
-        return {
-          name,
-          date: eventDate,
-          daysAway:
-            (Date.parse(eventDate + "T00:00:00Z") -
-              Date.parse(date + "T00:00:00Z")) /
-            86400000,
-        };
+        const parsedMs = Date.parse(eventDate + "T00:00:00Z");
+        if (
+          !Number.isFinite(parsedMs) ||
+          new Date(parsedMs).toISOString().slice(0, 10) !== eventDate
+        ) {
+          return [];
+        }
+        return [
+          {
+            name,
+            date: eventDate,
+            daysAway:
+              (parsedMs - Date.parse(date + "T00:00:00Z")) / 86400000,
+          },
+        ];
       }),
     )
-    .filter((event) => event.daysAway >= 0)
+    .filter((event) => Number.isFinite(event.daysAway) && event.daysAway >= 0)
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 3);
+    .slice(0, limit);
   return { status: "success", fetchedAt, errors: [], data: { date, events } };
 }
 export function collectTasks(

@@ -105,7 +105,7 @@ Tra ngày 15/11/2026: [model Gemini 3.5 Flash-Lite](https://ai.google.dev/gemini
 - Chỉ RSS/Atom đã duyệt cho custom ở bản này. Các API connector cũ vẫn phục vụ bản tin thường; chưa có connector cơ hội học bổng/API tùy ý.
 - Chưa email verification và reset qua email; đã có owner CLI hỗ trợ reset và rate limits hiện tại. Hoàn thiện xác minh email, reset token một lần có hạn, throttling và thử SMTP trước mở đăng ký rộng. Không dùng email chưa xác minh như bằng chứng chủ sở hữu.
 - Topic ntfy public không là ACL. Thành viên không đổi destination, safeHttp chống SSRF; API và scheduler production giới hạn destination trong ACCOUNT_NTFY_URL và NTFY_ALLOWED_ORIGINS; các origin LAN cho phép vẫn chịu kiểm tra metadata/link-local. Các fixture/tool có HTTP injection không mặc định bật allowlist destination production. Với token ntfy dùng chung, kiểm tra destination cũ và allowlist trước release; cần ntfy có auth/ACL nếu muốn riêng tư thực sự.
-- Chưa đo HP/BankingPrj, load nhiều tài khoản hoặc thời gian vận hành dài. Không dự báo uptime/capacity từ fixture PC.
+- Chưa đo tải thực tế trên máy chủ đích, load nhiều tài khoản hoặc thời gian vận hành dài. Không dự báo uptime/capacity từ fixture PC.
 
 
 ## Khám phá nguồn có giới hạn (migration 012)

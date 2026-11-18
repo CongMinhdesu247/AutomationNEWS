@@ -4,12 +4,29 @@ services:
     environment:
       MEMBER_PUBLIC_URL: ${MEMBER_PUBLIC_URL:-}
   member-web:
-    image: personal-automation-hub-web
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: web
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "${MEMBER_BIND_ADDRESS:-0.0.0.0}:${MEMBER_PORT:-8089}:80"
+      - "${MEMBER_BIND_ADDRESS:-127.0.0.1}:${MEMBER_PORT:-8089}:80"
     volumes:
       - ./member-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./member-security-headers.conf:/etc/nginx/snippets/member-security-headers.conf:ro
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    mem_limit: 128m
     restart: unless-stopped

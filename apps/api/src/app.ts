@@ -21,21 +21,44 @@ import { registerAuth, type AuthOptions } from "./accounts/auth.js";
 import { registerAccountRoutes } from "./accounts/routes.js";
 import { registerPremiumRoutes } from "./premium/routes.js";
 import type { HttpClient } from "./connectors/http.js";
+import { logEvent } from "./logger.js";
+
 export function buildApp(
   pool: Pool,
   options: ServiceOptions & { premiumSourceHttp?: HttpClient } = {},
   sseOptions: SseOptions = {},
-  familyCloud: FamilyCloudAdmin = githubFamilyAdmin(process.env.HUB_CLOUD_REPOSITORY,process.env.HUB_CLOUD_ADMIN_TOKEN),
+  familyCloud: FamilyCloudAdmin = githubFamilyAdmin(
+    process.env.HUB_CLOUD_REPOSITORY,
+    process.env.HUB_CLOUD_ADMIN_TOKEN,
+  ),
   authOptions: AuthOptions = {},
 ) {
-  const app = Fastify({ logger: false, bodyLimit: 262144 });
+  const app = Fastify({
+    logger: false,
+    bodyLimit: 262144,
+    ...(authOptions.trustProxy ? { trustProxy: authOptions.trustProxy } : {}),
+  });
+
+  // Single shared instances so concurrency semaphores and translation caches are unified.
+  const store = new DigestStore(pool);
+  const service = new DigestService(store, options);
+  const queue = new WorkflowQueue(pool, {
+    sourceTimeoutMs: options.totalTimeoutMs,
+  });
+
   const auth = registerAuth(app, pool, authOptions);
-  registerAccountRoutes(app, pool, options, auth.throttle);
-  registerPremiumRoutes(app, pool, auth.throttle, options.premiumSourceHttp);
+  registerAccountRoutes(app, pool, options, auth.throttle, {
+    store,
+    service,
+    queue,
+  });
+  registerPremiumRoutes(app, pool, auth.throttle, options.premiumSourceHttp, queue);
+
   const failure = (code: string, message: string): ApiError => ({
     error: { code, message, issues: [] },
   });
-  app.setErrorHandler((error, _request, reply) => {
+
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof RequestError) {
       reply.code(error.statusCode).send({
         error: {
@@ -54,6 +77,13 @@ export function buildApp(
       typeof statusCode === "number" && statusCode >= 400 && statusCode < 500
         ? statusCode
         : 500;
+    if (status === 500) {
+      logEvent("error", "http.internal_error", {
+        method: request.method,
+        path: request.url.split("?")[0],
+        error,
+      });
+    }
     reply
       .code(status)
       .send(
@@ -65,24 +95,31 @@ export function buildApp(
         ),
       );
   });
+
   app.setNotFoundHandler((_request, reply) =>
     reply.code(404).send(failure("NOT_FOUND", "Không tìm thấy endpoint.")),
   );
+
   app.addHook("onSend", async (_request, reply, payload) => {
     reply.header("Cache-Control", "no-store");
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
     return payload;
   });
+
   app.get("/api/health", async () => ({ status: "ok" }));
   app.get("/api/ready", async (_request, reply) => {
     try {
       await pool.query("SELECT 1");
       return { status: "ready" };
-    } catch {
+    } catch (error) {
+      logEvent("warn", "http.readiness_failed", { error });
       return reply
         .code(503)
         .send(failure("DATABASE_UNAVAILABLE", "Database chưa sẵn sàng."));
     }
   });
+
   app.get("/api/settings", async () => {
     const result = await pool.query<{ config: Settings }>(
       "SELECT config FROM settings WHERE id = $1",
@@ -91,6 +128,7 @@ export function buildApp(
     // Parse on output too: unknown or sensitive fields must never reach the browser.
     return settingsSchema.parse(result.rows[0]?.config);
   });
+
   app.put("/api/settings", async (request, reply) => {
     const parsed = settingsSchema.safeParse(request.body);
     if (!parsed.success)
@@ -118,14 +156,9 @@ export function buildApp(
       client.release();
     }
   });
-  const store = new DigestStore(pool);
-  registerFamilyRoutes(app,pool,familyCloud);
-  digestRoutes(
-    app,
-    store,
-    new DigestService(store, options),
-    new WorkflowQueue(pool, { sourceTimeoutMs: options.totalTimeoutMs }),
-  );
+
+  registerFamilyRoutes(app, pool, familyCloud, authOptions.origin);
+  digestRoutes(app, store, service, queue);
   registerRunEvents(app, pool, sseOptions);
   return app;
 }

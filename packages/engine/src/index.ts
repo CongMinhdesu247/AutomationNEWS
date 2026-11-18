@@ -91,6 +91,14 @@ export function topologicalOrder(workflow: Workflow): string[] {
 }
 export function plan(workflow: Workflow, states: Record<string, NodeState>) {
   const sorted = topologicalOrder(workflow);
+  for (const id of sorted) {
+    if (!states[id]) throw new Error(`Missing state for workflow node "${id}".`);
+  }
+  const nodeMap = new Map(workflow.nodes.map((node) => [node.id, node]));
+  const incoming = new Map<string, string[]>(sorted.map((id) => [id, []]));
+  for (const edge of workflow.edges) {
+    incoming.get(edge.to)!.push(edge.from);
+  }
   const local = { ...states };
   let slots = Math.max(
     0,
@@ -102,21 +110,19 @@ export function plan(workflow: Workflow, states: Record<string, NodeState>) {
   const ready: { id: string; input: DependencyInput }[] = [];
   const skipped: { id: string; input: DependencyInput; reason: string }[] = [];
   for (const id of sorted) {
-    if (!local[id] || local[id]!.status !== "pending") continue;
-    const node = workflow.nodes.find((node) => node.id === id)!;
-    const dependencies = workflow.edges
-      .filter((edge) => edge.to === id)
-      .map((edge) => edge.from);
-    if (dependencies.some((id) => !local[id] || !isTerminal(local[id]!.status)))
+    if (local[id]!.status !== "pending") continue;
+    const node = nodeMap.get(id)!;
+    const dependencies = incoming.get(id)!;
+    if (dependencies.some((depId) => !isTerminal(local[depId]!.status)))
       continue;
     const input: DependencyInput = {
       dependencies: Object.fromEntries(
-        dependencies.map((id) => [id, { ...local[id]! }]),
+        dependencies.map((depId) => [depId, { ...local[depId]! }]),
       ),
     };
     if (
       node.policy === "all_success" &&
-      dependencies.some((id) => local[id]!.status !== "succeeded")
+      dependencies.some((depId) => local[depId]!.status !== "succeeded")
     ) {
       const reason = "Dependency did not succeed.";
       skipped.push({ id, input, reason });

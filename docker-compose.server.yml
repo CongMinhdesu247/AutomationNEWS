@@ -1,0 +1,9 @@
+# Convenience root-level Compose entrypoint for Local Server deployments (SERVER_CONTEXT.md).
+# Usage:
+#   docker compose --env-file .env.home -f docker-compose.server.yml up -d --build
+# (Or run `bash scripts/server-update.sh` for full pre-update backup, restore verification, and auto-rollback.)
+name: ${COMPOSE_PROJECT_NAME:-automationnews}
+include:
+  - path:
+      - infra/compose.yaml
+      - infra/compose.home.yaml

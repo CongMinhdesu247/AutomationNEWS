@@ -18,35 +18,47 @@ import { RequestError } from "../digests/service.js";
 import { discoverySchema, runDiscovery, type SearchAdapter } from "./search.js";
 export async function tickCustom(queue: WorkflowQueue) {
   return queue.transaction(async (c) => {
-    // One due watch per tick; never replay missed intervals after a restart.
-    const w = (
+    // Claim a bounded batch of due watches; never replay missed intervals after a restart.
+    const rows = (
       await c.query(`SELECT w.* FROM news_watches w JOIN hub_users u ON u.id=w.user_id
       JOIN news_entitlements e ON e.user_id=w.user_id
       WHERE w.enabled AND w.deleted_at IS NULL AND NOT u.disabled AND w.next_run_at<=now()
       AND e.plan_id='premium' AND e.status='active' AND e.starts_at<=now() AND e.expires_at>now()
-      ORDER BY w.next_run_at,w.id FOR UPDATE OF w SKIP LOCKED LIMIT 1`)
-    ).rows[0];
-    if (!w) return;
-    const plan = await requirePremium(c, w.user_id);
-    const running = (
-      await c.query(
-        "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.watch_id=$1 AND r.status IN ('queued','running')",
-        [w.id],
-      )
-    ).rowCount;
-    await c.query(
-      "UPDATE news_watches SET next_run_at=now()+greatest(interval_minutes,$2)*interval '1 minute' WHERE id=$1",
-      [w.id, plan.min_interval_minutes],
-    );
-    if (running) return;
-    return queue.enqueueTask(
-      c,
-      crypto.randomUUID(),
-      w.user_id,
-      "watch",
-      { version: w.version },
-      w.id,
-    );
+      ORDER BY w.next_run_at,w.id FOR UPDATE OF w SKIP LOCKED LIMIT 15`)
+    ).rows;
+    if (!rows.length) return;
+    let firstEnqueued: string | undefined;
+    for (const w of rows) {
+      await c.query("SAVEPOINT custom_watch_tick");
+      try {
+        const plan = await requirePremium(c, w.user_id);
+        const running = (
+          await c.query(
+            "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.watch_id=$1 AND r.status IN ('queued','running')",
+            [w.id],
+          )
+        ).rowCount;
+        await c.query(
+          "UPDATE news_watches SET next_run_at=now()+greatest(interval_minutes,$2)*interval '1 minute' WHERE id=$1",
+          [w.id, plan.min_interval_minutes],
+        );
+        if (!running) {
+          const runId = await queue.enqueueTask(
+            c,
+            crypto.randomUUID(),
+            w.user_id,
+            "watch",
+            { version: w.version },
+            w.id,
+          );
+          firstEnqueued ??= runId;
+        }
+        await c.query("RELEASE SAVEPOINT custom_watch_tick");
+      } catch {
+        await c.query("ROLLBACK TO SAVEPOINT custom_watch_tick");
+      }
+    }
+    return firstEnqueued;
   });
 }
 export async function executeCustom(
@@ -242,18 +254,25 @@ export async function executeCustom(
       "UPDATE news_watches SET last_run_at=now() WHERE id=$1 AND version=$2",
       [w.id, w.version],
     );
-    // Bounded sequential fetches avoid multiplying concurrency on the HP server.
+    // Bounded sequential fetches avoid multiplying concurrency on the HP server; isolate per-source failures.
     const sourceSignal = AbortSignal.any([signal, AbortSignal.timeout(35000)]);
     for (const source of w.source_ids) {
       sourceSignal.throwIfAborted();
-      await refreshSource(pool, source, sourceSignal, http);
+      try {
+        await refreshSource(pool, source, sourceSignal, http);
+      } catch {
+        if (sourceSignal.aborted) throw new Error("timeout");
+      }
     }
     const articles = (
       await pool.query(
-        `SELECT DISTINCT ON(a.id) a.*,s.id AS source_id FROM news_articles a
-      JOIN news_source_articles sa ON sa.article_id=a.id JOIN news_sources s ON s.id=sa.source_id
-      WHERE sa.source_id=ANY($1::uuid[]) AND s.status='approved' AND a.published_at>=now()-$2*interval '1 day'
-      ORDER BY a.id,s.id LIMIT 500`,
+        `SELECT * FROM (
+          SELECT DISTINCT ON(a.id) a.*,s.id AS source_id FROM news_articles a
+          JOIN news_source_articles sa ON sa.article_id=a.id JOIN news_sources s ON s.id=sa.source_id
+          WHERE sa.source_id=ANY($1::uuid[]) AND s.status='approved' AND a.published_at>=now()-$2*interval '1 day'
+          ORDER BY a.id,s.id
+        ) candidate
+        ORDER BY candidate.published_at DESC NULLS LAST, candidate.id LIMIT 500`,
         [w.source_ids, w.lookback_days],
       )
     ).rows;
@@ -289,7 +308,11 @@ export async function executeCustom(
         );
         if (!reason) continue;
         const row = await c.query(
-          "INSERT INTO news_matches(watch_id,user_id,article_id,source_id,condition_version,reason) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(watch_id,article_id) DO UPDATE SET reason=EXCLUDED.reason,condition_version=EXCLUDED.condition_version",
+          `INSERT INTO news_matches(watch_id,user_id,article_id,source_id,condition_version,reason)
+           VALUES($1,$2,$3,$4,$5,$6)
+           ON CONFLICT(watch_id,article_id) DO UPDATE
+             SET reason=EXCLUDED.reason,condition_version=EXCLUDED.condition_version
+             WHERE news_matches.condition_version<>EXCLUDED.condition_version OR news_matches.reason<>EXCLUDED.reason`,
           [w.id, task.user_id, a.id, a.source_id, w.version, reason],
         );
         count += row.rowCount ?? 0;

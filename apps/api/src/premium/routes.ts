@@ -1,7 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
-import { watchSchema, aiControlSchema } from "@hub/contracts";
+import {
+  watchSchema,
+  aiControlSchema,
+  safeHttpUrlSchema,
+  safeExternalHref,
+  normalizeUrl,
+  validationIssues,
+  type PaymentConfig,
+} from "@hub/contracts";
 import { WorkflowQueue } from "../workflows/queue.js";
 import { accountKey } from "../accounts/routes.js";
 import {
@@ -9,31 +17,61 @@ import {
   resolveTarget,
   type HttpClient,
 } from "../connectors/http.js";
-import { fetchRss } from "../connectors/rss.js";
+import { RequestError } from "../digests/service.js";
 import { entitlement, requirePremium, fail, audit } from "./store.js";
 import { aiAvailability } from "./ai.js";
+import { registerPremiumAdminRoutes } from "./admin-routes.js";
 import { createHash } from "node:crypto";
+
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value);
-  if (!result.success)
-    return fail(
+  if (!result.success) {
+    throw new RequestError(
       400,
       "VALIDATION_ERROR",
       "Kiểm tra điều kiện, nguồn, lịch và các trường bắt buộc.",
+      validationIssues(result.error),
     );
+  }
   return result.data;
 };
+
 const idSchema = z.uuid();
 const sourceSchema = z
-  .object({ name: z.string().trim().min(1).max(100), url: z.url().max(2000) })
+  .object({
+    name: z.string().trim().min(1).max(100),
+    url: safeHttpUrlSchema.max(2000),
+  })
   .strict();
+
+function readPaymentConfig(): PaymentConfig {
+  const safeQr = safeExternalHref(process.env.PREMIUM_QR_URL);
+  return {
+    priceText: process.env.PREMIUM_PRICE_TEXT?.trim() || "20.000 ₫",
+    bankName: process.env.PREMIUM_BANK_NAME?.trim() || "Agribank",
+    accountName: process.env.PREMIUM_ACCOUNT_NAME?.trim() || null,
+    accountNumber: process.env.PREMIUM_ACCOUNT_NUMBER?.trim() || null,
+    qrUrl: safeQr && safeQr.startsWith("https://") ? safeQr : null,
+  };
+}
+
 export function registerPremiumRoutes(
   app: FastifyInstance,
   pool: Pool,
   throttle: (key: string, max: number, seconds: number) => Promise<void>,
   sourceHttp?: HttpClient,
+  sharedQueue?: WorkflowQueue,
 ) {
-  const queue = new WorkflowQueue(pool);
+  const queue = sharedQueue ?? new WorkflowQueue(pool);
+
+  async function hasExistingRun(key: string, userId: string): Promise<boolean> {
+    const row = await pool.query(
+      "SELECT 1 FROM workflow_runs WHERE idempotency_key=$1 AND user_id=$2",
+      [key, userId],
+    );
+    return (row.rowCount ?? 0) > 0;
+  }
+
   async function admit(
     c: PoolClient,
     userId: string,
@@ -68,7 +106,7 @@ export function registerPremiumRoutes(
     const quota = Number(
       (
         await c.query(
-          "SELECT (SELECT count(*) FROM news_usage WHERE user_id=$1 AND (kind='discover')=$2 AND created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+(SELECT count(*) FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.user_id=$1 AND (t.kind='discover')=$2 AND t.kind<>'watch' AND r.status IN ('queued','running') AND NOT EXISTS(SELECT 1 FROM news_usage u WHERE u.run_id=t.run_id)) AS calls",
+          "SELECT (SELECT count(*) FROM news_usage WHERE user_id=$1 AND status<>'rejected' AND (kind='discover')=$2 AND created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')+(SELECT count(*) FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.user_id=$1 AND (t.kind='discover')=$2 AND t.kind<>'watch' AND r.status IN ('queued','running') AND NOT EXISTS(SELECT 1 FROM news_usage u WHERE u.run_id=t.run_id)) AS calls",
           [userId, search],
         )
       ).rows[0].calls,
@@ -86,14 +124,11 @@ export function registerPremiumRoutes(
         "Đã hết lượt khả dụng trong tháng, gồm các yêu cầu đang chờ.",
       );
   }
+
   // Explicit guards also protect these endpoints when legacy auth is disabled in tools.
   const user = (r: { accountUser: { id: string; role: string } | null }) =>
     r.accountUser ?? fail(401, "AUTH_REQUIRED", "Vui lòng đăng nhập.");
-  const admin = (r: Parameters<typeof user>[0]) => {
-    const u = user(r);
-    if (u.role !== "admin") fail(403, "ADMIN_REQUIRED", "Cần quyền quản trị.");
-    return u;
-  };
+
   app.get("/api/account/plan", async (r) => {
     const u = user(r);
     const [plan, counts, usage, control, pref, signup, offer] =
@@ -104,11 +139,11 @@ export function registerPremiumRoutes(
           [u.id],
         ),
         pool.query(
-          "SELECT kind,status,count(*)::int AS calls FROM news_usage WHERE user_id=$1 AND created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' GROUP BY kind,status",
+          "SELECT kind,status,count(*)::int AS calls FROM news_usage WHERE user_id=$1 AND status<>'rejected' AND created_at>=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' GROUP BY kind,status",
           [u.id],
         ),
         pool.query(
-          "SELECT config->'enabled' AS enabled,config->'searchEnabled' AS search_enabled FROM news_ai_control WHERE id=1",
+          "SELECT config->'enabled' AS enabled, config->>'provider' AS provider, config->'searchEnabled' AS search_enabled, config->>'searchProvider' AS search_provider FROM news_ai_control WHERE id=1",
         ),
         pool.query(
           "SELECT include_digest FROM news_preferences WHERE user_id=$1",
@@ -127,18 +162,22 @@ export function registerPremiumRoutes(
       counts: counts.rows[0],
       usage: usage.rows,
       aiEnabled:
-        control.rows[0].enabled === true &&
+        control.rows[0]?.enabled === true &&
+        control.rows[0]?.provider !== "disabled" &&
         process.env.NEWS_AI_KILL_SWITCH !== "true" &&
         process.env.NEWS_FREE_ONLY !== "true",
       searchEnabled:
-        control.rows[0].search_enabled === true &&
+        control.rows[0]?.search_enabled === true &&
+        control.rows[0]?.search_provider !== "disabled" &&
         process.env.NEWS_SEARCH_KILL_SWITCH !== "true" &&
         process.env.NEWS_FREE_ONLY !== "true",
       includeDigest: pref.rows[0]?.include_digest ?? true,
       signup: signup.rows[0] ?? null,
       premiumOffer: offer.rows[0],
+      paymentConfig: readPaymentConfig(),
     };
   });
+
   app.post("/api/account/premium-request", async (r, reply) => {
     const u = user(r),
       body = parse(
@@ -153,12 +192,18 @@ export function registerPremiumRoutes(
       if (plan.premium)
         fail(409, "ALREADY_PREMIUM", "Bạn đang có Premium còn hạn.");
       const prior = (
-        await c.query(
-          "SELECT *,requested_at>now()-interval '1 day' AS recent FROM news_plan_requests WHERE user_id=$1 FOR UPDATE",
+        await c.query<{
+          status: string;
+          requested_at: Date;
+          recent: boolean;
+        }>(
+          "SELECT status,requested_at,requested_at>now()-interval '1 day' AS recent FROM news_plan_requests WHERE user_id=$1 FOR UPDATE",
           [u.id],
         )
       ).rows[0];
-      if (prior?.status === "pending") return prior;
+      if (prior?.status === "pending") {
+        return { status: prior.status, requested_at: prior.requested_at };
+      }
       if (prior?.recent)
         fail(
           429,
@@ -176,6 +221,7 @@ export function registerPremiumRoutes(
     });
     return reply.code(202).send({ request });
   });
+
   app.put("/api/account/custom-preferences", async (r) => {
     const u = user(r),
       body = parse(z.object({ includeDigest: z.boolean() }).strict(), r.body);
@@ -185,6 +231,7 @@ export function registerPremiumRoutes(
     );
     return { updated: true };
   });
+
   app.get("/api/account/custom-sources", async (r) => {
     user(r);
     return {
@@ -195,6 +242,7 @@ export function registerPremiumRoutes(
       ).rows,
     };
   });
+
   async function proposeSource(userId: string, input: unknown) {
     const body = parse(sourceSchema, input);
     let url: URL;
@@ -209,6 +257,7 @@ export function registerPremiumRoutes(
       );
     }
     url.hash = "";
+    const normalizedUrl = normalizeUrl(url.toString());
     return queue.transaction(async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
         "source-proposals:" + userId,
@@ -226,12 +275,13 @@ export function registerPremiumRoutes(
       const row = (
         await c.query(
           "INSERT INTO news_sources(id,name,url,proposed_by) VALUES($1,$2,$3,$4) ON CONFLICT(url) DO NOTHING RETURNING id",
-          [crypto.randomUUID(), body.name, url.toString(), userId],
+          [crypto.randomUUID(), body.name, normalizedUrl, userId],
         )
       ).rows[0];
-      return row?.id ?? null;
+      return (row?.id as string | undefined) ?? null;
     });
   }
+
   app.post("/api/account/custom-sources", async (r, reply) => {
     const u = user(r);
     await requirePremium(pool, u.id);
@@ -241,15 +291,7 @@ export function registerPremiumRoutes(
       fail(409, "SOURCE_EXISTS", "Đường dẫn này đã có trong hệ thống.");
     return reply.code(202).send({ id });
   });
-  app.post("/api/admin/custom-sources", async (r, reply) => {
-    const u = admin(r);
-    const id = await proposeSource(u.id, r.body);
-    return reply.code(202).send({
-      id,
-      message:
-        "Đã gửi đề nghị. Trang sẽ xuất hiện trong danh sách nếu được duyệt.",
-    });
-  });
+
   app.get("/api/account/watches", async (r) => ({
     watches: (
       await pool.query(
@@ -258,6 +300,7 @@ export function registerPremiumRoutes(
       )
     ).rows,
   }));
+
   for (const method of ["POST", "PUT"] as const)
     app.route<{ Params: { id?: string } }>({
       method,
@@ -365,6 +408,7 @@ export function registerPremiumRoutes(
         return reply.code(method === "POST" ? 201 : 200).send({ id });
       },
     });
+
   app.delete<{ Params: { id: string } }>(
     "/api/account/watches/:id",
     async (r) => {
@@ -378,20 +422,50 @@ export function registerPremiumRoutes(
       return { deleted: true };
     },
   );
+
   app.patch<{ Params: { id: string } }>(
     "/api/account/watches/:id",
     async (r) => {
       const id = parse(idSchema, r.params.id),
         u = user(r),
-        body = parse(z.object({ enabled: z.literal(false) }).strict(), r.body);
-      const row = await pool.query(
-        "UPDATE news_watches SET enabled=$3,next_run_at=NULL,version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id",
-        [id, u.id, body.enabled],
-      );
-      if (!row.rowCount) fail(404, "NOT_FOUND", "Không tìm thấy nhu cầu.");
+        body = parse(z.object({ enabled: z.boolean() }).strict(), r.body);
+      if (!body.enabled) {
+        const row = await pool.query(
+          "UPDATE news_watches SET enabled=false,next_run_at=NULL,version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id",
+          [id, u.id],
+        );
+        if (!row.rowCount) fail(404, "NOT_FOUND", "Không tìm thấy nhu cầu.");
+        return { updated: true };
+      }
+      await queue.transaction(async (c) => {
+        await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
+          "premium:" + u.id,
+        ]);
+        const plan = await requirePremium(c, u.id);
+        const existing = await c.query(
+          "SELECT interval_minutes,last_run_at FROM news_watches WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL FOR UPDATE",
+          [id, u.id],
+        );
+        if (!existing.rowCount) fail(404, "NOT_FOUND", "Không tìm thấy nhu cầu.");
+        const activeCount = Number(
+          (
+            await c.query(
+              "SELECT count(*) FROM news_watches WHERE user_id=$1 AND enabled AND id<>$2 AND deleted_at IS NULL",
+              [u.id, id],
+            )
+          ).rows[0].count,
+        );
+        if (activeCount >= plan.active_watches)
+          fail(429, "WATCH_LIMIT", "Đã hết số nhu cầu hoạt động của gói.");
+        await c.query(
+          "UPDATE news_watches SET enabled=true,next_run_at=greatest(now(),coalesce(last_run_at,now()-interval '1 year')+greatest(interval_minutes,$3)*interval '1 minute'),version=version+1,updated_at=now(),last_error=NULL WHERE id=$1 AND user_id=$2",
+          [id, u.id, plan.min_interval_minutes],
+        );
+      });
       return { updated: true };
     },
   );
+
   app.get("/api/account/custom-results", async (r) => {
     const u = user(r),
       query = parse(
@@ -413,6 +487,7 @@ export function registerPremiumRoutes(
       ).rows,
     };
   });
+
   app.patch<{ Params: { watchId: string; articleId: string } }>(
     "/api/account/custom-results/:watchId/:articleId",
     async (r) => {
@@ -431,6 +506,7 @@ export function registerPremiumRoutes(
       return { updated: true };
     },
   );
+
   app.post("/api/account/custom-interpret", async (r, reply) => {
     const u = user(r),
       body = parse(
@@ -441,7 +517,9 @@ export function registerPremiumRoutes(
       "interpret:" + u.id,
       parse(z.uuid(), r.headers["idempotency-key"]),
     );
-    await aiAvailability(pool, u.id);
+    if (!(await hasExistingRun(key, u.id))) {
+      await aiAvailability(pool, u.id);
+    }
     const id = await queue.transaction(async (c) => {
       await admit(c, u.id, key);
       return queue.enqueueTask(c, key, u.id, "interpret", body);
@@ -450,6 +528,7 @@ export function registerPremiumRoutes(
       .code(202)
       .send({ runId: id, statusUrl: "/api/account/custom-jobs/" + id });
   });
+
   app.get<{ Params: { id: string } }>(
     "/api/account/custom-jobs/:id",
     async (r) => {
@@ -462,6 +541,54 @@ export function registerPremiumRoutes(
       return row ?? fail(404, "NOT_FOUND", "Không tìm thấy tác vụ.");
     },
   );
+
+  app.post<{ Params: { id: string } }>(
+    "/api/account/custom-jobs/:id/cancel",
+    async (r) => {
+      const u = user(r);
+      const runId = parse(idSchema, r.params.id);
+      return queue.transaction(async (c) => {
+        const run = (
+          await c.query<{ status: string }>(
+            `SELECT r.status
+               FROM workflow_runs r
+               JOIN news_tasks t ON t.run_id = r.id
+              WHERE r.id = $1 AND t.user_id = $2 AND t.kind <> 'watch'
+              FOR UPDATE OF r`,
+            [runId, u.id],
+          )
+        ).rows[0];
+        if (!run) return fail(404, "NOT_FOUND", "Không tìm thấy tác vụ.");
+        if (run.status === "queued") {
+          const dispatched = await c.query(
+            "SELECT 1 FROM news_usage WHERE run_id = $1",
+            [runId],
+          );
+          if (!dispatched.rowCount) {
+            await c.query(
+              "DELETE FROM workflow_jobs WHERE run_id = $1 AND status = 'queued'",
+              [runId],
+            );
+            await c.query(
+              "UPDATE workflow_node_runs SET status = 'skipped', completed_at = now() WHERE run_id = $1 AND status IN ('pending', 'queued')",
+              [runId],
+            );
+            await c.query(
+              `UPDATE workflow_runs
+                  SET status = 'failed',
+                      completed_at = now(),
+                      error = '{"code":"CANCELLED","message":"Đã hủy yêu cầu theo thao tác của bạn."}'::jsonb
+                WHERE id = $1`,
+              [runId],
+            );
+            return { cancelled: true, status: "cancelled" };
+          }
+        }
+        return { cancelled: false, status: run.status };
+      });
+    },
+  );
+
   app.post<{ Params: { id: string } }>(
     "/api/account/custom-summary/:id",
     async (r, reply) => {
@@ -471,7 +598,9 @@ export function registerPremiumRoutes(
         "summary:" + u.id,
         parse(idSchema, r.headers["idempotency-key"]),
       );
-      await aiAvailability(pool, u.id);
+      if (!(await hasExistingRun(key, u.id))) {
+        await aiAvailability(pool, u.id);
+      }
       const runId = await queue.transaction(async (c) => {
         await admit(c, u.id, key);
         const watch = await c.query(
@@ -498,29 +627,38 @@ export function registerPremiumRoutes(
         .send({ runId, statusUrl: "/api/account/custom-jobs/" + runId });
     },
   );
+
   app.post("/api/account/custom-discover", async (r, reply) => {
     const u = user(r),
       body = parse(
         z.object({ description: z.string().trim().min(5).max(300) }).strict(),
         r.body,
       );
-    const config = await aiAvailability(pool, u.id, "discover");
+    const key = accountKey(
+      "discover:" + u.id,
+      parse(z.uuid(), r.headers["idempotency-key"]),
+    );
+    const alreadyExists = await hasExistingRun(key, u.id);
+    const config = alreadyExists
+      ? aiControlSchema.parse(
+          (await pool.query("SELECT config FROM news_ai_control WHERE id=1"))
+            .rows[0].config,
+        )
+      : await aiAvailability(pool, u.id, "discover");
     const cacheKey = createHash("sha256")
       .update(
         `${config.searchProvider}:${config.searchPricingVersion}:${body.description.normalize("NFKC").toLowerCase()}`,
       )
       .digest("hex");
-    const cached = (
-      await pool.query(
-        "SELECT result FROM news_discovery_cache WHERE cache_key=$1 AND created_at>now()-interval '1 day'",
-        [cacheKey],
-      )
-    ).rows[0];
-    if (cached) return { result: cached.result, cached: true };
-    const key = accountKey(
-      "discover:" + u.id,
-      parse(z.uuid(), r.headers["idempotency-key"]),
-    );
+    if (!alreadyExists) {
+      const cached = (
+        await pool.query(
+          "SELECT result FROM news_discovery_cache WHERE cache_key=$1 AND created_at>now()-interval '1 day'",
+          [cacheKey],
+        )
+      ).rows[0];
+      if (cached) return { result: cached.result, cached: true };
+    }
     const runId = await queue.transaction(async (c) => {
       await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
         "discover:" + cacheKey,
@@ -536,9 +674,10 @@ export function registerPremiumRoutes(
           ...body,
           cacheKey,
         });
+      // Only check in-flight discover tasks owned by THIS user so another user's query is never leaked.
       const pending = await c.query(
-        "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.kind='discover' AND (t.payload->>'cacheKey'=$1 OR t.user_id=$2) AND r.status IN ('queued','running')",
-        [cacheKey, u.id],
+        "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.kind='discover' AND t.user_id=$1 AND r.status IN ('queued','running')",
+        [u.id],
       );
       if (pending.rowCount)
         fail(
@@ -553,6 +692,7 @@ export function registerPremiumRoutes(
       .code(202)
       .send({ runId, statusUrl: "/api/account/custom-jobs/" + runId });
   });
+
   app.post("/api/account/custom-web-brief", async (r, reply) => {
     const u = user(r);
     const body = parse(
@@ -567,8 +707,10 @@ export function registerPremiumRoutes(
       "web-brief:" + u.id + (searching ? ":search" : ":summary"),
       parse(idSchema, r.headers["idempotency-key"]),
     );
-    await aiAvailability(pool, u.id, "summarize");
-    if (searching) await aiAvailability(pool, u.id, "discover");
+    if (!(await hasExistingRun(key, u.id))) {
+      await aiAvailability(pool, u.id, "summarize");
+      if (searching) await aiAvailability(pool, u.id, "discover");
+    }
     const runId = await queue.transaction(async (c) => {
       await admit(c, u.id, key, searching);
       if (searching)
@@ -593,12 +735,23 @@ export function registerPremiumRoutes(
       .code(202)
       .send({ runId, statusUrl: "/api/account/custom-jobs/" + runId });
   });
+
   app.post<{ Params: { id: string } }>(
     "/api/account/custom-enrich/:id",
     async (r, reply) => {
       const u = user(r),
-        id = parse(idSchema, r.params.id),
-        config = await aiAvailability(pool, u.id);
+        id = parse(idSchema, r.params.id);
+      const key = accountKey(
+        "enrich:" + u.id,
+        parse(z.uuid(), r.headers["idempotency-key"]),
+      );
+      const alreadyExists = await hasExistingRun(key, u.id);
+      const config = alreadyExists
+        ? aiControlSchema.parse(
+            (await pool.query("SELECT config FROM news_ai_control WHERE id=1"))
+              .rows[0].config,
+          )
+        : await aiAvailability(pool, u.id);
       const article = (
         await pool.query(
           "SELECT a.* FROM news_articles a WHERE a.id=$1 AND EXISTS(SELECT 1 FROM news_matches m WHERE m.article_id=a.id AND m.user_id=$2)",
@@ -607,17 +760,15 @@ export function registerPremiumRoutes(
       ).rows[0];
       if (!article) fail(404, "NOT_FOUND", "Không tìm thấy kết quả.");
       const version = `extract.v1:${config.provider}:${config.model}:${config.pricingVersion}`;
-      const cached = (
-        await pool.query(
-          "SELECT result FROM news_enrichment WHERE content_hash=$1 AND processing_version=$2",
-          [article.content_hash, version],
-        )
-      ).rows[0];
-      if (cached) return { result: cached.result, cached: true };
-      const key = accountKey(
-        "enrich:" + u.id,
-        parse(z.uuid(), r.headers["idempotency-key"]),
-      );
+      if (!alreadyExists) {
+        const cached = (
+          await pool.query(
+            "SELECT result FROM news_enrichment WHERE content_hash=$1 AND processing_version=$2",
+            [article.content_hash, version],
+          )
+        ).rows[0];
+        if (cached) return { result: cached.result, cached: true };
+      }
       const runId = await queue.transaction(async (c) => {
         await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
           "enrich:" + article.content_hash + version,
@@ -637,275 +788,30 @@ export function registerPremiumRoutes(
         )
           return queue.enqueueTask(c, key, u.id, "enrich", payload);
         const pending = await c.query(
-          "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.kind='enrich' AND t.payload->>'hash'=$1 AND t.payload->>'processingVersion'=$2 AND r.status IN ('queued','running')",
-          [article.content_hash, version],
+          "SELECT 1 FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE t.kind='enrich' AND t.user_id=$1 AND t.payload->>'hash'=$2 AND t.payload->>'processingVersion'=$3 AND r.status IN ('queued','running')",
+          [u.id, article.content_hash, version],
         );
         if (pending.rowCount)
           fail(
             409,
             "ENRICH_PENDING",
-            "Nội dung đang được xử lý dùng chung; thử lại sau.",
+            "Nội dung đang được xử lý; thử lại sau.",
           );
         await admit(c, u.id, key);
-        return queue.enqueueTask(c, key, u.id, "enrich", {
-          description: article.title + "\n" + article.description,
-          hash: article.content_hash,
-          processingVersion: version,
-        });
+        return queue.enqueueTask(c, key, u.id, "enrich", payload);
       });
       return reply
         .code(202)
         .send({ runId, statusUrl: "/api/account/custom-jobs/" + runId });
     },
   );
-  app.get("/api/admin/premium", async (r) => {
-    admin(r);
-    const [users, audits, plans, requests] = await Promise.all([
-      pool.query(
-        "SELECT u.id,u.email,u.name,u.role,e.plan_id,e.starts_at,e.expires_at,e.status FROM hub_users u LEFT JOIN news_entitlements e ON e.user_id=u.id ORDER BY u.created_at LIMIT 1000",
-      ),
-      pool.query("SELECT * FROM news_audit ORDER BY id DESC LIMIT 100"),
-      pool.query("SELECT * FROM news_plans ORDER BY id"),
-      pool.query(
-        "SELECT r.user_id,r.note,r.requested_at,u.name,u.email FROM news_plan_requests r JOIN hub_users u ON u.id=r.user_id WHERE r.status='pending' AND NOT u.disabled ORDER BY r.requested_at LIMIT 1000",
-      ),
-    ]);
-    return {
-      users: users.rows,
-      audits: audits.rows,
-      plans: plans.rows,
-      requests: requests.rows,
-    };
-  });
-  app.put<{ Params: { id: string } }>("/api/admin/premium/:id", async (r) => {
-    const actor = admin(r),
-      id = parse(idSchema, r.params.id),
-      body = parse(
-        z
-          .object({
-            plan: z.enum(["free", "premium"]),
-            expiresAt: z.iso.datetime().nullable(),
-            reason: z.string().trim().min(1).max(300),
-          })
-          .strict(),
-        r.body,
-      );
-    if (
-      body.plan === "premium" &&
-      (!body.expiresAt || Date.parse(body.expiresAt) <= Date.now())
-    )
-      fail(400, "EXPIRY", "Ngày hết hạn phải ở tương lai.");
-    await queue.transaction(async (c) => {
-      await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-        "premium:" + id,
-      ]);
-      if (
-        !(await c.query("SELECT id FROM hub_users WHERE id=$1", [id])).rowCount
-      )
-        fail(404, "NOT_FOUND", "Không tìm thấy tài khoản.");
-      const before = (
-        await c.query("SELECT * FROM news_entitlements WHERE user_id=$1", [id])
-      ).rows[0];
-      await c.query(
-        "INSERT INTO news_entitlements(user_id,plan_id,starts_at,expires_at,status,granted_by) VALUES($1,$2,now(),$3,$4,$5) ON CONFLICT(user_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,starts_at=now(),expires_at=EXCLUDED.expires_at,status=EXCLUDED.status,granted_by=EXCLUDED.granted_by,updated_at=now()",
-        [
-          id,
-          body.plan,
-          body.plan === "premium" ? body.expiresAt : null,
-          body.plan === "premium" ? "active" : "revoked",
-          actor.id,
-        ],
-      );
-      await audit(c, actor.id, id, "entitlement.change", {
-        before,
-        after: body,
-      });
-      if (body.plan === "premium")
-        await c.query(
-          "UPDATE news_plan_requests SET status='approved',reviewed_at=now(),reviewed_by=$2,review_note=NULL WHERE user_id=$1 AND status='pending'",
-          [id, actor.id],
-        );
-    });
-    return { updated: true };
-  });
-  app.post<{ Params: { id: string } }>(
-    "/api/admin/premium-requests/:id/decline",
-    async (r) => {
-      const actor = admin(r),
-        id = parse(idSchema, r.params.id),
-        body = parse(
-          z.object({ reason: z.string().trim().min(1).max(300) }).strict(),
-          r.body,
-        );
-      await queue.transaction(async (c) => {
-        await c.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [
-          "premium:" + id,
-        ]);
-        const row = await c.query(
-          "UPDATE news_plan_requests SET status='declined',reviewed_at=now(),reviewed_by=$2,review_note=$3 WHERE user_id=$1 AND status='pending' RETURNING user_id",
-          [id, actor.id, body.reason],
-        );
-        if (!row.rowCount)
-          fail(404, "NOT_FOUND", "Yêu cầu đã được xử lý hoặc không tồn tại.");
-        await audit(c, actor.id, id, "premium.decline", {
-          reason: body.reason,
-        });
-      });
-      return { updated: true };
-    },
-  );
-  app.put<{ Params: { id: string } }>("/api/admin/plans/:id", async (r) => {
-    const actor = admin(r),
-      id = parse(z.enum(["free", "premium"]), r.params.id),
-      body = parse(
-        z
-          .object({
-            activeWatches: z.number().int().min(0).max(100),
-            discoveryMonth: z.number().int().min(0).max(100),
-            aiCallsMonth: z.number().int().min(0).max(1000),
-            minIntervalMinutes: z.number().int().min(60).max(43200),
-          })
-          .strict(),
-        r.body,
-      );
-    await queue.transaction(async (c) => {
-      await c.query(
-        "UPDATE news_plans SET active_watches=$2,discovery_month=$3,ai_calls_month=$4,min_interval_minutes=$5 WHERE id=$1",
-        [
-          id,
-          body.activeWatches,
-          body.discoveryMonth,
-          body.aiCallsMonth,
-          body.minIntervalMinutes,
-        ],
-      );
-      await audit(c, actor.id, null, "plan.change", { id, ...body });
-    });
-    return { updated: true };
-  });
-  app.get("/api/admin/custom-ai", async (r) => {
-    admin(r);
-    const [config, usage, jobs, sources] = await Promise.all([
-      pool.query("SELECT config FROM news_ai_control WHERE id=1"),
-      pool.query("SELECT * FROM news_usage ORDER BY created_at DESC LIMIT 100"),
-      pool.query(
-        "SELECT t.run_id,t.kind,t.user_id,r.status,r.error FROM news_tasks t JOIN workflow_runs r ON r.id=t.run_id WHERE r.status='failed' ORDER BY r.created_at DESC LIMIT 100",
-      ),
-      pool.query(
-        `SELECT s.id,s.name,s.url,s.status,s.created_at,s.last_error,
-          s.status<>'approved' AND NOT EXISTS(SELECT 1 FROM news_source_articles a WHERE a.source_id=s.id) AS "canReplaceFeed"
-         FROM news_sources s
-         ORDER BY (s.status='pending') DESC,s.created_at DESC LIMIT 500`,
-      ),
-    ]);
-    return {
-      config: aiControlSchema.parse(config.rows[0].config),
-      usage: usage.rows,
-      jobs: jobs.rows,
-      sources: sources.rows,
-    };
-  });
-  app.put("/api/admin/custom-ai", async (r) => {
-    const actor = admin(r),
-      body = parse(aiControlSchema, r.body);
-    await queue.transaction(async (c) => {
-      await c.query("UPDATE news_ai_control SET config=$1::jsonb WHERE id=1", [
-        JSON.stringify(body),
-      ]);
-      await audit(c, actor.id, null, "ai.control", body);
-    });
-    return { updated: true };
-  });
-  app.put<{ Params: { id: string } }>(
-    "/api/admin/custom-sources/:id",
-    async (r) => {
-      const actor = admin(r),
-        id = parse(idSchema, r.params.id),
-        body = parse(
-          z.discriminatedUnion("status", [
-            z
-              .object({
-                status: z.literal("approved"),
-                feedUrl: sourceSchema.shape.url.optional(),
-              })
-              .strict(),
-            z.object({ status: z.literal("rejected") }).strict(),
-          ]),
-          r.body,
-        );
-      const source = (
-        await pool.query(
-          `SELECT s.name,s.url,s.status,
-            EXISTS(SELECT 1 FROM news_source_articles a WHERE a.source_id=s.id) AS "hasArticles"
-           FROM news_sources s WHERE s.id=$1`,
-          [id],
-        )
-      ).rows[0];
-      if (!source) fail(404, "NOT_FOUND", "Không tìm thấy nguồn.");
-      let url = source.url as string;
-      if (body.status === "approved") {
-        if (
-          body.feedUrl &&
-          (source.status === "approved" || source.hasArticles)
-        )
-          fail(
-            409,
-            "SOURCE_CHANGED",
-            "Nguồn này đã được sử dụng. Hãy tạo đề xuất mới nếu cần đổi đường dẫn.",
-          );
-        const feed = checkUrl(body.feedUrl ?? url);
-        feed.hash = "";
-        url = feed.toString();
-        const checked = await fetchRss(
-          [{ id, name: source.name, url, enabled: true }],
-          { http: sourceHttp, signal: AbortSignal.timeout(10000) },
-        );
-        if (checked.status !== "success")
-          fail(
-            400,
-            "SOURCE_NOT_READABLE",
-            checked.errors.some(
-              (error) =>
-                error.code === "NOT_RSS_FEED" ||
-                error.code === "RESPONSE_LIMIT",
-            )
-              ? "Địa chỉ này không đọc được như bảng tin. Hãy nhập đường dẫn RSS/Atom của trang rồi thử lại."
-              : "Không mở được bảng tin RSS/Atom. Kiểm tra đường dẫn hoặc thử lại sau.",
-          );
-      }
-      try {
-        const reviewed = await queue.transaction(async (c) => {
-          const updated = await c.query(
-            `UPDATE news_sources SET status=$2,reviewed_by=$3,reviewed_at=now(),url=$4,
-                last_error=CASE WHEN $2='approved' THEN NULL ELSE last_error END
-             WHERE id=$1 AND url=$5 AND status=$6
-               AND ($4=$5 OR NOT EXISTS(SELECT 1 FROM news_source_articles a WHERE a.source_id=$1))
-             RETURNING id,name,url,status,last_error,
-               status<>'approved' AND NOT EXISTS(SELECT 1 FROM news_source_articles a WHERE a.source_id=$1) AS "canReplaceFeed"`,
-            [id, body.status, actor.id, url, source.url, source.status],
-          );
-          if (!updated.rowCount)
-            fail(
-              409,
-              "SOURCE_CHANGED",
-              "Đề nghị đã thay đổi. Tải lại danh sách rồi thử lại.",
-            );
-          await audit(c, actor.id, null, "source.review", {
-            id,
-            status: body.status,
-          });
-          return updated.rows[0];
-        });
-        return { updated: true, source: reviewed };
-      } catch (error) {
-        if ((error as { code?: string }).code === "23505")
-          fail(
-            409,
-            "SOURCE_EXISTS",
-            "Đường dẫn nguồn tin này đã có trong danh sách.",
-          );
-        throw error;
-      }
-    },
+
+  registerPremiumAdminRoutes(
+    app,
+    pool,
+    queue,
+    parse,
+    proposeSource,
+    sourceHttp,
   );
 }

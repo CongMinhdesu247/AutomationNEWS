@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultSettings, settingsSchema } from "./index.js";
+import {
+  bookmarkInputSchema,
+  defaultSettings,
+  foldVi,
+  isValidMonthDay,
+  settingsSchema,
+} from "./index.js";
 const fresh = () => structuredClone(defaultSettings);
 describe("settings validation", () => {
   it("accepts defaults and coordinate boundaries", () => {
@@ -135,6 +141,52 @@ describe("settings validation", () => {
       settingsSchema.safeParse({
         ...fresh(),
         notifications: { ...defaultSettings.notifications, token: "secret" },
+      }).success,
+    ).toBe(false);
+  });
+  it("normalizes Vietnamese diacritics including đ/Đ via foldVi", () => {
+    expect(foldVi("Đà Nẵng — Bản tin buổi sáng")).toBe(
+      "da nang — ban tin buoi sang",
+    );
+    expect(foldVi("Đường Độc Lập")).toBe("duong doc lap");
+  });
+  it("validates calendar month-day dates and rejects impossible dates like 02-31", () => {
+    expect(isValidMonthDay("02-29")).toBe(true);
+    expect(isValidMonthDay("10-20")).toBe(true);
+    expect(isValidMonthDay("02-30")).toBe(false);
+    expect(isValidMonthDay("02-31")).toBe(false);
+    expect(isValidMonthDay("04-31")).toBe(false);
+
+    const bad = fresh();
+    bad.holidays = {
+      enabled: true,
+      items: [{ id: crypto.randomUUID(), title: "Test", monthDay: "02-31" }],
+    };
+    expect(settingsSchema.safeParse(bad).success).toBe(false);
+
+    const good = fresh();
+    good.holidays = {
+      enabled: true,
+      items: [{ id: crypto.randomUUID(), title: "Leap", monthDay: "02-29" }],
+    };
+    expect(settingsSchema.safeParse(good).success).toBe(true);
+  });
+  it("validates bookmarkInputSchema and blocks unsafe bookmark URLs", () => {
+    expect(
+      bookmarkInputSchema.safeParse({
+        url: "https://vnexpress.net/bai-viet-123.html",
+        title: "Bài viết thử nghiệm",
+        source: "VnExpress",
+        summary: "Tóm tắt ngắn",
+        kind: "rss",
+        digestId: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      bookmarkInputSchema.safeParse({
+        url: "javascript:alert(1)",
+        title: "XSS",
+        kind: "rss",
       }).success,
     ).toBe(false);
   });

@@ -1,0 +1,20 @@
+# Caddy vhost snippet for /home/congminh/apps/_proxy/sites/automationnews.caddy
+# Replace news.example.com with your exact APP_ORIGIN domain.
+
+news.example.com {
+    encode zstd gzip
+
+    @sse path_regexp ^/api/runs/[0-9a-f-]+/events$
+    handle @sse {
+        reverse_proxy 127.0.0.1:8091 {
+            flush_interval -1
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8091 {
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}

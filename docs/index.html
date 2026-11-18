@@ -1,26 +1,66 @@
 <!doctype html>
 <html lang="vi">
-  <meta charset="utf-8" /><meta
-    name="viewport"
-    content="width=device-width,initial-scale=1"
-  /><title>Bản tin gia đình</title>
-  <body
-    style="
-      max-width: 650px;
-      margin: 60px auto;
-      padding: 24px;
-      font: 18px/1.7 system-ui;
-      color: #152a43;
-    "
-  >
-    <h1>Bản tin gia đình</h1>
-    <p>
-      Để đọc bản tin riêng, chạm vào thông báo mới trong ứng dụng ntfy trên điện
-      thoại.
-    </p>
-    <p>
-      Trang đọc bản tin hoạt động độc lập với máy tính cá nhân. Quản lý hồ sơ
-      dùng dashboard của gia đình.
-    </p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Bản tin mỗi sáng · Trình đọc Cloud</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f3f7f6;
+        color: #233d37;
+        font: 17px/1.7 system-ui, -apple-system, sans-serif;
+        padding: 40px 20px;
+      }
+      main {
+        max-width: 660px;
+        margin: 0 auto;
+        padding: 32px;
+        background: #ffffff;
+        border: 1px solid #dce7e1;
+        border-radius: 18px;
+        box-shadow: 0 12px 32px rgba(23, 107, 87, 0.06);
+      }
+      .eyebrow {
+        color: #176b57;
+        letter-spacing: 0.12em;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin: 0 0 8px;
+      }
+      h1 {
+        margin: 0 0 14px;
+        font-size: 28px;
+        letter-spacing: -0.02em;
+      }
+      p {
+        color: #4b635b;
+        margin: 0 0 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Bản tin mỗi sáng</p>
+      <h1>Trình đọc bản tin mã hóa</h1>
+      <p>
+        Để mở bản tin riêng tư, hãy chạm vào nút <strong>Xem chi tiết</strong> bên
+        trong thông báo mới trên ứng dụng <strong>ntfy</strong>.
+      </p>
+      <p>
+        Nội dung được giải mã trực tiếp trên trình duyệt của bạn bằng khóa một lần
+        trong liên kết và hoạt động ngay cả khi máy chủ cá nhân đang tắt.
+      </p>
+    </main>
   </body>
 </html>

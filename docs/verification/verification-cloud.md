@@ -2,7 +2,7 @@
 
 ## Đã triển khai
 
-- Default branch main của CongMinhdesu247/AutomationNEWS có workflow Morning digest (PC off), lịch 00:00 UTC / 07:00 Việt Nam.
+- Default branch main của `<owner>/AutomationNEWS` có workflow Morning digest (PC off), lịch 00:00 UTC / 07:00 Việt Nam.
 - Dùng GitHub-hosted ubuntu-latest, không self-hosted runner, không cần PC hoặc database local.
 - Cấu hình cá nhân chuyển qua repository secrets mã hóa HUB_SETTINGS_JSON và NTFY_TOKEN; không commit cấu hình, token hoặc topic thật.
 - Chỉ commit các file cloud và thay đổi tùy chọn message trong connector ntfy. Các thay đổi khác có sẵn ở workspace được giữ nguyên, không đưa vào deployment này.
@@ -16,8 +16,8 @@
 
 ## Kiểm tra GitHub-hosted runner thật
 
-- [Dry-run](https://github.com/CongMinhdesu247/AutomationNEWS/actions/runs/43155275786): success. Cài dependency, typecheck, cloud test và thu thập nguồn thật đều qua; log kết luận dry_run success.
-- [Gửi thật](https://github.com/CongMinhdesu247/AutomationNEWS/actions/runs/43155408156): success. Log kết luận sent success.
+- Dry-run trên GitHub Actions: success. Cài dependency, typecheck, cloud test và thu thập nguồn thật đều qua; log kết luận dry_run success.
+- Gửi thật trên GitHub Actions: success. Log kết luận sent success.
 - State branch hub-cloud-state ghi ngày 2026-11-12, status sent, 200 snapshot repository. ntfy đã trả thành công; việc iPhone thực sự hiển thị cần người dùng quan sát trên thiết bị.
 - Tắt newsletter.enabled ở cấu hình local sau khi cloud gửi thành công; giữ cấu hình nguồn và chức năng gửi thủ công. Không thay đổi secret cloud sang trạng thái tắt.
 - Không cần mở port/router/tunnel, không thuê server hoặc dùng artifact/cache lưu bản tin.

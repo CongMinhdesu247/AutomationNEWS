@@ -9,52 +9,87 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src https://raw.githubusercontent.com; base-uri 'none'; form-action 'none'"
     />
-    <title>Bản tin cá nhân</title>
+    <title>Bản tin cá nhân · Bản tin mỗi sáng</title>
     <style>
+      :root {
+        --bg: #f3f7f6;
+        --card: #ffffff;
+        --ink: #1e3731;
+        --muted: #4b635a;
+        --line: #d6e4dd;
+        --accent: #146954;
+        --warn-bg: #fff6db;
+        --warn-ink: #744d09;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #12211c;
+          --card: #192d26;
+          --ink: #eaf4ee;
+          --muted: #b0c9bc;
+          --line: #324d41;
+          --accent: #9be0bc;
+          --warn-bg: #3b2f16;
+          --warn-ink: #fbd38d;
+        }
+      }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        background: #f3f6fa;
-        color: #152a43;
-        font-family: system-ui, sans-serif;
-        line-height: 1.7;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.75;
       }
       main {
         max-width: 760px;
         margin: 40px auto;
-        padding: 30px;
-        background: white;
-        border: 1px solid #dce4ef;
-        border-radius: 16px;
+        padding: 34px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 14px 36px rgba(20, 105, 84, 0.06);
       }
       h1 {
         font-size: 28px;
-        margin: 0;
+        letter-spacing: -0.02em;
+        margin: 4px 0 8px;
+      }
+      a {
+        color: var(--accent);
+        text-underline-offset: 3px;
       }
       #status {
-        color: #526780;
+        color: var(--muted);
+        font-size: 14px;
+        margin-top: 0;
       }
       #content {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         font: inherit;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
       }
       .eyebrow {
-        color: #2563eb;
-        letter-spacing: 0.12em;
+        color: var(--accent);
+        letter-spacing: 0.1em;
         font-size: 12px;
         font-weight: 700;
+        margin: 0;
       }
       .warning {
-        background: #fff6db;
-        padding: 14px;
-        border-radius: 8px;
+        background: var(--warn-bg);
+        color: var(--warn-ink);
+        padding: 14px 16px;
+        border-radius: 10px;
+        font-size: 14px;
       }
       footer {
-        color: #526780;
-        border-top: 1px solid #dce4ef;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
         padding-top: 20px;
         margin-top: 30px;
         font-size: 13px;
@@ -65,9 +100,10 @@
           padding: 24px 18px;
           border: 0;
           border-radius: 0;
+          box-shadow: none;
         }
         h1 {
-          font-size: 25px;
+          font-size: 24px;
         }
       }
     </style>

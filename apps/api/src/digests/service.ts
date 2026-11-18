@@ -1,5 +1,6 @@
 import {
   settingsSchema,
+  goldBarItems,
   type FieldIssue,
   type DigestSources,
   type Settings,
@@ -7,9 +8,9 @@ import {
 } from "@hub/contracts";
 import { DigestStore } from "./store.js";
 import { safeHttp, type HttpClient } from "../connectors/http.js";
-import { goldBarItems } from "@hub/contracts";
 import { sendNtfy } from "../connectors/ntfy.js";
 import { createVietnameseSummarizer } from "../connectors/vietnamese.js";
+
 export class RequestError extends Error {
   constructor(
     public statusCode: number,
@@ -20,6 +21,7 @@ export class RequestError extends Error {
     super(message);
   }
 }
+
 export type ServiceOptions = {
   aiAdapter?: import("../premium/ai.js").AiAdapter;
   searchAdapter?: import("../premium/search.js").SearchAdapter;
@@ -34,17 +36,21 @@ export type ServiceOptions = {
   publicBaseUrl?: string;
   ntfyAllowedOrigins?: string[];
   ntfyDestinationOrigins?: string[];
+  ntfyTokenOrigins?: string[];
 };
+
 export function aggregateStatus(sources: DigestSources) {
   const active = Object.values(sources).filter(
-    (source) => source.status !== "disabled",
+    (source) => source && source.status !== "disabled",
   );
+  if (!active.length) return "partial";
   return active.every((source) => source.status === "failed")
     ? "failed"
     : active.every((source) => source.status === "success")
       ? "success"
       : "partial";
 }
+
 export class DigestService {
   private active = 0;
   private http: HttpClient;
@@ -58,14 +64,45 @@ export class DigestService {
     this.now = options.now ?? (() => new Date());
     const client = options.http ?? safeHttp;
     this.http = (url, request = {}) =>
-      client(url, { ...request, timeoutMs: options.requestTimeoutMs ?? 6000 });
+      client(url, { timeoutMs: options.requestTimeoutMs ?? 6000, ...request });
     this.summarize = createVietnameseSummarizer({
       http: this.http,
       now: this.now,
     });
   }
-  async localize(digest: Digest): Promise<Digest> {
+
+  async localize(
+    digest: Digest,
+    { allowExternalFetch = true }: { allowExternalFetch?: boolean } = {},
+  ): Promise<Digest> {
     if (!digest.sources) return digest;
+    const githubData = allowExternalFetch
+      ? await this.summarize(digest.sources.github.data)
+      : {
+          ...digest.sources.github.data,
+          rising: digest.sources.github.data.rising.map((repo) =>
+            repo.summaryVi
+              ? repo
+              : {
+                  ...repo,
+                  summaryVi: repo.description
+                    ? repo.description.slice(0, 320)
+                    : "Tác giả chưa cung cấp mô tả cho dự án này.",
+                  summaryViStatus: repo.description ? "unavailable" as const : "missing" as const,
+                },
+          ),
+          newNotable: digest.sources.github.data.newNotable.map((repo) =>
+            repo.summaryVi
+              ? repo
+              : {
+                  ...repo,
+                  summaryVi: repo.description
+                    ? repo.description.slice(0, 320)
+                    : "Tác giả chưa cung cấp mô tả cho dự án này.",
+                  summaryViStatus: repo.description ? "unavailable" as const : "missing" as const,
+                },
+          ),
+        };
     return {
       ...digest,
       sources: {
@@ -96,11 +133,12 @@ export class DigestService {
           : {}),
         github: {
           ...digest.sources.github,
-          data: await this.summarize(digest.sources.github.data),
+          data: githubData,
         },
       },
     };
   }
+
   private enter() {
     if (this.active >= (this.options.maxConcurrent ?? 2))
       throw new RequestError(
@@ -110,6 +148,7 @@ export class DigestService {
       );
     this.active++;
   }
+
   async notify(
     id: string,
     key: string,
@@ -117,7 +156,7 @@ export class DigestService {
   ) {
     const existing = await this.store.notificationByKey(id, key);
     if (existing) return existing;
-    const digest = await this.store.get(id);
+    const digest = await this.store.get(id, !destination);
     if (!digest)
       throw new RequestError(
         404,
@@ -155,6 +194,7 @@ export class DigestService {
           http: this.http,
           now: this.now,
           token: this.options.ntfyToken,
+          tokenOrigins: this.options.ntfyTokenOrigins,
           publicBaseUrl: this.options.publicBaseUrl,
           allowedOrigins: this.options.ntfyAllowedOrigins,
           destinationOrigins: this.options.ntfyDestinationOrigins,

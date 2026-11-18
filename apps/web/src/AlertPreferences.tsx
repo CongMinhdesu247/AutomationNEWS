@@ -1,4 +1,5 @@
 import { defaultAlerts, type FamilyProfile } from "@hub/contracts";
+
 export default function AlertPreferences({
   value,
   onChange,
@@ -28,9 +29,15 @@ export default function AlertPreferences({
                 min="1000"
                 max="10000000"
                 step="1000"
-                value={rules.goldChange}
+                value={Number.isNaN(rules.goldChange) ? "" : rules.goldChange}
                 onChange={(e) =>
-                  onChange({ ...rules, goldChange: Number(e.target.value) })
+                  onChange({
+                    ...rules,
+                    goldChange:
+                      e.target.value === ""
+                        ? Number.NaN
+                        : Number(e.target.value),
+                  })
                 }
               />
             </label>
@@ -40,9 +47,15 @@ export default function AlertPreferences({
                 type="number"
                 min="1"
                 max="10000"
-                value={rules.usdChange}
+                value={Number.isNaN(rules.usdChange) ? "" : rules.usdChange}
                 onChange={(e) =>
-                  onChange({ ...rules, usdChange: Number(e.target.value) })
+                  onChange({
+                    ...rules,
+                    usdChange:
+                      e.target.value === ""
+                        ? Number.NaN
+                        : Number(e.target.value),
+                  })
                 }
               />
             </label>
@@ -52,9 +65,17 @@ export default function AlertPreferences({
                 type="number"
                 min="50"
                 max="500"
-                value={rules.aqiThreshold}
+                value={
+                  Number.isNaN(rules.aqiThreshold) ? "" : rules.aqiThreshold
+                }
                 onChange={(e) =>
-                  onChange({ ...rules, aqiThreshold: Number(e.target.value) })
+                  onChange({
+                    ...rules,
+                    aqiThreshold:
+                      e.target.value === ""
+                        ? Number.NaN
+                        : Number(e.target.value),
+                  })
                 }
               />
             </label>

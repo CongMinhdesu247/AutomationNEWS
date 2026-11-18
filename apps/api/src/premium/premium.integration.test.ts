@@ -234,7 +234,7 @@ it("upgrades 010 without changing existing accounts, settings or schedules; safe
   ).toBe("free");
   expect(
     (await pool.query("SELECT count(*) FROM schema_migrations")).rows[0].count,
-  ).toBe("16");
+  ).toBe("17");
 });
 it("keeps Free and role independent, forbids plan payload and admin endpoints", async () => {
   expect((await call(a, "GET", "/api/account/plan")).json().plan.id).toBe(

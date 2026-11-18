@@ -23,12 +23,11 @@ services:
     environment:
       DATABASE_URL: postgresql://step6:fixture_only@db:5432/step6
       PORTFOLIO_FIXTURE: "1"
+      HOST: "0.0.0.0"
     command:
       [
-        "pnpm",
-        "--filter",
-        "@hub/api",
-        "exec",
+        "node",
+        "--import",
         "tsx",
         "src/operations/portfolio-server.ts",
       ]

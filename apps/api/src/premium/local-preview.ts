@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { checkUrl, ConnectorError, resolveTarget } from "../connectors/http.js";
+import { logEvent } from "../logger.js";
 import { geminiAdapter } from "./ai.js";
 import { braveSearch, discoverySchema } from "./search.js";
 import { fail, requirePremium } from "./store.js";
@@ -22,8 +23,9 @@ export async function registerLocalWebPreview(
     throw new Error(
       "Live Premium preview requires both keys and a Gemini model.",
     );
-  app.get("/api/account/custom-web-preview", async () => {
+  app.get("/api/account/custom-web-preview", async (request) => {
     if (!live) return { live };
+    if (!request.accountUser) return { live: false };
     const { rows } = await pool.query<{ id: string }>(
       "SELECT id FROM news_sources WHERE url LIKE 'https://rss.fixture.invalid/%' OR url='https://93.184.216.34/feed'",
     );
@@ -122,7 +124,7 @@ export async function registerLocalWebPreview(
               : signal.aborted
                 ? "TIMEOUT"
                 : "UNKNOWN";
-        console.warn("Gemini web preview summary unavailable", { code });
+        logEvent("warn", "premium.preview.summary_unavailable", { code });
         const summaryNotice =
           code === "HTTP_429"
             ? "Gemini đang giới hạn lượt tổng hợp. Bạn vẫn có thể mở các nguồn bên dưới."

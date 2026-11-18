@@ -94,7 +94,7 @@ export class DigestNodeExecutor {
     this.now = options.now ?? (() => new Date());
     const http = options.http ?? safeHttp;
     this.http = (url, opts = {}) =>
-      http(url, { ...opts, timeoutMs: options.requestTimeoutMs ?? 6000 });
+      http(url, { timeoutMs: options.requestTimeoutMs ?? 6000, ...opts });
     this.github = createGithubConnector({
       http: this.http,
       now: this.now,
@@ -178,10 +178,8 @@ export class DigestNodeExecutor {
     let snapshots: Repository[] = [];
     const context = { http: this.http, now: this.now, signal: combined };
     const collectFuel = async () => {
-      const recent = await this.store.list(1, 5);
-      const previousId = recent.items.find((item) => item.status !== "running")?.id;
-      const previous = previousId ? await this.store.get(previousId) : undefined;
-      return fetchFuel(config.fuel, { ...context, baseline: previous?.sources?.fuel ? fuelBaseline(previous.sources.fuel) : undefined });
+      const baseline = await this.store.latestFuelBaseline(job.userId);
+      return fetchFuel(config.fuel, { ...context, baseline });
     };
     const collectMarket = async () => {
       // A slow history service must never consume the live quote's deadline.
@@ -206,7 +204,19 @@ export class DigestNodeExecutor {
         : job.type === "fetch_usd"
           ? collectMarket()
         : job.type === "fetch_air_quality"
-          ? fetchAirQuality(config.airQuality, context)
+          ? fetchAirQuality(
+              config.airQuality?.latitude === undefined &&
+                config.weather.location
+                ? {
+                    ...config.airQuality,
+                    enabled: config.airQuality?.enabled ?? false,
+                    location: config.airQuality?.location ?? config.weather.location,
+                    latitude: config.weather.latitude,
+                    longitude: config.weather.longitude,
+                  }
+                : config.airQuality,
+              { ...context, timezone: config.newsletter.timezone },
+            )
         : job.type === "fetch_fuel"
           ? collectFuel()
         : job.type === "fetch_weather"
@@ -280,13 +290,20 @@ export class WorkerRunner {
     this.controllers.add(controller);
     let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
     let done = false;
+    let consecutiveHeartbeatErrors = 0;
     const beat = async () => {
       if (done || controller.signal.aborted) return;
       try {
-        if (!(await this.queue.heartbeat(job)))
+        if (!(await this.queue.heartbeat(job))) {
           controller.abort(new LeaseLost());
+        } else {
+          consecutiveHeartbeatErrors = 0;
+        }
       } catch {
-        controller.abort(new LeaseLost());
+        consecutiveHeartbeatErrors++;
+        if (consecutiveHeartbeatErrors >= 2) {
+          controller.abort(new LeaseLost());
+        }
       }
       if (!done && !controller.signal.aborted)
         heartbeatTimer = setTimeout(
@@ -382,8 +399,8 @@ export class WorkerRunner {
         } catch {
           console.error("Worker chưa kết nối được queue; sẽ kiểm tra lại.");
         }
-        if (!this.stopping)
-          await new Promise<void>((resolve) => {
+        if (!this.stopping) {
+          const waitSleep = new Promise<void>((resolve) => {
             const timer = setTimeout(finish, this.options.pollMs ?? 1000);
             function finish() {
               clearTimeout(timer);
@@ -393,6 +410,12 @@ export class WorkerRunner {
             signal.addEventListener("abort", finish, { once: true });
             if (signal.aborted) finish();
           });
+          if (this.tasks.size >= concurrency) {
+            await Promise.race([waitSleep, ...this.tasks]);
+          } else {
+            await waitSleep;
+          }
+        }
       }
     } finally {
       signal.removeEventListener("abort", stop);

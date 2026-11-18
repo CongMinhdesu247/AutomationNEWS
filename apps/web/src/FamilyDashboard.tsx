@@ -1,33 +1,30 @@
-import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import {
   familyCities,
-  familyTopics,
   familyConfigSchema,
-  type FamilyDocument,
+  familyTopics,
   type FamilyConfig,
+  type FamilyDocument,
   type FamilyProfile,
 } from "@hub/contracts";
 import "./family.css";
 import AlertPreferences from "./AlertPreferences";
 import { DeliveryPanel, FamilyBackup, MemberAccess } from "./FamilyTools";
+import { apiRequest } from "./lib/api-client";
+import { Icon } from "./Icons";
 
-async function api<T>(url: string, method = "GET", body?: unknown): Promise<T> {
-  const response = await fetch(url, {
+async function familyApi<T>(
+  url: string,
+  method = "GET",
+  body?: unknown,
+): Promise<T> {
+  return apiRequest<T>(url, {
     method,
-    signal: requestSignal(45000),
-    ...(body === undefined
-      ? {}
-      : {
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        }),
+    body,
+    timeoutMs: 45000,
   });
-  const value = await response.json();
-  if (!response.ok)
-    throw new Error(value.error?.message ?? "Chưa xử lý được yêu cầu.");
-  return value;
 }
+
 const weekdays = [
   "Thứ Hai",
   "Thứ Ba",
@@ -37,11 +34,13 @@ const weekdays = [
   "Thứ Bảy",
   "Chủ nhật",
 ];
+
 const times = Array.from(
   { length: 48 },
   (_, i) =>
     `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`,
 );
+
 export default function FamilyDashboard() {
   const [document, setDocument] = useState<FamilyDocument | null>(null);
   const [draft, setDraft] = useState<FamilyConfig | null>(null);
@@ -50,9 +49,25 @@ export default function FamilyDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showTopic, setShowTopic] = useState(false);
+
+  useEffect(() => {
+    setShowTopic(false);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   useEffect(() => {
     let active = true;
-    api<FamilyDocument>("/api/family")
+    familyApi<FamilyDocument>("/api/family")
       .then((value) => {
         if (active) {
           setDocument(value);
@@ -61,14 +76,16 @@ export default function FamilyDashboard() {
         }
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) setError((e as Error).message);
       });
     return () => {
       active = false;
     };
   }, []);
+
   const profile = draft?.profiles.find((p) => p.id === selected);
   const synced = document?.revision === document?.syncedRevision && !dirty;
+
   const change = (patch: Partial<FamilyProfile>) => {
     if (!draft || !profile) return;
     setDraft({
@@ -81,7 +98,9 @@ export default function FamilyDashboard() {
     setNotice("");
     setError("");
   };
+
   async function save() {
+    if (!document) return;
     const parsed = familyConfigSchema.safeParse(draft);
     if (!parsed.success) {
       setError(parsed.error.issues.map((i) => i.message).join(" "));
@@ -91,10 +110,10 @@ export default function FamilyDashboard() {
     setError("");
     setNotice("");
     try {
-      const result = await api<FamilyDocument & { syncError?: string }>(
+      const result = await familyApi<FamilyDocument & { syncError?: string }>(
         "/api/family",
         "PUT",
-        { config: parsed.data, revision: document!.revision },
+        { config: parsed.data, revision: document.revision },
       );
       setDocument(result);
       setDraft(result.config);
@@ -107,11 +126,16 @@ export default function FamilyDashboard() {
       setBusy(false);
     }
   }
+
   async function sync() {
     setBusy(true);
     setError("");
     try {
-      const result = await api<FamilyDocument>("/api/family/sync", "POST", {});
+      const result = await familyApi<FamilyDocument>(
+        "/api/family/sync",
+        "POST",
+        {},
+      );
       setDocument(result);
       setNotice("Đã đồng bộ cấu hình hiện tại lên cloud.");
     } catch (e) {
@@ -120,12 +144,13 @@ export default function FamilyDashboard() {
       setBusy(false);
     }
   }
+
   async function test() {
     if (!profile) return;
     setBusy(true);
     setError("");
     try {
-      await api(
+      await familyApi(
         "/api/family/" + encodeURIComponent(profile.id) + "/test",
         "POST",
         {},
@@ -139,6 +164,7 @@ export default function FamilyDashboard() {
       setBusy(false);
     }
   }
+
   function add() {
     if (!draft || draft.profiles.length >= 8) return;
     const id = crypto.randomUUID();
@@ -163,6 +189,7 @@ export default function FamilyDashboard() {
     setDirty(true);
     setNotice("");
   }
+
   return (
     <div className="family-page">
       <div className="page-heading">
@@ -175,6 +202,7 @@ export default function FamilyDashboard() {
           </p>
         </div>
         <button
+          type="button"
           className="primary"
           disabled={busy || !dirty}
           onClick={() => void save()}
@@ -213,6 +241,7 @@ export default function FamilyDashboard() {
             </span>
             {!dirty && !synced && (
               <button
+                type="button"
                 disabled={busy || !document.cloudConfigured}
                 onClick={() => void sync()}
               >
@@ -233,6 +262,7 @@ export default function FamilyDashboard() {
                   Hồ sơ <small>{draft.profiles.length}/8</small>
                 </h2>
                 <button
+                  type="button"
                   disabled={busy || draft.profiles.length >= 8}
                   onClick={add}
                 >
@@ -241,6 +271,7 @@ export default function FamilyDashboard() {
               </div>
               {draft.profiles.map((p) => (
                 <button
+                  type="button"
                   key={p.id}
                   className={
                     "family-member " + (p.id === selected ? "selected" : "")
@@ -412,37 +443,71 @@ export default function FamilyDashboard() {
                   </p>
                   <label className="family-topic">
                     Topic ntfy
-                    <input
-                      autoComplete="off"
-                      spellCheck={false}
-                      value={profile.topic}
-                      maxLength={128}
-                      onChange={(e) => change({ topic: e.target.value })}
-                    />
+                    <div className="secret-topic-box">
+                      <input
+                        type={showTopic ? "text" : "password"}
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={profile.topic}
+                        maxLength={128}
+                        onChange={(e) => change({ topic: e.target.value })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTopic((v) => !v)}
+                        aria-label={showTopic ? "Ẩn topic" : "Hiện topic"}
+                      >
+                        <Icon name={showTopic ? "eyeOff" : "eye"} size={16} />
+                        {showTopic ? "Ẩn" : "Hiện"}
+                      </button>
+                    </div>
                   </label>
                   <p className="muted">
                     Topic tự tạo có chuỗi ngẫu nhiên để khó đoán. Không chia sẻ
                     công khai topic nhận tin của gia đình.
                   </p>
-                  <button
-                    disabled={!profile.topic}
-                    onClick={() =>
-                      void navigator.clipboard.writeText(profile.topic).then(
-                        () =>
-                          setNotice(
-                            "Đã sao chép topic. Dùng topic này để đăng ký ntfy trên điện thoại của người nhận.",
-                          ),
-                        () =>
-                          setError(
-                            "Trình duyệt chưa cho sao chép. Bạn có thể chọn và sao chép trực tiếp trong ô topic.",
-                          ),
-                      )
-                    }
-                  >
-                    Sao chép topic
-                  </button>
                   <div className="family-actions">
                     <button
+                      type="button"
+                      disabled={!profile.topic}
+                      onClick={() =>
+                        void navigator.clipboard.writeText(profile.topic).then(
+                          () =>
+                            setNotice(
+                              "Đã sao chép topic. Dùng topic này để đăng ký ntfy trên điện thoại của người nhận.",
+                            ),
+                          () =>
+                            setError(
+                              "Trình duyệt chưa cho sao chép. Bấm Hiện để chọn và sao chép trực tiếp.",
+                            ),
+                        )
+                      }
+                    >
+                      <Icon name="copy" size={16} />
+                      Sao chép topic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Tạo topic mới? Điện thoại của người nhận sẽ cần đăng ký lại topic mới trong ứng dụng ntfy.",
+                          )
+                        ) {
+                          change({
+                            topic:
+                              "hub_" + crypto.randomUUID().replaceAll("-", ""),
+                          });
+                          setShowTopic(true);
+                        }
+                      }}
+                    >
+                      Tạo topic mới
+                    </button>
+                  </div>
+                  <div className="family-actions">
+                    <button
+                      type="button"
                       disabled={busy || dirty || !synced || !profile.topic}
                       onClick={() => void test()}
                     >
@@ -450,8 +515,16 @@ export default function FamilyDashboard() {
                     </button>
                     {draft.profiles.length > 1 && (
                       <button
+                        type="button"
                         className="family-remove"
                         onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Xóa hồ sơ "${profile.name || "Chưa đặt tên"}" khỏi danh sách gia đình?`,
+                            )
+                          ) {
+                            return;
+                          }
                           const rest = draft.profiles.filter(
                             (p) => p.id !== selected,
                           );
@@ -475,7 +548,8 @@ export default function FamilyDashboard() {
           </div>
           <FamilyBackup
             config={document.config}
-            disabled={busy || dirty}
+            hasUnsavedChanges={dirty}
+            disabled={busy}
             onRestore={(config) => {
               setDraft(config);
               setSelected(config.profiles[0]!.id);

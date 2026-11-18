@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { RequestError } from "../digests/service.js";
-import type { WatchConditions } from "@hub/contracts";
+import { foldVi, type WatchConditions } from "@hub/contracts";
 export type Db = Pool | PoolClient;
 export const fail = (status: number, code: string, message: string): never => {
   throw new RequestError(status, code, message);
@@ -41,8 +41,7 @@ export async function audit(
     [actor, subject, action, JSON.stringify(details)],
   );
 }
-const fold = (s: string) =>
-  s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const fold = foldVi;
 // Every include term is required. Region/type groups use OR within each group.
 // Deadline must be explicit ISO evidence; unknown dates never satisfy a date constraint.
 export function matchConditions(

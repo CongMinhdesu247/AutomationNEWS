@@ -48,6 +48,7 @@ export type CloudOptions = {
   now?: () => Date;
   githubToken?: string;
   ntfyToken?: string;
+  ntfyDestinationOrigins?: string[];
   dryRun?: boolean;
   forceSend?: boolean;
   deliveryNamespace?: string;
@@ -242,15 +243,15 @@ export async function runCloudDigest(options: CloudOptions) {
     ).length,
   });
   const active = Object.values(sources).filter(
-    (source) => source.status !== "disabled",
+    (source) => source && source.status !== "disabled",
   );
-  const status: "failed" | "success" | "partial" = active.every(
-    (source) => source.status === "failed",
-  )
-    ? "failed"
-    : active.every((source) => source.status === "success")
-      ? "success"
-      : "partial";
+  const status: "failed" | "success" | "partial" = !active.length
+    ? "partial"
+    : active.every((source) => source.status === "failed")
+      ? "failed"
+      : active.every((source) => source.status === "success")
+        ? "success"
+        : "partial";
   const digest: Digest = {
     id: crypto.randomUUID(),
     createdAt: now().toISOString(),
@@ -351,6 +352,7 @@ export async function runCloudDigest(options: CloudOptions) {
     http: boundedHttp,
     now,
     token: options.ntfyToken,
+    destinationOrigins: options.ntfyDestinationOrigins,
     signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]),
     message: options.alertsOnly && lowest.length
       ? cloudMessage(digest)

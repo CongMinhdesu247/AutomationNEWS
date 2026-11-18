@@ -10,7 +10,7 @@ Tạo **một job** trong cron-job.org, đặt tên `AutomationNEWS — Minh 09:
 - Ngày: mọi ngày. Bộ chạy vẫn kiểm tra ngày được bật của từng hồ sơ.
 - Giờ: `09`.
 - Phút: `00,05,30,35`. Hai lượt chính là 09:00/09:30; 09:05/09:35 kiểm tra bù khi lượt trước chưa bắt đầu hoặc lỗi trước khi giữ chỗ gửi.
-- URL: `https://api.github.com/repos/CongMinhdesu247/AutomationNEWS/actions/workflows/morning-digest.yml/dispatches`.
+- URL: `https://api.github.com/repos/<owner>/<repo>/actions/workflows/morning-digest.yml/dispatches`.
 - Phương thức: `POST`.
 - Headers: `Accept: application/vnd.github+json`, `Content-Type: application/json`, `X-GitHub-Api-Version: 2022-11-28`, `Authorization: Bearer <GITHUB_DISPATCH_TOKEN>`.
 - Nội dung body:
@@ -38,10 +38,8 @@ Sau lượt chạy thật, kiểm tra cả **history của job cron**, **event w
 
 Tài liệu nguồn: [cron-job.org: miễn phí, lịch và HTTP tùy chỉnh](https://cron-job.org/en/), [giới hạn và độ chính xác](https://cron-job.org/en/faq/), [GitHub workflow dispatch và quyền token](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event).
 
-## Kích hoạt đã xác minh ngày 14/11/2026
+## Kích hoạt và kiểm chứng mẫu
 
-- Job `8862706` đã được tạo và **bật**, múi giờ `Asia/Ho_Chi_Minh`, cron `0,5,30,35 9 * * *`.
-- Dùng token GitHub hiện có theo chấp thuận của chủ tài khoản, lưu trong header Authorization tại cron-job.org; giá trị token không lưu trong repository hoặc URL.
-- Lượt thử từ cron-job.org nhận HTTP **204** và tạo [workflow 43584734951](https://github.com/CongMinhdesu247/AutomationNEWS/actions/runs/43584734951). Workflow thành công, xử lý hai hồ sơ với `sent: 0` trong chế độ dry-run.
-- Đã đổi và tải lại để xác minh cấu hình thật: `dry_run: "false"`, `force_send: "false"`, không chọn riêng profile. Lượt tiếp theo hiển thị **15/11/2026 lúc 09:00, 09:05, 09:30, 09:35** theo giờ Việt Nam.
-- Đã đối chiếu cấu hình gia đình revision 16, synced revision 16: Minh 09:00, Mẹ 09:30, bật cả bảy ngày. Chưa thể xác nhận lượt tự động sáng 15/11 trước khi thời điểm đó diễn ra; kiểm tra history và delivery sau giờ gửi.
+- Tạo job với múi giờ `Asia/Ho_Chi_Minh`, cron `0,5,30,35 9 * * *`.
+- Dùng fine-grained GitHub token giới hạn đúng repository, lưu trong header `Authorization` tại cron-job.org; không lưu token trong repository hoặc URL.
+- Chạy thử ở chế độ `dry_run: "true"` để xác nhận HTTP **204** và workflow hoàn tất với `sent: 0`, sau đó chuyển về `dry_run: "false"`, `force_send: "false"`.

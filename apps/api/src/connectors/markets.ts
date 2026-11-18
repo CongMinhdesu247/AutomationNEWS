@@ -30,20 +30,52 @@ async function marketRead(
     cache = new Map();
     reads.set(http, cache);
   }
+  for (const [k, v] of cache) {
+    if (+now - v.at >= 300000) cache.delete(k);
+  }
   const old = cache.get(url);
-  if (old && +now >= old.at && +now - old.at < 300000) return old.pending;
-  const pending = http(url, { signal, maxBytes: 500000, maxRedirects: 1 }).then(
-    (response) => {
-      if (response.status >= 500) cache!.delete(url);
-      return response;
-    },
-    (error) => {
-      cache!.delete(url);
-      throw error;
-    },
-  );
-  cache.set(url, { at: +now, pending });
-  return pending;
+  const shared =
+    old && +now >= old.at && +now - old.at < 300000
+      ? old.pending
+      : (() => {
+          if (cache.size >= 32) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+          }
+          const pending = http(url, {
+            signal: AbortSignal.timeout(10000),
+            timeoutMs: 10000,
+            maxBytes: 500000,
+            maxRedirects: 1,
+          }).then(
+            (response) => {
+              if (response.status < 200 || response.status >= 300)
+                cache!.delete(url);
+              return response;
+            },
+            (error) => {
+              cache!.delete(url);
+              throw error;
+            },
+          );
+          cache.set(url, { at: +now, pending });
+          return pending;
+        })();
+  return Promise.race([
+    shared,
+    new Promise<never>((_resolve, reject) => {
+      if (signal.aborted) {
+        reject(new ConnectorError("TIMEOUT", "Nguồn vượt thời gian cho phép."));
+        return;
+      }
+      signal.addEventListener(
+        "abort",
+        () =>
+          reject(new ConnectorError("TIMEOUT", "Nguồn vượt thời gian cho phép.")),
+        { once: true },
+      );
+    }),
+  ]);
 }
 function localTimestamp(
   year: number,

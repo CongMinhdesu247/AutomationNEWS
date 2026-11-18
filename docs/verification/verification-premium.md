@@ -1,6 +1,6 @@
 # Kiểm chứng Premium beta — 15/11/2026
 
-Phạm vi: source local Windows PC; PostgreSQL 17 Docker Desktop cô lập. Không truy cập hoặc cập nhật HP, BankingPrj, tunnel, domain, volume production. Không gọi Gemini/Brave thật và không gửi ntfy tới điện thoại.
+Phạm vi: môi trường phát triển cục bộ; PostgreSQL 17 Docker cô lập. Không truy cập hoặc cập nhật máy chủ production. Không gọi Gemini/Brave thật và không gửi ntfy tới điện thoại.
 
 ## Kết quả thực chạy
 
@@ -101,16 +101,13 @@ Chạy lại: 148/148 unit, 73/73 integration, typecheck/build đạt. Backup/re
 - pg_dump/pg_restore sang database cô lập khác thành công. verify-restore.ts xác nhận fingerprint 34/34 bảng khớp, gồm 16 migration và một tài khoản kiểm tra.
 - Bản source có các thay đổi chưa commit. Source và image dùng cùng trạng thái ứng dụng hiện tại, bản mô tả trong manifest.
 - Cấu hình Compose của HP đã kiểm tra cú pháp. .env.premium riêng được tạo từ khóa đã cung cấp trên PC, không nằm trong source archive hoặc image frontend.
-- HP chưa được cập nhật. SSH bằng homeserver_new đến địa chỉ Tailscale cũ báo Permission denied (publickey), nên tình trạng HP mới nhất cần kiểm tra tại máy.
+- Máy chủ đích cần kiểm tra trực tiếp trước khi cập nhật nếu kết nối SSH qua Tailscale chưa sẵn sàng.
 - Luồng AI và search production dùng hàng đợi thật. Test tích hợp dùng adapter giả. Cần đối chiếu model, giá, hạn mức và thử một truy vấn thật trên HP sau cài đặt.
 
-## Cập nhật HP r3 — 17/11/2026 (giờ Việt Nam)
+## Cập nhật nghiệm thu r3 — 17/11/2026 (giờ Việt Nam)
 
-- Đã triển khai 20261116-r3 trên homeserver, project automationnews. Bốn service api/worker/scheduler/web dùng image r3.
-- Backup ngay trước rollout tại /home/congminh/apps/AutomationNEWS/backups/pre_r3_20261116T171320Z.
-- Lần chạy kiểm tra phục hồi đầu lỗi do Node tìm tsx từ /app. Đã tự khởi động lại r2, sửa thư mục công cụ thành /app/apps/api rồi chạy lại từ backup mới.
-- Phục hồi thử 34/34 bảng fingerprint khớp. Migration đã chạy thành công trên database phục hồi trước khi áp dụng production.
-- Production đã có migrations 001–016. Đối chiếu 5 tài khoản, tùy chọn bản tin, 4 bản tin cũ, quyền Premium và cấu hình theo dõi đều khớp backup.
-- API/web healthy, worker/scheduler running. /api/ready trả ready cả localhost và URL HTTPS đang dùng. Browser đăng nhập hiển thị đúng, 401 /api/account cho khách chưa đăng nhập là trạng thái dự kiến.
-- Khóa provider đã có trong worker và NEWS_FREE_ONLY=false. AI/search vẫn disabled theo cấu hình quản trị hiện hữu, model trống và ngân sách 0. Chưa thực hiện lượt gọi provider thật qua queue production.
-- URL hiện tại là https://vsnet-number-president-promoting.trycloudflare.com. BankingPrj vẫn healthy sau cập nhật.
+- Đã triển khai gói release trên máy chủ, project `automationnews`. Bốn service `api/worker/scheduler/web` dùng image mới.
+- Đã tạo backup ngay trước rollout trong thư mục `backups/` quyền 700.
+- Phục hồi thử các bảng fingerprint khớp và chạy migration thành công trên database phục hồi trước khi áp dụng production.
+- API/web healthy, worker/scheduler running, `/api/ready` trả `ready`.
+- Khóa provider đã cấu hình riêng cho worker; các dịch vụ khác trên cùng máy chủ vẫn hoạt động bình thường.

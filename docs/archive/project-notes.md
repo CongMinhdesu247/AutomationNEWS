@@ -14,7 +14,7 @@ Nội dung mới: chỉ giữ **vàng miếng SJC**, bổ sung **sức khỏe, d
 
 > **Bản làm việc mới: tài khoản và triển khai tại nhà.** Entry point web/API bình thường hiện yêu cầu đăng nhập. Mỗi người có cấu hình, lịch, lịch sử và topic thông báo riêng trong PostgreSQL. Dashboard gia đình/cloud cũ nằm trong khu vực quản trị. Các mục “single-user/chưa có xác thực” bên dưới mô tả bản portfolio v1.0; không còn đúng với entry point mới. Demo fixture vẫn chạy riêng, không có xác thực và chỉ được dùng cục bộ.
 
-**Máy chủ Ubuntu / public qua Cloudflare Tunnel:** làm theo [hướng dẫn triển khai tại nhà](../guides/home-server.md). Bộ cấu hình dùng project `automationnews`, port loopback `8091`, tách khỏi BankingPrj ở port `8090`. Tên miền dự kiến `news.020407.xyz`; cần tên miền Active và named tunnel trước khi có URL ổn định.
+**Máy chủ Ubuntu / public qua Cloudflare Tunnel:** làm theo [hướng dẫn triển khai tại nhà](../guides/home-server.md). Bộ cấu hình dùng project `automationnews`, port loopback `8091`, tách độc lập khỏi các dịch vụ khác trên cùng máy chủ. Tên miền dự kiến `news.example.com`; cần tên miền Active và named tunnel trước khi có URL ổn định.
 
 **Chạy bản tài khoản trên máy hiện tại:** giữ `.env`/volume, bổ sung các biến từ `.env.example` (không ghi đè secret), chạy migration/build như hướng dẫn Docker. `APP_ORIGIN` phải khớp origin trình duyệt, ví dụ `http://127.0.0.1:8088` cho Docker hoặc `http://127.0.0.1:5173` cho Vite. Giữ `REGISTRATION_OPEN=false` trước khi tạo admin.
 

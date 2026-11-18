@@ -55,7 +55,9 @@
 .custom-disclosure summary,
 .custom-source-tools > summary {
   cursor: pointer;
-  min-height: 32px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   font-weight: 600;
   line-height: 1.6;
 }
@@ -141,7 +143,7 @@
   resize: vertical;
   font: inherit;
   padding: 0.75rem;
-  border: 1px solid var(--border, #ccd3ce);
+  border: 1px solid var(--border, var(--line, #ccd3ce));
   border-radius: 0.65rem;
   background: var(--surface, #fff);
   color: inherit;
@@ -153,7 +155,7 @@
 }
 .custom-list > li {
   padding-block: 1rem;
-  border-bottom: 1px solid #a0b0a540;
+  border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
 .custom-portal h3 {
@@ -170,10 +172,68 @@
   max-width: 100%;
 }
 .custom-preview {
-  padding: 1rem;
-  border: 1px solid #7b9d7e;
-  border-radius: 0.75rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--accent);
+  background: var(--surface-soft);
+  border-radius: 0.85rem;
   margin-block: 1rem;
+}
+.ai-progress-card {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+}
+.ai-progress-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+  position: relative;
+}
+.ai-progress-bar > span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: hub-ai-pulse 1.3s ease-in-out infinite;
+}
+@keyframes hub-ai-pulse {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(270%);
+  }
+}
+.ai-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 14px;
+  color: var(--ink);
+}
+.ai-enrichment-result {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+.ai-enrichment-result blockquote {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  color: var(--muted);
 }
 .custom-preview dl > div {
   display: flex;
@@ -266,6 +326,38 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 16px 0;
+}
+.custom-admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.custom-admin-search {
+  max-width: 280px;
+}
+.admin-audit-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.admin-audit-list li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+  font-size: 13px;
+}
+.admin-audit-list li small {
+  display: inline;
+  margin: 0;
+}
+.custom-bank-details {
+  font-size: 13px;
+  margin: 6px 0 !important;
 }
 .account-root .custom-admin-filters button {
   display: inline-flex;

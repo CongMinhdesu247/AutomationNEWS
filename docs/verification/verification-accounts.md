@@ -10,7 +10,7 @@
 
 Ảnh mới: `output/playwright/redesign-*.png`. Frontend cục bộ đã được cập nhật bằng build lại riêng service web; không thay tài khoản, dữ liệu hoặc cấu hình nguồn của người đang sử dụng.
 
-Các kiểm thử dữ liệu dùng database/container riêng trên máy phát triển. Sau yêu cầu sửa giao diện, service web ở port 8088 đã được cập nhật; không thay dữ liệu tài khoản, BankingPrj, DNS hoặc máy chủ HP EliteDesk.
+Các kiểm thử dữ liệu dùng database/container riêng trên máy phát triển. Sau yêu cầu sửa giao diện, service web ở port 8088 đã được cập nhật; không thay dữ liệu tài khoản, các dịch vụ khác trên cùng máy chủ, DNS hoặc máy chủ đích.
 
 ## Kết quả
 
@@ -27,9 +27,9 @@ Các kiểm thử dữ liệu dùng database/container riêng trên máy phát t
 
 ## Giới hạn chưa xác minh
 
-- SSH tới `congminh@100.95.33.63` không kết nối được: khóa `homeserver_ed25519` không có tại đường dẫn được cung cấp trong môi trường này; kết nối cũng timeout. Không đọc hoặc chuyển private key.
+- SSH tới `<ssh-user>@<server-tailscale-ip>` không kết nối được từ môi trường kiểm thử cô lập; không đọc hoặc chuyển private key.
 - Chưa triển khai/migrate trên Ubuntu đích; chưa tạo DNS/named tunnel, kiểm chứng HTTPS public, tải nhiều người, khởi động lại máy chủ hoặc push trên điện thoại thật qua một buổi sáng.
-- Tên miền `020407.xyz` đang Pending theo thông tin chủ dự án. `news.020407.xyz` là hostname dự kiến, chưa phải URL hoạt động.
+- Tên miền riêng đang chờ kích hoạt DNS; `news.example.com` là hostname dự kiến.
 - Quick Tunnel không được bật trong nghiệm thu để tránh public dữ liệu fixture; khi dùng tạm, tiến độ cần tải lại vì Quick Tunnel không hỗ trợ SSE.
 
 Triển khai và nghiệm thu tiếp theo theo [home-server.md](../guides/home-server.md), bằng PC có kết nối Tailscale và khóa SSH được server cho phép. Gói source chứa migration mới và hướng dẫn backup; không có dữ liệu/secret cá nhân.

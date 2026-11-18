@@ -28,6 +28,18 @@ const knownErrors = new Set([
   "WORKFLOW_FAILED",
   "MISSING_SOURCE_OUTPUT",
   "SOURCE_FAILED",
+  "AI_QUOTA",
+  "AI_BUDGET",
+  "AI_BUSY",
+  "AI_DISABLED",
+  "SEARCH_DISABLED",
+  "AI_UNCERTAIN",
+  "SEARCH_UNCERTAIN",
+  "NO_MATCHES",
+  "WATCH_CHANGED",
+  "WATCH_LIMIT",
+  "PROCESSING_VERSION_CHANGED",
+  "CUSTOM_UNAVAILABLE",
 ]);
 export function telemetryError(value: unknown): SourceError | null {
   if (!value) return null;

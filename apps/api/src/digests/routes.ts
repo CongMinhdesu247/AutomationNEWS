@@ -11,6 +11,7 @@ import type { DigestService } from "./service.js";
 import { RequestError } from "./service.js";
 import type { DigestStore } from "./store.js";
 import type { z } from "zod";
+
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
   if (!parsed.success)
@@ -22,6 +23,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
     );
   return parsed.data;
 }
+
 export function digestRoutes(
   app: FastifyInstance,
   store: DigestStore,
@@ -53,10 +55,13 @@ export function digestRoutes(
   });
   app.get("/api/runs", async (request) => {
     const { page, pageSize } = parse(paginationSchema, request.query);
-    return queue.list(page, pageSize);
+    return queue.list(page, pageSize, undefined, false);
   });
   app.get<{ Params: { id: string } }>("/api/runs/:id", async (request) => {
-    const run = await queue.get(parse(digestIdSchema, request.params.id));
+    const id = parse(digestIdSchema, request.params.id).toLowerCase();
+    const isMember =
+      Boolean(request.accountUser) && request.accountUser?.role !== "admin";
+    const run = await queue.get(id, isMember);
     if (!run)
       throw new RequestError(
         404,
@@ -65,13 +70,15 @@ export function digestRoutes(
       );
     return run;
   });
+  // Legacy singleton digest endpoints only read/notify singleton (user_id IS NULL) digests
+  // when authentication is active, preventing accidental cross-tenant exposure of member tasks.
   app.get("/api/digests", async (request) => {
     const { page, pageSize } = parse(paginationSchema, request.query);
-    return store.list(page, pageSize);
+    return store.list(page, pageSize, request.accountUser ? null : undefined);
   });
   app.get<{ Params: { id: string } }>("/api/digests/:id", async (request) => {
     const id = parse(digestIdSchema, request.params.id);
-    const digest = await store.get(id);
+    const digest = await store.get(id, Boolean(request.accountUser));
     if (!digest)
       throw new RequestError(
         404,

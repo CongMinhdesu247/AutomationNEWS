@@ -1,12 +1,18 @@
 name: Application fixture tests
 on:
   push:
+    branches-ignore:
+      - hub-cloud-state
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17-alpine
@@ -14,7 +20,7 @@ jobs:
           POSTGRES_USER: accounts_test
           POSTGRES_PASSWORD: fixture_only
           POSTGRES_DB: accounts_test
-        ports: ["5432:5432"]
+        ports: ["127.0.0.1:5432:5432"]
         options: --health-cmd "pg_isready -U accounts_test -d accounts_test" --health-interval 5s --health-timeout 3s --health-retries 15
     env:
       TEST_DATABASE_URL: postgresql://accounts_test:fixture_only@127.0.0.1:5432/accounts_test
@@ -22,13 +28,14 @@ jobs:
       NTFY_TOKEN: ""
       NEWS_FREE_ONLY: "false"
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          version: 11.25.0
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.25.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: 24
+          node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck

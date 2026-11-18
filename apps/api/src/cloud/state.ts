@@ -208,6 +208,18 @@ export function pruneState(state: CloudState, at: Date): CloudState {
   };
 }
 
+export function isValidRepoSlug(repository: string): boolean {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) return false;
+  const [owner, repo] = repository.split("/");
+  return (
+    owner !== "." &&
+    owner !== ".." &&
+    repo !== "." &&
+    repo !== ".." &&
+    !repository.includes("..")
+  );
+}
+
 // Public metrics, delivery metadata and encrypted report bodies only.
 // No plaintext settings, locations, topics, report keys or credentials are persisted.
 export class GithubStateStore implements CloudStateStore {
@@ -217,7 +229,7 @@ export class GithubStateStore implements CloudStateStore {
     private token: string,
     private http: typeof fetch = fetch,
   ) {
-    if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !token)
+    if (!isValidRepoSlug(repository) || !token)
       throw new Error("Cloud GitHub credentials/configuration missing.");
     this.base = "https://api.github.com/repos/" + repository;
   }

@@ -1,4 +1,3 @@
-import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import {
   familyCities,
@@ -7,40 +6,79 @@ import {
   type MemberPreferences,
 } from "@hub/contracts";
 import AlertPreferences from "./AlertPreferences";
+import { apiRequest } from "./lib/api-client";
 import "./family.css";
-type Document = {
+
+type MemberDocument = {
   name: string;
   preferences: MemberPreferences;
   revision: number;
   synced: boolean;
+  syncError?: string;
 };
+
+const SESSION_MEMBER_TOKEN_KEY = "hub-member-portal-token";
+
+function readAndScrubMemberToken(): string {
+  const fromHash = window.location.hash.startsWith("#/member/")
+    ? window.location.hash.slice("#/member/".length).trim()
+    : "";
+  if (fromHash) {
+    try {
+      sessionStorage.setItem(SESSION_MEMBER_TOKEN_KEY, fromHash);
+      // Scrub raw capability token from browser URL bar & synced history while keeping member mode active.
+      history.replaceState(null, "", window.location.pathname + "#/member");
+    } catch {
+      // Ignore restricted storage environments.
+    }
+    return fromHash;
+  }
+  try {
+    return sessionStorage.getItem(SESSION_MEMBER_TOKEN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export default function MemberPortal() {
-  const [token] = useState(() =>
-    window.location.hash.slice("#/member/".length),
-  );
-  const [document, setDocument] = useState<Document | null>(null),
-    [draft, setDraft] = useState<MemberPreferences | null>(null);
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState("");
-  async function request(method = "GET", body?: unknown) {
-    const response = await fetch("/api/member", {
+  const [token, setToken] = useState(readAndScrubMemberToken);
+  const [document, setDocument] = useState<MemberDocument | null>(null);
+  const [draft, setDraft] = useState<MemberPreferences | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const onHashChange = () => {
+      if (window.location.hash.startsWith("#/member/")) {
+        const nextToken = readAndScrubMemberToken();
+        if (nextToken) setToken(nextToken);
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  async function request<T>(method = "GET", body?: unknown): Promise<T> {
+    return apiRequest<T>("/api/member", {
       method,
-      signal: requestSignal(45000),
+      body,
+      timeoutMs: 45000,
+      notifyUnauthorized: false,
       headers: {
         Authorization: "Bearer " + token,
-        ...(body ? { "Content-Type": "application/json" } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
     });
-    const data = await response.json();
-    if (!response.ok)
-      throw Error(data.error?.message ?? "Chưa kết nối được máy chủ.");
-    return data;
   }
+
   useEffect(() => {
+    if (!token) {
+      setError("Liên kết thành viên không hợp lệ hoặc đã hết hạn.");
+      return;
+    }
     let active = true;
-    void request()
+    setError("");
+    void request<MemberDocument>()
       .then((value) => {
         if (active) {
           setDocument(value);
@@ -48,12 +86,13 @@ export default function MemberPortal() {
         }
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) setError((e as Error).message);
       });
     return () => {
       active = false;
     };
   }, [token]);
+
   async function save() {
     const parsed = memberPreferencesSchema.safeParse(draft);
     if (!parsed.success) {
@@ -64,25 +103,34 @@ export default function MemberPortal() {
     setError("");
     setNotice("");
     try {
-      const result = await request("PUT", {
+      const result = await request<{
+        revision: number;
+        synced: boolean;
+        syncError?: string;
+      }>("PUT", {
         preferences: parsed.data,
         revision: document!.revision,
       });
       setDocument({ ...document!, ...result });
-      setNotice(result.syncError ?? "Đã lưu và đồng bộ lịch cloud.");
+      if (result.syncError) {
+        setError(result.syncError);
+      } else {
+        setNotice("Đã lưu và đồng bộ lịch cloud.");
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+
   return (
     <main className="member-portal">
       <p className="family-eyebrow">BẢN TIN CỦA BẠN</p>
       <h1>{document?.name ?? "Cài đặt bản tin"}</h1>
       <p>
         Chọn điều bạn quan tâm và thời gian thuận tiện. Trang này chỉ chỉnh hồ
-        sơ của bạn.
+        sơ riêng của bạn.
       </p>
       {error && (
         <p className="status error" role="alert">
@@ -169,7 +217,9 @@ export default function MemberPortal() {
                       setDraft({
                         ...draft,
                         days: e.target.checked
-                          ? [...draft.days, i + 1].sort()
+                          ? [...new Set([...draft.days, i + 1])].sort(
+                              (a, b) => a - b,
+                            )
                           : draft.days.filter((d) => d !== i + 1),
                       })
                     }
@@ -232,9 +282,8 @@ export default function MemberPortal() {
               onChange={(alerts) => setDraft({ ...draft, alerts })}
             />
             <p className="muted">
-              Lưu khi máy chủ quản lý đang bật và bạn kết nối được với máy chủ.
-              Sau khi đồng bộ, lịch cloud vẫn chạy khi PC tắt. GitHub có thể gửi
-              muộn so với giờ đã chọn.
+              Lưu khi máy chủ quản lý đang bật và điện thoại kết nối được với máy
+              chủ. Sau khi đồng bộ, lịch cloud vẫn chạy ngay cả khi máy tính tắt.
             </p>
             <button className="primary" type="submit">
               {busy ? "Đang lưu…" : "Lưu lựa chọn"}

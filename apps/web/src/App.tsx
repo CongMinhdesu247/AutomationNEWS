@@ -1,16 +1,15 @@
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  settingsSchema,
+  validationIssues,
+  type ApiError,
+  type FieldIssue,
+  type Settings,
+} from "@hub/contracts";
 import { requestSignal } from "./request-signal";
 import RunDashboard from "./RunDashboard";
 import AutomationDashboard from "./AutomationDashboard";
 import FamilyDashboard from "./FamilyDashboard";
-import { useEffect, useState, type ReactNode, type FormEvent } from "react";
-import {
-  settingsSchema,
-  validationIssues,
-  type Settings,
-  type FieldIssue,
-  type ApiError,
-} from "@hub/contracts";
-
 import DigestDashboard from "./DigestDashboard";
 import { Icon } from "./Icons";
 
@@ -24,6 +23,7 @@ type Draft = Omit<Settings, "weather" | "github"> & {
     "topics" | "languages" | "repositoryCount"
   > & { topicsText: string; languagesText: string; repositoryCount: string };
 };
+
 function toDraft(s: Settings): Draft {
   return {
     ...s,
@@ -40,8 +40,10 @@ function toDraft(s: Settings): Draft {
     },
   };
 }
+
 const numberValue = (value: string) =>
   value.trim() === "" ? NaN : Number(value);
+
 function toPayload(d: Draft): unknown {
   return {
     ...d,
@@ -58,11 +60,28 @@ function toPayload(d: Draft): unknown {
     },
   };
 }
+
 async function readResponse(response: Response): Promise<Settings> {
-  const body: unknown = await response.json();
+  const raw = await response.text();
+  let body: unknown = null;
+  if (raw.trim()) {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw {
+        error: {
+          message:
+            response.status >= 500
+              ? "Máy chủ đang bận hoặc phản hồi không hợp lệ. Vui lòng thử lại."
+              : "Không đọc được phản hồi từ máy chủ.",
+        },
+      };
+    }
+  }
   if (!response.ok) throw body;
   return settingsSchema.parse(body);
 }
+
 function Field({
   name,
   label,
@@ -110,6 +129,7 @@ function Field({
     </div>
   );
 }
+
 function Toggle({
   label,
   checked,
@@ -131,6 +151,7 @@ function Toggle({
     </label>
   );
 }
+
 function Section({
   id,
   title,
@@ -152,20 +173,27 @@ function Section({
     </section>
   );
 }
+
 const groups = [
   ["newsletter", "Bản tin"],
   ["rss", "Nguồn RSS"],
-  ["weather", "Thời tiết"],
+  ["weather", "Thời tiết & tiện ích"],
   ["github", "GitHub"],
   ["notifications", "Thông báo"],
-];
-export default function App() {
-  const [view, setView] = useState(window.location.hash || "#/digests");
+] as const;
+
+export default function App({ embedded = false }: { embedded?: boolean } = {}) {
+  const [view, setView] = useState(
+    window.location.hash || (embedded ? "#/admin" : "#/digests"),
+  );
+
   useEffect(() => {
-    const handler = () => setView(window.location.hash || "#/digests");
+    const handler = () =>
+      setView(window.location.hash || (embedded ? "#/admin" : "#/digests"));
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
-  }, []);
+  }, [embedded]);
+
   const [draft, setDraft] = useState<Draft | null>(null);
   const [issues, setIssues] = useState<FieldIssue[]>([]);
   const [message, setMessage] = useState("");
@@ -174,20 +202,36 @@ export default function App() {
   >("loading");
   const [attempt, setAttempt] = useState(0);
   const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   const settingsTab =
     groups.find(
       ([id]) => view === "#" + id || view === "#/settings/" + id,
     )?.[0] ?? "newsletter";
+
   const inSettings =
     !view.startsWith("#/family") &&
     !view.startsWith("#/digests") &&
     !view.startsWith("#/runs") &&
     !view.startsWith("#/automation");
+
   useEffect(() => {
     const controller = new AbortController();
     setState("loading");
     setMessage("");
-    fetch("/api/settings", { signal: controller.signal })
+    fetch("/api/settings", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
       .then(readResponse)
       .then((settings) => {
         setDraft(toDraft(settings));
@@ -203,6 +247,7 @@ export default function App() {
       });
     return () => controller.abort();
   }, [attempt]);
+
   function change(next: Draft) {
     setDirty(true);
     setDraft(next);
@@ -210,6 +255,7 @@ export default function App() {
     setIssues([]);
     setState("idle");
   }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!draft || state === "saving") return;
@@ -234,6 +280,7 @@ export default function App() {
       const saved = await readResponse(
         await fetch("/api/settings", {
           method: "PUT",
+          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parsed.data),
           signal: requestSignal(15000),
@@ -242,7 +289,7 @@ export default function App() {
       setDraft(toDraft(saved));
       setDirty(false);
       setState("success");
-      setMessage("Đã lưu thay đổi trên máy này.");
+      setMessage("Đã lưu cấu hình vào PostgreSQL.");
     } catch (error) {
       const apiError = error as Partial<ApiError> | null;
       setIssues(apiError?.error?.issues ?? []);
@@ -253,6 +300,527 @@ export default function App() {
       );
     }
   }
+
+  const mainContent = (
+    <>
+      {import.meta.env.VITE_DEMO_MODE === "true" && (
+        <p className="status demo-fixture-banner" role="note">
+          DEMO FIXTURE · Dữ liệu mô phỏng. Không gọi API ngoài hoặc gửi thông
+          báo thật.
+        </p>
+      )}
+      {view.startsWith("#/family") ? (
+        <FamilyDashboard />
+      ) : view.startsWith("#/automation") ? (
+        <AutomationDashboard />
+      ) : view.startsWith("#/runs") ? (
+        <RunDashboard hash={view} />
+      ) : view.startsWith("#/digests") ? (
+        <DigestDashboard hash={view} />
+      ) : (
+        <>
+          <div className="page-heading">
+            <div>
+              <h1>Cài đặt hệ thống</h1>
+              <p>Chọn nội dung mặc định và kênh thông báo cho bản tin cục bộ.</p>
+              <p>
+                Lịch và bản tin cloud cho từng thành viên được quản lý trong{" "}
+                <a href="#/family" className="text-link">
+                  Gia đình
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+          <nav className="settings-tabs" aria-label="Nhóm cài đặt">
+            {groups.map(([id, label]) => (
+              <a
+                href={"#/settings/" + id}
+                key={id}
+                aria-current={settingsTab === id ? "page" : undefined}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+          <div
+            role="status"
+            aria-live="polite"
+            className={
+              message || state === "loading" ? "status " + state : "sr-only"
+            }
+          >
+            {state === "loading" ? "Đang tải cấu hình…" : message}
+          </div>
+          {!draft && state === "error" && (
+            <button type="button" onClick={() => setAttempt((v) => v + 1)}>
+              Thử tải lại
+            </button>
+          )}
+          {draft && (
+            <form
+              className="settings-form"
+              data-tab={settingsTab}
+              onSubmit={(e) => void save(e)}
+              noValidate
+            >
+              <fieldset disabled={state === "saving"}>
+                <Section
+                  id="newsletter"
+                  title="Lịch trên máy"
+                  description="Áp dụng cho scheduler cục bộ. Lịch cloud chạy trên GitHub được quản lý riêng."
+                >
+                  <Toggle
+                    label="Bật lịch gửi trên máy"
+                    checked={draft.newsletter.enabled}
+                    onChange={(enabled) =>
+                      change({
+                        ...draft,
+                        newsletter: { ...draft.newsletter, enabled },
+                      })
+                    }
+                  />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      name="newsletter.sendTime"
+                      label="Giờ gửi"
+                      type="time"
+                      value={draft.newsletter.sendTime}
+                      onChange={(sendTime) =>
+                        change({
+                          ...draft,
+                          newsletter: { ...draft.newsletter, sendTime },
+                        })
+                      }
+                      issues={issues}
+                    />
+                    <Field
+                      name="newsletter.timezone"
+                      label="Múi giờ"
+                      value={draft.newsletter.timezone}
+                      onChange={(timezone) =>
+                        change({
+                          ...draft,
+                          newsletter: { ...draft.newsletter, timezone },
+                        })
+                      }
+                      issues={issues}
+                      hint="Tên IANA, ví dụ Asia/Ho_Chi_Minh."
+                    />
+                  </div>
+                </Section>
+
+                <Section
+                  id="rss"
+                  title="Nguồn RSS"
+                  description="Chọn các nguồn tin bạn muốn có trong bản tin."
+                >
+                  {draft.rss.length === 0 && (
+                    <div className="empty-state">
+                      <strong>Chưa có nguồn tin nào</strong>
+                      <p>
+                        Thêm URL RSS đầu tiên để chuẩn bị danh sách đọc của bạn.
+                      </p>
+                    </div>
+                  )}
+                  {draft.rss.map((source, index) => (
+                    <div className="rss-row" key={source.id}>
+                      <div className="rss-row-heading">
+                        <Toggle
+                          label={"Bật nguồn " + (index + 1)}
+                          checked={source.enabled}
+                          onChange={(enabled) =>
+                            change({
+                              ...draft,
+                              rss: draft.rss.map((s) =>
+                                s.id === source.id ? { ...s, enabled } : s,
+                              ),
+                            })
+                          }
+                        />
+                        <button
+                          className="delete-button"
+                          type="button"
+                          aria-label={"Xóa nguồn " + (index + 1)}
+                          onClick={() =>
+                            change({
+                              ...draft,
+                              rss: draft.rss.filter((s) => s.id !== source.id),
+                            })
+                          }
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <Field
+                          name={"rss." + index + ".name"}
+                          label={"Tên nguồn " + (index + 1)}
+                          value={source.name}
+                          onChange={(name) =>
+                            change({
+                              ...draft,
+                              rss: draft.rss.map((s) =>
+                                s.id === source.id ? { ...s, name } : s,
+                              ),
+                            })
+                          }
+                          issues={issues}
+                        />
+                        <Field
+                          name={"rss." + index + ".url"}
+                          label={"URL RSS " + (index + 1)}
+                          type="url"
+                          hint="Dùng link RSS, không dùng trang chủ. Ví dụ: https://vnexpress.net/rss/tin-moi-nhat.rss"
+                          value={source.url}
+                          onChange={(url) =>
+                            change({
+                              ...draft,
+                              rss: draft.rss.map((s) =>
+                                s.id === source.id ? { ...s, url } : s,
+                              ),
+                            })
+                          }
+                          issues={issues}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={draft.rss.length >= 100}
+                    onClick={() =>
+                      change({
+                        ...draft,
+                        rss: [
+                          ...draft.rss,
+                          {
+                            id: crypto.randomUUID(),
+                            name: "",
+                            url: "",
+                            enabled: true,
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    + Thêm nguồn RSS
+                  </button>
+                </Section>
+
+                <Section
+                  id="weather"
+                  title="Thời tiết, thị trường & tiện ích"
+                  description="Dự báo tại địa điểm bạn chọn, giá vàng/USD/xăng, không khí và tiện ích sáng."
+                >
+                  <Toggle
+                    label="Thêm giá vàng miếng SJC vào bản tin"
+                    checked={draft.gold?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({ ...draft, gold: { enabled } })
+                    }
+                  />
+                  <Toggle
+                    label="Thêm tỷ giá USD/VND vào bản tin"
+                    checked={draft.usd?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({ ...draft, usd: { enabled } })
+                    }
+                  />
+                  <Toggle
+                    label="Thêm giá Xăng E10 RON 95-III vào bản tin sáng"
+                    checked={draft.fuel?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({ ...draft, fuel: { enabled } })
+                    }
+                  />
+                  <Toggle
+                    label="Thêm chất lượng không khí Hà Nội"
+                    checked={draft.airQuality?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({
+                        ...draft,
+                        airQuality: {
+                          ...(draft.airQuality ?? {
+                            location: "Hà Nội",
+                            latitude: 21.0285,
+                            longitude: 105.8542,
+                          }),
+                          enabled,
+                        },
+                      })
+                    }
+                  />
+                  <Toggle
+                    label="Thêm chỉ số UV cao nhất trong ngày"
+                    checked={draft.uv?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({ ...draft, uv: { enabled } })
+                    }
+                  />
+                  <Toggle
+                    label="Thêm lịch ngày lễ & kỷ niệm Việt Nam"
+                    checked={draft.holidays?.enabled ?? false}
+                    onChange={(enabled) =>
+                      change({ ...draft, holidays: { enabled } })
+                    }
+                  />
+                  <p className="muted">
+                    AQI theo thang Mỹ và PM2.5 từ mô hình dự báo Open-Meteo/CAMS;
+                    giá xăng theo dõi Xăng E10 RON 95-III của Petrolimex vùng 1.
+                  </p>
+                  <Toggle
+                    label="Thêm thời tiết vào bản tin"
+                    checked={draft.weather.enabled}
+                    onChange={(enabled) =>
+                      change({
+                        ...draft,
+                        weather: { ...draft.weather, enabled },
+                      })
+                    }
+                  />
+                  <Field
+                    name="weather.location"
+                    label="Tên địa điểm"
+                    value={draft.weather.location}
+                    onChange={(location) =>
+                      change({
+                        ...draft,
+                        weather: { ...draft.weather, location },
+                      })
+                    }
+                    issues={issues}
+                  />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      name="weather.latitude"
+                      label="Latitude (vĩ độ)"
+                      type="number"
+                      step="any"
+                      value={draft.weather.latitude}
+                      onChange={(latitude) =>
+                        change({
+                          ...draft,
+                          weather: { ...draft.weather, latitude },
+                        })
+                      }
+                      issues={issues}
+                      hint="Từ -90 đến 90."
+                    />
+                    <Field
+                      name="weather.longitude"
+                      label="Longitude (kinh độ)"
+                      type="number"
+                      step="any"
+                      value={draft.weather.longitude}
+                      onChange={(longitude) =>
+                        change({
+                          ...draft,
+                          weather: { ...draft.weather, longitude },
+                        })
+                      }
+                      issues={issues}
+                      hint="Từ -180 đến 180."
+                    />
+                  </div>
+                </Section>
+
+                <Section
+                  id="github"
+                  title="GitHub"
+                  description="Định hình danh sách repository theo mối quan tâm của bạn."
+                >
+                  <Toggle
+                    label="Thêm GitHub vào bản tin"
+                    checked={draft.github.enabled}
+                    onChange={(enabled) =>
+                      change({
+                        ...draft,
+                        github: { ...draft.github, enabled },
+                      })
+                    }
+                  />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      name="github.topics"
+                      label="Chủ đề quan tâm"
+                      value={draft.github.topicsText}
+                      onChange={(topicsText) =>
+                        change({
+                          ...draft,
+                          github: { ...draft.github, topicsText },
+                        })
+                      }
+                      issues={issues}
+                      hint="Phân cách bằng dấu phẩy, ví dụ automation, self-hosted."
+                    />
+                    <Field
+                      name="github.languages"
+                      label="Ngôn ngữ lập trình"
+                      value={draft.github.languagesText}
+                      onChange={(languagesText) =>
+                        change({
+                          ...draft,
+                          github: { ...draft.github, languagesText },
+                        })
+                      }
+                      issues={issues}
+                      hint="Phân cách bằng dấu phẩy, ví dụ TypeScript, Python."
+                    />
+                  </div>
+                  <Field
+                    name="github.repositoryCount"
+                    label="Số repository trong bản tin"
+                    type="number"
+                    step="1"
+                    value={draft.github.repositoryCount}
+                    onChange={(repositoryCount) =>
+                      change({
+                        ...draft,
+                        github: { ...draft.github, repositoryCount },
+                      })
+                    }
+                    issues={issues}
+                    hint="Từ 1 đến 20 repository."
+                  />
+                </Section>
+
+                <Section
+                  id="notifications"
+                  title="Thông báo"
+                  description="Nhận bản tin trên điện thoại qua ứng dụng ntfy."
+                >
+                  <Toggle
+                    label="Bật gửi qua ntfy"
+                    checked={draft.notifications.enabled}
+                    onChange={(enabled) =>
+                      change({
+                        ...draft,
+                        notifications: { ...draft.notifications, enabled },
+                      })
+                    }
+                  />
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      name="notifications.serverUrl"
+                      label="ntfy server URL"
+                      type="url"
+                      value={draft.notifications.serverUrl}
+                      onChange={(serverUrl) =>
+                        change({
+                          ...draft,
+                          notifications: {
+                            ...draft.notifications,
+                            serverUrl,
+                          },
+                        })
+                      }
+                      issues={issues}
+                    />
+                    <Field
+                      name="notifications.topic"
+                      label="Topic"
+                      value={draft.notifications.topic}
+                      onChange={(topic) =>
+                        change({
+                          ...draft,
+                          notifications: { ...draft.notifications, topic },
+                        })
+                      }
+                      issues={issues}
+                      hint="Chữ, số, dấu gạch ngang và gạch dưới."
+                    />
+                  </div>
+                  <p className="help-note">
+                    Server và topic phải trùng với kênh bạn đã đăng ký trong
+                    ntfy.
+                  </p>
+                </Section>
+              </fieldset>
+              <div className="save-bar">
+                <p>
+                  {state === "saving"
+                    ? "Đang lưu cấu hình…"
+                    : state === "success"
+                      ? message
+                      : state === "error"
+                        ? "Chưa lưu. Kiểm tra thông báo lỗi."
+                        : dirty
+                          ? "Bạn có thay đổi chưa lưu."
+                          : "Chưa có thay đổi mới."}
+                </p>
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={state === "saving" || !dirty}
+                >
+                  {state === "saving" ? "Đang lưu…" : "Lưu cấu hình"}
+                </button>
+              </div>
+              {issues.length > 0 && (
+                <div className="error-summary" role="alert">
+                  <strong>Cần kiểm tra lại</strong>
+                  <ul>
+                    {issues.map((issue, index) => (
+                      <li key={index}>
+                        <a
+                          href={"#/settings/" + String(issue.path[0])}
+                          onClick={() =>
+                            setTimeout(
+                              () =>
+                                document
+                                  .getElementById(issue.path.join("."))
+                                  ?.focus(),
+                              50,
+                            )
+                          }
+                        >
+                          {issue.path.join(".")} — {issue.message}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </form>
+          )}
+        </>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="embedded-admin-shell">
+        <nav className="embedded-admin-bar" aria-label="Phân hệ quản trị">
+          <a
+            href="#/family"
+            aria-current={view.startsWith("#/family") ? "page" : undefined}
+          >
+            <Icon name="user" size={16} />
+            Gia đình &amp; Cloud
+          </a>
+          <a
+            href="#/automation"
+            aria-current={view.startsWith("#/automation") ? "page" : undefined}
+          >
+            <Icon name="calendar" size={16} />
+            Lịch gửi &amp; Dead-letters
+          </a>
+          <a
+            href="#/settings/newsletter"
+            aria-current={inSettings ? "page" : undefined}
+          >
+            <Icon name="settings" size={16} />
+            Cấu hình cục bộ
+          </a>
+        </nav>
+        {mainContent}
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -270,7 +838,13 @@ export default function App() {
           </span>
         </a>
         <nav className="family-navigation" aria-label="Điều hướng">
-          <a href="#/family" aria-current={view.startsWith("#/family")?"page":undefined}><Icon name="brief"/>Gia đình</a>
+          <a
+            href="#/family"
+            aria-current={view.startsWith("#/family") ? "page" : undefined}
+          >
+            <Icon name="brief" />
+            Gia đình
+          </a>
           <a
             href="#/digests"
             aria-current={view.startsWith("#/digests") ? "page" : undefined}
@@ -318,448 +892,10 @@ export default function App() {
             Dashboard cục bộ
           </span>
         </div>
-        {import.meta.env.VITE_DEMO_MODE === "true" && (
-          <p
-            className="status"
-            style={{
-              background: "#fff3cd",
-              color: "#664d03",
-              border: "1px solid #d9ab35",
-            }}
-            role="note"
-          >
-            DEMO FIXTURE · Dữ liệu mô phỏng. Không gọi API ngoài hoặc gửi thông
-            báo thật.
-          </p>
-        )}
-        {view.startsWith("#/family") ? <FamilyDashboard/> : view.startsWith("#/automation") ? (
-          <AutomationDashboard />
-        ) : view.startsWith("#/runs") ? (
-          <RunDashboard hash={view} />
-        ) : view.startsWith("#/digests") ? (
-          <DigestDashboard hash={view} />
-        ) : (
-          <>
-            <div className="page-heading">
-              <div>
-                <h1>Cài đặt bản tin</h1>
-                <p>Chọn nội dung bạn quan tâm và cách nhận thông báo.</p>
-                <p>Lịch và bản tin cloud cho từng người được quản lý trong <a href="#/family">Gia đình</a>. Cài đặt dưới đây dùng khi tạo bản tin trên máy.</p>
-              </div>
-            </div>
-            <nav className="settings-tabs" aria-label="Nhóm cài đặt">
-              {groups.map(([id, label]) => (
-                <a
-                  href={"#/settings/" + id}
-                  key={id}
-                  aria-current={settingsTab === id ? "page" : undefined}
-                >
-                  {label}
-                </a>
-              ))}
-            </nav>
-            <div
-              role="status"
-              aria-live="polite"
-              className={
-                message || state === "loading" ? "status " + state : "sr-only"
-              }
-            >
-              {state === "loading" ? "Đang tải cấu hình…" : message}
-            </div>
-            {!draft && state === "error" && (
-              <button type="button" onClick={() => setAttempt((v) => v + 1)}>
-                Thử tải lại
-              </button>
-            )}
-            {draft && (
-              <form
-                className="settings-form"
-                data-tab={settingsTab}
-                onSubmit={save}
-                noValidate
-              >
-                <fieldset disabled={state === "saving"}>
-                  <Section
-                    id="newsletter"
-                    title="Lịch trên máy"
-                    description="Áp dụng cho scheduler cục bộ. Lịch cloud chạy trên GitHub được quản lý riêng."
-                  >
-                    <Toggle
-                      label="Bật lịch gửi trên máy"
-                      checked={draft.newsletter.enabled}
-                      onChange={(enabled) =>
-                        change({
-                          ...draft,
-                          newsletter: { ...draft.newsletter, enabled },
-                        })
-                      }
-                    />
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field
-                        name="newsletter.sendTime"
-                        label="Giờ gửi"
-                        type="time"
-                        value={draft.newsletter.sendTime}
-                        onChange={(sendTime) =>
-                          change({
-                            ...draft,
-                            newsletter: { ...draft.newsletter, sendTime },
-                          })
-                        }
-                        issues={issues}
-                      />
-                      <Field
-                        name="newsletter.timezone"
-                        label="Múi giờ"
-                        value={draft.newsletter.timezone}
-                        onChange={(timezone) =>
-                          change({
-                            ...draft,
-                            newsletter: { ...draft.newsletter, timezone },
-                          })
-                        }
-                        issues={issues}
-                        hint="Tên IANA, ví dụ Asia/Ho_Chi_Minh."
-                      />
-                    </div>
-                  </Section>
-                  <Section
-                    id="rss"
-                    title="Nguồn RSS"
-                    description="Chọn các nguồn tin bạn muốn có trong bản tin."
-                  >
-                    {draft.rss.length === 0 && (
-                      <div className="empty-state">
-                        <strong>Chưa có nguồn tin nào</strong>
-                        <p>
-                          Thêm URL RSS đầu tiên để chuẩn bị danh sách đọc của
-                          bạn.
-                        </p>
-                      </div>
-                    )}
-                    {draft.rss.map((source, index) => (
-                      <div className="rss-row" key={source.id}>
-                        <div className="rss-row-heading">
-                          <Toggle
-                            label={"Bật nguồn " + (index + 1)}
-                            checked={source.enabled}
-                            onChange={(enabled) =>
-                              change({
-                                ...draft,
-                                rss: draft.rss.map((s) =>
-                                  s.id === source.id ? { ...s, enabled } : s,
-                                ),
-                              })
-                            }
-                          />
-                          <button
-                            className="delete-button"
-                            type="button"
-                            aria-label={"Xóa nguồn " + (index + 1)}
-                            onClick={() =>
-                              change({
-                                ...draft,
-                                rss: draft.rss.filter(
-                                  (s) => s.id !== source.id,
-                                ),
-                              })
-                            }
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                        <div className="grid gap-5 sm:grid-cols-2">
-                          <Field
-                            name={"rss." + index + ".name"}
-                            label={"Tên nguồn " + (index + 1)}
-                            value={source.name}
-                            onChange={(name) =>
-                              change({
-                                ...draft,
-                                rss: draft.rss.map((s) =>
-                                  s.id === source.id ? { ...s, name } : s,
-                                ),
-                              })
-                            }
-                            issues={issues}
-                          />
-                          <Field
-                            name={"rss." + index + ".url"}
-                            label={"URL RSS " + (index + 1)}
-                            type="url"
-                            hint="Dùng link RSS, không dùng trang chủ. Ví dụ: https://vnexpress.net/rss/tin-moi-nhat.rss"
-                            value={source.url}
-                            onChange={(url) =>
-                              change({
-                                ...draft,
-                                rss: draft.rss.map((s) =>
-                                  s.id === source.id ? { ...s, url } : s,
-                                ),
-                              })
-                            }
-                            issues={issues}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={draft.rss.length >= 100}
-                      onClick={() =>
-                        change({
-                          ...draft,
-                          rss: [
-                            ...draft.rss,
-                            {
-                              id: crypto.randomUUID(),
-                              name: "",
-                              url: "",
-                              enabled: true,
-                            },
-                          ],
-                        })
-                      }
-                    >
-                      + Thêm nguồn RSS
-                    </button>
-                  </Section>
-                  <Section
-                    id="weather"
-                    title="Thời tiết & giá xăng"
-                    description="Dự báo tại địa điểm bạn chọn và giá Xăng E10 RON 95-III của Petrolimex vùng 1."
-                  >
-                    <Toggle
-                      label="Thêm giá Xăng E10 RON 95-III vào bản tin sáng"
-                      checked={draft.fuel?.enabled ?? false}
-                      onChange={(enabled) => change({ ...draft, fuel: { enabled } })}
-                    />
-                    <Toggle
-                      label="Thêm chất lượng không khí Hà Nội"
-                      checked={draft.airQuality?.enabled ?? false}
-                      onChange={(enabled) => change({ ...draft, airQuality: { enabled } })}
-                    />
-                    <p className="muted">AQI theo thang Mỹ và PM2.5 tại trung tâm Hà Nội, từ mô hình dự báo Open-Meteo/CAMS; không phải số đo tại trạm.</p>
-                    <p className="muted">Chỉ theo dõi Xăng E10 RON 95-III. Mức tăng/giảm được so với bản tin trước.</p>
-                    <Toggle
-                      label="Thêm thời tiết vào bản tin"
-                      checked={draft.weather.enabled}
-                      onChange={(enabled) =>
-                        change({
-                          ...draft,
-                          weather: { ...draft.weather, enabled },
-                        })
-                      }
-                    />
-                    <Field
-                      name="weather.location"
-                      label="Tên địa điểm"
-                      value={draft.weather.location}
-                      onChange={(location) =>
-                        change({
-                          ...draft,
-                          weather: { ...draft.weather, location },
-                        })
-                      }
-                      issues={issues}
-                    />
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field
-                        name="weather.latitude"
-                        label="Latitude (vĩ độ)"
-                        type="number"
-                        step="any"
-                        value={draft.weather.latitude}
-                        onChange={(latitude) =>
-                          change({
-                            ...draft,
-                            weather: { ...draft.weather, latitude },
-                          })
-                        }
-                        issues={issues}
-                        hint="Từ -90 đến 90."
-                      />
-                      <Field
-                        name="weather.longitude"
-                        label="Longitude (kinh độ)"
-                        type="number"
-                        step="any"
-                        value={draft.weather.longitude}
-                        onChange={(longitude) =>
-                          change({
-                            ...draft,
-                            weather: { ...draft.weather, longitude },
-                          })
-                        }
-                        issues={issues}
-                        hint="Từ -180 đến 180."
-                      />
-                    </div>
-                  </Section>
-                  <Section
-                    id="github"
-                    title="GitHub"
-                    description="Định hình danh sách repository theo mối quan tâm của bạn."
-                  >
-                    <Toggle
-                      label="Thêm GitHub vào bản tin"
-                      checked={draft.github.enabled}
-                      onChange={(enabled) =>
-                        change({
-                          ...draft,
-                          github: { ...draft.github, enabled },
-                        })
-                      }
-                    />
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field
-                        name="github.topics"
-                        label="Chủ đề quan tâm"
-                        value={draft.github.topicsText}
-                        onChange={(topicsText) =>
-                          change({
-                            ...draft,
-                            github: { ...draft.github, topicsText },
-                          })
-                        }
-                        issues={issues}
-                        hint="Phân cách bằng dấu phẩy, ví dụ automation, self-hosted."
-                      />
-                      <Field
-                        name="github.languages"
-                        label="Ngôn ngữ lập trình"
-                        value={draft.github.languagesText}
-                        onChange={(languagesText) =>
-                          change({
-                            ...draft,
-                            github: { ...draft.github, languagesText },
-                          })
-                        }
-                        issues={issues}
-                        hint="Phân cách bằng dấu phẩy, ví dụ TypeScript, Python."
-                      />
-                    </div>
-                    <Field
-                      name="github.repositoryCount"
-                      label="Số repository trong bản tin"
-                      type="number"
-                      step="1"
-                      value={draft.github.repositoryCount}
-                      onChange={(repositoryCount) =>
-                        change({
-                          ...draft,
-                          github: { ...draft.github, repositoryCount },
-                        })
-                      }
-                      issues={issues}
-                      hint="Từ 1 đến 20 repository."
-                    />
-                  </Section>
-                  <Section
-                    id="notifications"
-                    title="Thông báo"
-                    description="Nhận bản tin trên điện thoại qua ứng dụng ntfy."
-                  >
-                    <Toggle
-                      label="Bật gửi qua ntfy"
-                      checked={draft.notifications.enabled}
-                      onChange={(enabled) =>
-                        change({
-                          ...draft,
-                          notifications: { ...draft.notifications, enabled },
-                        })
-                      }
-                    />
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <Field
-                        name="notifications.serverUrl"
-                        label="ntfy server URL"
-                        type="url"
-                        value={draft.notifications.serverUrl}
-                        onChange={(serverUrl) =>
-                          change({
-                            ...draft,
-                            notifications: {
-                              ...draft.notifications,
-                              serverUrl,
-                            },
-                          })
-                        }
-                        issues={issues}
-                      />
-                      <Field
-                        name="notifications.topic"
-                        label="Topic"
-                        value={draft.notifications.topic}
-                        onChange={(topic) =>
-                          change({
-                            ...draft,
-                            notifications: { ...draft.notifications, topic },
-                          })
-                        }
-                        issues={issues}
-                        hint="Chữ, số, dấu gạch ngang và gạch dưới."
-                      />
-                    </div>
-                    <p className="help-note">
-                      Server và topic phải trùng với kênh bạn đã đăng ký trong
-                      ntfy.
-                    </p>
-                  </Section>
-                </fieldset>
-                <div className="save-bar">
-                  <p>
-                    {state === "saving"
-                      ? "Đang lưu cấu hình…"
-                      : state === "success"
-                        ? message
-                        : state === "error"
-                          ? "Chưa lưu. Kiểm tra thông báo lỗi."
-                          : dirty
-                            ? "Bạn có thay đổi chưa lưu."
-                            : "Chưa có thay đổi mới."}
-                  </p>
-                  <button
-                    className="primary-button"
-                    type="submit"
-                    disabled={state === "saving" || !dirty}
-                  >
-                    {state === "saving" ? "Đang lưu…" : "Lưu thay đổi"}
-                  </button>
-                </div>
-                {issues.length > 0 && (
-                  <div className="error-summary" role="alert">
-                    <strong>Cần kiểm tra lại</strong>
-                    <ul>
-                      {issues.map((issue, index) => (
-                        <li key={index}>
-                          <a
-                            href={"#/settings/" + String(issue.path[0])}
-                            onClick={() =>
-                              setTimeout(
-                                () =>
-                                  document
-                                    .getElementById(issue.path.join("."))
-                                    ?.focus(),
-                                50,
-                              )
-                            }
-                          >
-                            {issue.path.join(".")} — {issue.message}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </form>
-            )}
-          </>
-        )}
-        <footer>
+        {mainContent}
+        <footer className="legacy-footer">
           <span>Morning Hub</span>
-          <span>Tin tức · Thời tiết · GitHub</span>
+          <span>Tin tức · Thời tiết · Thị trường · GitHub</span>
         </footer>
       </main>
     </div>

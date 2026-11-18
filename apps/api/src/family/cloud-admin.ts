@@ -1,7 +1,7 @@
 import sodium from "libsodium-wrappers";
 import { z } from "zod";
 import { familyConfigSchema, type FamilyConfig } from "@hub/contracts";
-import { GithubStateStore, type CloudState } from "../cloud/state.js";
+import { GithubStateStore, isValidRepoSlug, type CloudState } from "../cloud/state.js";
 
 export type FamilyCloudAdmin = {
   configured: boolean;
@@ -9,13 +9,14 @@ export type FamilyCloudAdmin = {
   test(profileId: string): Promise<void>;
   state?(): Promise<CloudState>;
 };
+
 export function githubFamilyAdmin(
   repository?: string,
   token?: string,
   http: typeof fetch = fetch,
 ): FamilyCloudAdmin {
   const configured = Boolean(
-    repository && /^[\w.-]+\/[\w.-]+$/.test(repository) && token,
+    repository && isValidRepoSlug(repository) && token,
   );
   const api = async (path: string, method = "GET", body?: unknown) => {
     if (!configured)
@@ -70,7 +71,7 @@ export function githubFamilyAdmin(
     },
     async test(profileId) {
       await api("/actions/workflows/morning-digest.yml/dispatches", "POST", {
-        ref: "main",
+        ref: process.env.HUB_CLOUD_REF ?? "main",
         inputs: { dry_run: "false", force_send: "true", profile_id: profileId },
       });
     },

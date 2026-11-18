@@ -1,9 +1,12 @@
 // Fixture-only server mounted into a separate Docker project; never part of production image.
-import { databaseUrl } from "../env.js";
-import { createPool } from "../db.js";
-import { migrate } from "../migrate.js";
-import { buildTestApp as buildApp } from "../test-app.js";
-import { WorkflowQueue, WorkerRunner } from "../workflows/runtime.js";
+import { databaseUrl } from "../../apps/api/src/env.js";
+import { createPool } from "../../apps/api/src/db.js";
+import { migrate } from "../../apps/api/src/migrate.js";
+import { buildTestApp as buildApp } from "../../apps/api/src/test-app.js";
+import {
+  WorkflowQueue,
+  WorkerRunner,
+} from "../../apps/api/src/workflows/runtime.js";
 import { defaultSettings } from "@hub/contracts";
 const pool = createPool(databaseUrl());
 await migrate(pool);

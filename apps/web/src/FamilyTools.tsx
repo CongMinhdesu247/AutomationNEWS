@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   nextFamilySend,
   priceFreshness,
@@ -6,9 +6,12 @@ import {
   type FamilyHealth,
   type FamilyProfile,
 } from "@hub/contracts";
-import { encryptFamilyBackup, decryptFamilyBackup } from "./family-backup";
+import { decryptFamilyBackup, encryptFamilyBackup } from "./family-backup";
+import { apiRequest } from "./lib/api-client";
+
 const when = (value: string) =>
   new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+
 const sourceNames: Record<string, string> = {
   gold: "Vàng SJC",
   usd: "USD/VND",
@@ -17,44 +20,58 @@ const sourceNames: Record<string, string> = {
   fuel: "Xăng",
   github: "GitHub",
   rss: "Tin tức",
-  uv: "Chỉ số UV", holidays: "Ngày lễ & kỷ niệm", tasks: "Việc cần làm",
+  uv: "Chỉ số UV",
+  holidays: "Ngày lễ & kỷ niệm",
+  tasks: "Việc cần làm",
 };
+
 export function DeliveryPanel({ profile }: { profile: FamilyProfile }) {
-  const [health, setHealth] = useState<FamilyHealth | null>(null),
-    [error, setError] = useState(""),
-    [refresh, setRefresh] = useState(0);
+  const [health, setHealth] = useState<FamilyHealth | null>(null);
+  const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
+
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
+
     async function load() {
+      if (document.hidden) return;
       try {
-        const response = await fetch("/api/family/status", {
+        const data = await apiRequest<FamilyHealth>("/api/family/status", {
           signal: controller.signal,
+          timeoutMs: 15000,
         });
-        const data = await response.json();
-        if (!response.ok)
-          throw Error(data.error?.message ?? "Chưa đọc được trạng thái cloud.");
         if (active) {
           setHealth(data);
           setError("");
         }
       } catch (e) {
-        if (active) setError((e as Error).message);
+        if (active && !controller.signal.aborted) {
+          setError((e as Error).message);
+        }
       }
     }
+
     void load();
     const timer = setInterval(() => void load(), 60000);
+    const onVisibility = () => {
+      if (!document.hidden) void load();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
       active = false;
       controller.abort();
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [refresh]);
-  const record = health?.profiles.find((p) => p.id === profile.id),
-    latest = record?.deliveries[0],
-    next = nextFamilySend(profile);
-  const local = new Date(Date.now() + 7 * 3600000),
-    today = local.toISOString().slice(0, 10);
+
+  const record = health?.profiles.find((p) => p.id === profile.id);
+  const latest = record?.deliveries[0];
+  const next = nextFamilySend(profile);
+  const local = new Date(Date.now() + 7 * 3600000);
+  const today = local.toISOString().slice(0, 10);
   const [hour, minute] = profile.sendTime.split(":").map(Number);
   const dueToday =
     profile.enabled &&
@@ -63,6 +80,7 @@ export function DeliveryPanel({ profile }: { profile: FamilyProfile }) {
   const hasToday = record?.deliveries.some(
     (d) => d.key.startsWith(today) && !d.key.includes(":alert:"),
   );
+
   return (
     <section className="family-delivery" aria-label="Trạng thái gửi">
       <div className="family-editor-heading">
@@ -104,7 +122,7 @@ export function DeliveryPanel({ profile }: { profile: FamilyProfile }) {
           <ul className="family-source-health">
             {latest.sources?.map((s) => (
               <li key={s.key}>
-                <strong>{sourceNames[s.key]}</strong>
+                <strong>{sourceNames[s.key] ?? s.key}</strong>
                 <span>
                   {s.status === "failed"
                     ? "Chưa lấy được dữ liệu"
@@ -152,33 +170,38 @@ export function DeliveryPanel({ profile }: { profile: FamilyProfile }) {
       </p>
       <p className="muted">
         Giờ dự kiến; GitHub có thể chạy muộn. Máy chủ gửi thành công chưa xác
-        nhận iPhone đã hiện banner.{" "}
+        nhận điện thoại đã hiện banner.{" "}
         {health ? "Kiểm tra lúc " + when(health.checkedAt) : ""}
       </p>
     </section>
   );
 }
+
 export function FamilyBackup({
   config,
   onRestore,
   disabled,
+  hasUnsavedChanges = false,
 }: {
   config: FamilyConfig;
   onRestore: (config: FamilyConfig) => void;
   disabled: boolean;
+  hasUnsavedChanges?: boolean;
 }) {
-  const [password, setPassword] = useState(""),
-    [file, setFile] = useState<File | null>(null),
-    [preview, setPreview] = useState<FamilyConfig | null>(null),
-    [busy, setBusy] = useState(false),
-    [message, setMessage] = useState("");
+  const [password, setPassword] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<FamilyConfig | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   async function run(restore: boolean) {
     setBusy(true);
     setMessage("");
     try {
       if (restore) {
-        if (!file) throw Error("Chọn tệp sao lưu trước.");
-        if (file.size > 128000) throw Error("Tệp sao lưu quá lớn.");
+        if (!file) throw new Error("Chọn tệp sao lưu trước.");
+        if (file.size > 128000) throw new Error("Tệp sao lưu quá lớn.");
         setPreview(await decryptFamilyBackup(await file.text(), password));
         setPassword("");
       } else {
@@ -205,9 +228,15 @@ export function FamilyBackup({
       setBusy(false);
     }
   }
+
+  const currentTopics = new Map(config.profiles.map((p) => [p.id, p.topic]));
+  const topicWillChange = preview?.profiles.some(
+    (p) => currentTopics.has(p.id) && currentTopics.get(p.id) !== p.topic,
+  );
+
   return (
     <details className="family-tools">
-      <summary>Sao lưu & khôi phục hồ sơ</summary>
+      <summary>Sao lưu &amp; khôi phục hồ sơ</summary>
       <p>
         Gồm hồ sơ, topic, nội dung, ngưỡng và lịch nhận đã lưu. Không gồm token
         quản trị, liên kết cài đặt riêng hay lịch sử bản tin. Lưu mật khẩu ở nơi
@@ -234,6 +263,7 @@ export function FamilyBackup({
           <label>
             Tệp cần khôi phục
             <input
+              ref={fileInputRef}
               type="file"
               accept=".json,application/json"
               onChange={(e) => {
@@ -243,7 +273,7 @@ export function FamilyBackup({
             />
           </label>
           <button type="button" disabled={!file} onClick={() => void run(true)}>
-            Mở & xem trước
+            Mở &amp; xem trước
           </button>
         </div>
         {preview && (
@@ -257,11 +287,27 @@ export function FamilyBackup({
                 </li>
               ))}
             </ul>
+            {topicWillChange && (
+              <p className="muted">
+                Lưu ý: Một số hồ sơ trong bản sao lưu dùng topic ntfy khác hiện
+                tại. Hãy kiểm tra topic sau khi nạp vào bản nháp.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => {
+                if (
+                  hasUnsavedChanges &&
+                  !window.confirm(
+                    "Bạn đang có thay đổi chưa lưu. Ghi đè bản nháp bằng dữ liệu sao lưu?",
+                  )
+                ) {
+                  return;
+                }
                 onRestore(preview);
                 setPreview(null);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
                 setMessage(
                   "Đã đưa vào bản nháp. Kiểm tra rồi bấm Lưu & đồng bộ để áp dụng.",
                 );
@@ -276,6 +322,16 @@ export function FamilyBackup({
     </details>
   );
 }
+
+function defaultMemberBaseUrl(): string {
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  if (!host || host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    return "";
+  }
+  return `${window.location.protocol}//${host}:8089`;
+}
+
 export function MemberAccess({
   id,
   disabled,
@@ -283,32 +339,32 @@ export function MemberAccess({
   id: string;
   disabled: boolean;
 }) {
-  const [base, setBase] = useState(""),
-    [path, setPath] = useState(""),
-    [expiry, setExpiry] = useState(""),
-    [busy, setBusy] = useState(false),
-    [message, setMessage] = useState("");
+  const [base, setBase] = useState(defaultMemberBaseUrl);
+  const [path, setPath] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
   useEffect(() => {
     setPath("");
     setMessage("");
     setExpiry("");
   }, [id]);
+
   async function action(revoke = false) {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(
-        "/api/family/" + encodeURIComponent(id) + "/access",
-        {
-          method: revoke ? "DELETE" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        },
-      );
-      const data = await response.json();
-      if (!response.ok)
-        throw Error(data.error?.message ?? "Chưa tạo được liên kết.");
-      setPath(revoke ? "" : data.path);
+      const data = await apiRequest<{
+        path?: string;
+        expiresAt?: string;
+        baseUrl?: string;
+      }>("/api/family/" + encodeURIComponent(id) + "/access", {
+        method: revoke ? "DELETE" : "POST",
+        body: {},
+        timeoutMs: 15000,
+      });
+      setPath(revoke ? "" : (data.path ?? ""));
       setExpiry(data.expiresAt ?? "");
       if (data.baseUrl) setBase(data.baseUrl);
       setMessage(
@@ -322,6 +378,7 @@ export function MemberAccess({
       setBusy(false);
     }
   }
+
   const validBase = (() => {
     try {
       const url = new URL(base);
@@ -337,6 +394,7 @@ export function MemberAccess({
       return "";
     }
   })();
+
   return (
     <details className="family-tools">
       <summary>Liên kết cài đặt riêng trên điện thoại</summary>
@@ -345,9 +403,9 @@ export function MemberAccess({
         hiệu lực 90 ngày; tạo lại sẽ hủy liên kết cũ.
       </p>
       <p className="muted">
-        Dùng cùng Wi-Fi khi PC đang bật. Cổng dành cho thành viên là 8089. Nhập
-        địa chỉ LAN của PC, ví dụ http://192.168.1.10:8089. Không dùng localhost
-        trên điện thoại.
+        Dùng cùng Wi-Fi khi máy chủ đang bật. Cổng mặc định dành cho thành viên
+        là 8089 (ví dụ http://192.168.1.10:8089). Không dùng localhost trên điện
+        thoại.
       </p>
       <label>
         Địa chỉ máy chủ cho điện thoại
@@ -395,7 +453,8 @@ export function MemberAccess({
       )}
       {path && !validBase && (
         <p>
-          Nhập địa chỉ máy chủ ở trên để lấy liên kết có thể mở trên điện thoại.
+          Nhập địa chỉ máy chủ hợp lệ ở trên để lấy liên kết mở được trên điện
+          thoại.
         </p>
       )}
       {expiry && <p className="muted">Hết hạn: {when(expiry)}</p>}

@@ -21,7 +21,7 @@ export async function refreshSource(
   ).rows[0];
   if (!source) {
     // Share an in-flight fetch across workers without holding a connection/transaction.
-    const until = Date.now() + 30000;
+    const until = Date.now() + 42000;
     while (Date.now() < until) {
       const current = (
         await pool.query(
@@ -42,7 +42,13 @@ export async function refreshSource(
   try {
     const result = await fetchRss(
       [{ id, name: source.name, url: source.url, enabled: true }],
-      { http, signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]) },
+      {
+        http,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
+        maxItems: 100,
+        maxAgeMs: 30 * 86400000,
+        futureSkewMs: 5 * 60000,
+      },
     );
     // All cache writes and lease release commit together, fenced against stale fetches.
     const client = await pool.connect();
@@ -89,10 +95,18 @@ export async function refreshSource(
       client.release();
     }
   } catch (e) {
-    await pool.query(
-      "UPDATE news_sources SET fetched_at=now(),fetch_token=NULL,lease_until=NULL,last_error='SOURCE_UNAVAILABLE' WHERE id=$1 AND fetch_token=$2",
-      [id, token],
-    );
+    if (signal.aborted) {
+      // Release lease without advancing fetched_at so shutdown/cancellation never poisons the 15-minute cache.
+      await pool.query(
+        "UPDATE news_sources SET fetch_token=NULL,lease_until=NULL WHERE id=$1 AND fetch_token=$2",
+        [id, token],
+      );
+    } else {
+      await pool.query(
+        "UPDATE news_sources SET fetched_at=now()-interval '13 minutes',fetch_token=NULL,lease_until=NULL,last_error='SOURCE_UNAVAILABLE' WHERE id=$1 AND fetch_token=$2",
+        [id, token],
+      );
+    }
     throw e;
   }
 }

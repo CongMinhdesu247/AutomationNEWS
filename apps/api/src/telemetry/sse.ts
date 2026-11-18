@@ -4,15 +4,20 @@ import type { ServerResponse } from "node:http";
 import { cursor, cursorSequence, digestIdSchema } from "@hub/contracts";
 import { eventDto, type EventRow } from "./store.js";
 import { RequestError } from "../digests/service.js";
+import { logEvent } from "../logger.js";
+
 export type SseOptions = {
   pollMs?: number;
   heartbeatMs?: number;
   maxClients?: number;
+  maxClientsPerUser?: number;
   maxRuns?: number;
   maxBufferBytes?: number;
 };
+
 type Client = {
   runId: string;
+  userId?: string;
   sequence: bigint;
   response: ServerResponse;
   lastSync: string;
@@ -22,6 +27,7 @@ type Client = {
   drain: () => void;
   cleanup: () => void;
 };
+
 export function writeFrame(
   response: ServerResponse,
   frame: string,
@@ -35,15 +41,18 @@ export function writeFrame(
   if (!response.write(frame)) return false;
   return true;
 }
+
 export class RunEventHub {
   private clients = new Set<Client>();
   private timer: ReturnType<typeof setTimeout> | undefined;
   private polling = false;
   private closed = false;
+
   constructor(
     private pool: Pool,
     private options: SseOptions = {},
   ) {}
+
   stats() {
     return {
       clients: this.clients.size,
@@ -52,15 +61,26 @@ export class RunEventHub {
       polling: this.polling,
     };
   }
-  capacity(runId: string) {
+
+  capacity(runId: string, userId?: string) {
+    if (this.closed) return false;
+    if (this.clients.size >= (this.options.maxClients ?? 100)) return false;
+    if (userId) {
+      const userCount = [...this.clients].filter((c) => c.userId === userId).length;
+      if (userCount >= (this.options.maxClientsPerUser ?? 8)) return false;
+    }
     return (
-      !this.closed &&
-      this.clients.size < (this.options.maxClients ?? 100) &&
-      (this.stats().runs < (this.options.maxRuns ?? 50) ||
-        [...this.clients].some((c) => c.runId === runId))
+      this.stats().runs < (this.options.maxRuns ?? 50) ||
+      [...this.clients].some((c) => c.runId === runId)
     );
   }
-  attach(runId: string, sequence: bigint, response: ServerResponse) {
+
+  attach(
+    runId: string,
+    sequence: bigint,
+    response: ServerResponse,
+    userId?: string,
+  ) {
     const cleanup = () => {
       this.clients.delete(client);
       response.off("close", cleanup);
@@ -73,6 +93,7 @@ export class RunEventHub {
     };
     const client: Client = {
       runId,
+      userId,
       sequence,
       response,
       lastSync: "",
@@ -91,6 +112,7 @@ export class RunEventHub {
     if (!this.send(client, "retry: 1500\n: connected\n\n")) return;
     this.schedule(0);
   }
+
   private send(client: Client, frame: string) {
     if (client.blocked) return false;
     const written = writeFrame(
@@ -109,6 +131,7 @@ export class RunEventHub {
     }
     return true;
   }
+
   private reset(client: Client, code: string) {
     this.send(
       client,
@@ -119,6 +142,7 @@ export class RunEventHub {
     client.response.end();
     client.cleanup();
   }
+
   private schedule(delay = this.options.pollMs ?? 500) {
     if (!this.closed && this.clients.size && !this.timer && !this.polling)
       this.timer = setTimeout(() => {
@@ -126,6 +150,7 @@ export class RunEventHub {
         void this.poll();
       }, delay);
   }
+
   private async poll() {
     if (this.polling || this.closed || !this.clients.size) return;
     this.polling = true;
@@ -146,7 +171,6 @@ export class RunEventHub {
           groups.set(client.runId, client.sequence);
       }
       if (!groups.size) return;
-      // One bounded read per run, shared by all clients in this API process.
       const result = await this.pool.query<{
         id: string;
         high: string;
@@ -205,8 +229,6 @@ export class RunEventHub {
               "\nevent: run-event\ndata: " +
               JSON.stringify(event) +
               "\n\n";
-            // Yield between small bursts so a healthy socket can flush before
-            // hitting our buffer cap (which can precede Node's highWaterMark).
             const bytes = Buffer.byteLength(frame);
             if (sentBytes && sentBytes + bytes > 16384) {
               yielded = true;
@@ -272,16 +294,15 @@ export class RunEventHub {
           !found.has(client.runId)
         )
           this.reset(client, "RUN_REMOVED");
-    } catch {
-      for (const client of [...this.clients]) {
-        client.response.destroy();
-        client.cleanup();
-      }
+    } catch (error) {
+      // Keep active streams open across transient DB glitches instead of causing a reconnect stampede.
+      logEvent("warn", "sse.poll_error", { error });
     } finally {
       this.polling = false;
       this.schedule();
     }
   }
+
   close() {
     this.closed = true;
     clearTimeout(this.timer);
@@ -292,6 +313,7 @@ export class RunEventHub {
     }
   }
 }
+
 export function registerRunEvents(
   app: FastifyInstance,
   pool: Pool,
@@ -330,7 +352,7 @@ export function registerRunEvents(
           "Cursor không hợp lệ hoặc thuộc run khác.",
         );
       }
-      if (!hub.capacity(id))
+      if (!hub.capacity(id, request.accountUser?.id))
         throw new RequestError(
           429,
           "SSE_CAPACITY",
@@ -345,7 +367,7 @@ export function registerRunEvents(
         "X-Accel-Buffering": "no",
       });
       reply.raw.flushHeaders();
-      hub.attach(id, sequence, reply.raw);
+      hub.attach(id, sequence, reply.raw, request.accountUser?.id);
     },
   );
   return hub;

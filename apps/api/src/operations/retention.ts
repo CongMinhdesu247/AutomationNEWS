@@ -82,6 +82,13 @@ export async function retainHistory(
           );
       }
     }
+    let sessionsPruned = 0;
+    if (options.apply) {
+      const s1 = await client.query("DELETE FROM user_sessions WHERE expires_at < now()");
+      const s2 = await client.query("DELETE FROM account_rate_limits WHERE expires_at < now()");
+      const s3 = await client.query("DELETE FROM member_access WHERE expires_at < now()");
+      sessionsPruned = (s1.rowCount ?? 0) + (s2.rowCount ?? 0) + (s3.rowCount ?? 0);
+    }
     await client.query(options.apply ? "COMMIT" : "ROLLBACK");
     return {
       mode: options.apply ? "apply" : "dry-run",
@@ -90,6 +97,7 @@ export async function retainHistory(
       attemptDays,
       events,
       attempts,
+      sessionsPruned,
     };
   } catch (error) {
     await client.query("ROLLBACK");

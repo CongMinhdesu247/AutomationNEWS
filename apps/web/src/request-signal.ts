@@ -1,8 +1,8 @@
-/** Timeout plus optional cancellation, including Safari without AbortSignal.any/timeout. */
-export function requestSignal(
+/** Timeout plus optional cancellation, with deterministic cleanup so completed requests never leak timers. */
+export function createRequestSignal(
   milliseconds: number,
   parent?: AbortSignal | null,
-): AbortSignal {
+): { signal: AbortSignal; cleanup: () => void } {
   const controller = new AbortController();
   const cancel = () => {
     clearTimeout(timer);
@@ -19,5 +19,19 @@ export function requestSignal(
   }, milliseconds);
   if (parent?.aborted) cancel();
   else parent?.addEventListener("abort", cancel, { once: true });
-  return controller.signal;
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", cancel);
+    },
+  };
+}
+
+export function requestSignal(
+  milliseconds: number,
+  parent?: AbortSignal | null,
+): AbortSignal {
+  return createRequestSignal(milliseconds, parent).signal;
 }

@@ -20,7 +20,7 @@ on:
         default: ""
 
 permissions:
-  contents: write # Only needed for the separate public star-count/delivery-state branch.
+  contents: read
 
 concurrency:
   group: morning-digest-cloud
@@ -29,26 +29,23 @@ concurrency:
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 5
+    permissions:
+      contents: write # Required to update state.json on the separate hub-cloud-state branch.
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.25.0
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
-      - name: Install pinned package manager and dependencies
-        run: |
-          npm install --global pnpm@11.25.0
-          pnpm install --frozen-lockfile
-      - name: Typecheck backend and contracts
-        run: |
-          pnpm --filter @hub/contracts typecheck
-          pnpm --filter @hub/api typecheck
-      - name: Test cloud execution and notification layout
-        run: pnpm exec vitest run apps/api/src/cloud/cloud.test.ts apps/api/src/cloud/family.test.ts apps/api/src/cloud/enhancements.test.ts apps/api/src/family/cloud-admin.test.ts apps/api/src/notifications/format.test.ts apps/api/src/connectors/vietnamese.test.ts apps/api/src/connectors/fuel.test.ts apps/api/src/connectors/air-quality.test.ts apps/api/src/connectors/markets.test.ts apps/api/src/cloud/markets.test.ts apps/api/src/cloud/market-lows.test.ts apps/api/src/connectors/market-history.test.ts apps/api/src/connectors/market-backfill.test.ts
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Collect and send morning digest
         env:
           HUB_SETTINGS_JSON: ${{ secrets.HUB_SETTINGS_JSON }}

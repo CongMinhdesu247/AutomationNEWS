@@ -7,7 +7,7 @@ import {
 } from "@hub/contracts";
 import { matchConditions } from "./store.js";
 import { resolveTarget, checkUrl } from "../connectors/http.js";
-import { geminiAdapter } from "./ai.js";
+import { extractAndRepairAiJson, geminiAdapter } from "./ai.js";
 import { sendNtfy } from "../connectors/ntfy.js";
 import { braveSearch } from "./search.js";
 it("uses conservative deterministic filters without executing source instructions", () => {
@@ -199,4 +199,83 @@ it("search adapter sends exactly one bounded request with a backend key and sani
   );
   expect(calls).toBe(1);
   expect(JSON.stringify(output)).not.toContain("<script>");
+});
+
+it("repairs fenced/quirky AI JSON, salvages truncated summaries, and preserves strict schema rejection", () => {
+  const fenced = extractAndRepairAiJson(
+    '```json\n{"include":[" IT ","","Data"],"exclude":[],"regions":[" Hà Nội "],"opportunityTypes":[],"deadlineAfter":"N/A"}\n```',
+    "interpret",
+  );
+  expect(watchConditionsSchema.parse(fenced)).toEqual({
+    include: ["IT", "Data"],
+    exclude: [],
+    regions: ["Hà Nội"],
+    opportunityTypes: [],
+    deadlineAfter: null,
+  });
+
+  // Unknown keys must still be rejected by strict schema
+  const unexpected = extractAndRepairAiJson('{"role":"admin"}', "interpret");
+  expect(watchConditionsSchema.safeParse(unexpected).success).toBe(false);
+
+  // Truncated MAX_TOKENS Vietnamese summary is cleanly salvaged instead of crashing JSON.parse
+  const salvaged = extractAndRepairAiJson(
+    '{"summary": "Các doanh nghiệp tại Hà Nội đang tuyển thực tập sinh công nghệ thông tin. Yêu cầu nắm vững nền tảng lập trình và chủ động học hỏi',
+    "summarize",
+    "MAX_TOKENS",
+  );
+  expect(topicSummarySchema.parse(salvaged).summary).toContain(
+    "Các doanh nghiệp tại Hà Nội đang tuyển thực tập sinh công nghệ thông tin.",
+  );
+});
+
+it("retries transient HTTP 503 once in Gemini adapter and rejects SAFETY-blocked candidates cleanly", async () => {
+  let attempts = 0;
+  const adapter = geminiAdapter("fixture-key", async () => {
+    attempts++;
+    if (attempts === 1) {
+      return { status: 503, headers: {}, body: "Service Unavailable" };
+    }
+    return {
+      status: 200,
+      headers: {},
+      body: JSON.stringify({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"summary":"Bản tóm tắt sau khi thử lại thành công."}' }],
+            },
+          },
+        ],
+        usageMetadata: { promptTokenCount: 15, candidatesTokenCount: 12 },
+      }),
+    };
+  });
+
+  const ok = await adapter.run(
+    "summarize",
+    "Thực tập Hà Nội",
+    { model: "gemini-2.5-flash", timeoutMs: 3000 } as never,
+    AbortSignal.timeout(4000),
+  );
+  expect(attempts).toBe(2);
+  expect(topicSummarySchema.parse(ok.value).summary).toBe(
+    "Bản tóm tắt sau khi thử lại thành công.",
+  );
+
+  const blockedAdapter = geminiAdapter("fixture-key", async () => ({
+    status: 200,
+    headers: {},
+    body: JSON.stringify({
+      candidates: [{ finishReason: "SAFETY", content: { parts: [] } }],
+    }),
+  }));
+  await expect(
+    blockedAdapter.run(
+      "summarize",
+      "Blocked input",
+      { model: "gemini-2.5-flash", timeoutMs: 2000 } as never,
+      AbortSignal.timeout(2000),
+    ),
+  ).rejects.toMatchObject({ code: "HTTP_400" });
 });

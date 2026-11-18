@@ -1,4 +1,5 @@
-# Use with compose.yaml and a separate .env.home; project name comes from -p automationnews.
+# Use with compose.yaml and .env.home; defaults project name to automationnews so existing volume automationnews_hub_data is preserved.
+name: ${COMPOSE_PROJECT_NAME:-automationnews}
 services:
   api:
     environment:
@@ -11,11 +12,13 @@ services:
   tunnel:
     image: cloudflare/cloudflared@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
     profiles: [tunnel]
+    security_opt:
+      - no-new-privileges:true
     command: [tunnel, --no-autoupdate, run, --token-file, /run/secrets/cloudflare_tunnel_token]
     secrets: [cloudflare_tunnel_token]
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     logging:
       driver: json-file
@@ -23,10 +26,12 @@ services:
   quick-tunnel:
     image: cloudflare/cloudflared@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
     profiles: [quick]
+    security_opt:
+      - no-new-privileges:true
     command: [tunnel, --no-autoupdate, --url, "http://web:80"]
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     logging:
       driver: json-file
@@ -36,7 +41,7 @@ services:
       file: compose.yaml
       service: api
     profiles: [tools]
-    command: [pnpm, --filter, "@hub/api", exec, tsx, src/accounts/owner-cli.ts]
+    command: ["node", "--import", "tsx", "src/accounts/owner-cli.ts"]
     environment:
       OWNER_EMAIL: ${OWNER_EMAIL:-}
       OWNER_PASSWORD_FILE: /run/secrets/owner_password

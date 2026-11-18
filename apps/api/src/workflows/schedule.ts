@@ -140,70 +140,71 @@ export class DigestScheduler {
           ],
         );
     });
-    const delivery = await this.queue.transaction(async (client) => {
-      const row = (
+    for (let item = 0; item < 5; item++) {
+      const delivery = await this.queue.transaction(async (client) => {
+        const row = (
+          await client.query(
+            "SELECT * FROM scheduled_deliveries WHERE status='pending' ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1",
+          )
+        ).rows[0];
+        if (!row) return;
         await client.query(
-          "SELECT * FROM scheduled_deliveries WHERE status='pending' ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1",
-        )
-      ).rows[0];
-      if (!row) return;
-      await client.query(
-        "UPDATE scheduled_deliveries SET status='sending',lease_until=clock_timestamp()+interval '60 seconds' WHERE id=$1",
-        [row.id],
-      );
-      return row as { id: string; digest_id: string };
-    });
-    if (!delivery) return;
-    let status: "success" | "failed" | "unknown" = "unknown";
-    let error: { code: string; message: string } | null = null;
-    try {
-      const digest = await new DigestStore(this.queue.pool).get(
-        delivery.digest_id,
-      );
-      if (!digest)
-        throw new RequestError(
-          404,
-          "DIGEST_NOT_FOUND",
-          "Không tìm thấy bản tin.",
+          "UPDATE scheduled_deliveries SET status='sending',lease_until=clock_timestamp()+interval '60 seconds' WHERE id=$1",
+          [row.id],
         );
-      const scheduledAt: Date | undefined = (
-        await this.queue.pool.query(
-          "SELECT scheduled_at FROM workflow_runs WHERE digest_id=$1",
-          [digest.id],
-        )
-      ).rows[0]?.scheduled_at;
-      if (
-        scheduledAt &&
-        localDay(scheduledAt, digest.settings.newsletter.timezone) !==
-          localDay(new Date(), digest.settings.newsletter.timezone)
-      )
-        throw new RequestError(
-          409,
-          "STALE_SCHEDULED_DIGEST",
-          "Bản tin thuộc lịch ngày cũ; bỏ gửi tự động.",
+        return row as { id: string; digest_id: string };
+      });
+      if (!delivery) break;
+      let status: "success" | "failed" | "unknown" = "unknown";
+      let error: { code: string; message: string } | null = null;
+      try {
+        const digest = await new DigestStore(this.queue.pool).get(
+          delivery.digest_id,
         );
-      const result = await this.service.notify(
-        delivery.digest_id,
-        delivery.id,
-        digest.settings.notifications,
+        if (!digest)
+          throw new RequestError(
+            404,
+            "DIGEST_NOT_FOUND",
+            "Không tìm thấy bản tin.",
+          );
+        const scheduledAt: Date | undefined = (
+          await this.queue.pool.query(
+            "SELECT scheduled_at FROM workflow_runs WHERE digest_id=$1",
+            [digest.id],
+          )
+        ).rows[0]?.scheduled_at;
+        if (
+          scheduledAt &&
+          Date.now() - scheduledAt.getTime() > 6 * 3600000
+        )
+          throw new RequestError(
+            409,
+            "STALE_SCHEDULED_DIGEST",
+            "Bản tin thuộc lịch cũ quá hạn; bỏ gửi tự động.",
+          );
+        const result = await this.service.notify(
+          delivery.digest_id,
+          delivery.id,
+          digest.settings.notifications,
+        );
+        status = result.status === "sending" ? "unknown" : result.status;
+        error = result.error;
+      } catch (cause) {
+        status = cause instanceof RequestError ? "failed" : "unknown";
+        error =
+          cause instanceof RequestError
+            ? { code: cause.code, message: cause.message }
+            : {
+                code: "AUTO_DELIVERY_FAILED",
+                message:
+                  "Không hoàn tất gửi tự động; kiểm tra trước khi gửi lại thủ công.",
+              };
+      }
+      await this.queue.pool.query(
+        "UPDATE scheduled_deliveries SET status=$2,error=$3::jsonb,completed_at=clock_timestamp(),lease_until=NULL WHERE id=$1 AND status='sending' AND lease_until>clock_timestamp()",
+        [delivery.id, status, error ? JSON.stringify(error) : null],
       );
-      status = result.status === "sending" ? "unknown" : result.status;
-      error = result.error;
-    } catch (cause) {
-      status = cause instanceof RequestError ? "failed" : "unknown";
-      error =
-        cause instanceof RequestError
-          ? { code: cause.code, message: cause.message }
-          : {
-              code: "AUTO_DELIVERY_FAILED",
-              message:
-                "Không hoàn tất gửi tự động; kiểm tra trước khi gửi lại thủ công.",
-            };
     }
-    await this.queue.pool.query(
-      "UPDATE scheduled_deliveries SET status=$2,error=$3::jsonb,completed_at=clock_timestamp(),lease_until=NULL WHERE id=$1 AND status='sending' AND lease_until>clock_timestamp()",
-      [delivery.id, status, error ? JSON.stringify(error) : null],
-    );
   }
   async status() {
     const [schedule, deliveries] = await Promise.all([

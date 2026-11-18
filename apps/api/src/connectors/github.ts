@@ -3,12 +3,13 @@ import {
   createVietnameseSummarizer,
   type TranslationCache,
 } from "./vietnamese.js";
-import type {
-  Settings,
-  Repository,
-  SourceResult,
-  GithubData,
-  RisingRepository,
+import {
+  safeHttpUrlSchema,
+  type Settings,
+  type Repository,
+  type SourceResult,
+  type GithubData,
+  type RisingRepository,
 } from "@hub/contracts";
 import {
   safeHttp,
@@ -28,7 +29,7 @@ const repositorySchema = z.object({
   full_name: z.string().max(300),
   description: z.string().nullable(),
   language: z.string().nullable(),
-  html_url: z.url(),
+  html_url: safeHttpUrlSchema,
   stargazers_count: z.number().int().nonnegative(),
   created_at: z.iso.datetime(),
   archived: z.boolean(),

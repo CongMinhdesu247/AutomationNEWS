@@ -4,7 +4,7 @@
 
 Bản này dùng tài khoản PostgreSQL, phiên đăng nhập bằng cookie HttpOnly, cấu hình/lịch/lịch sử riêng. Web, API, worker và scheduler tiếp tục dùng Docker Compose. Không cần máy Windows bật sau khi triển khai.
 
-Máy đích: Ubuntu Server 24.04 x86_64, Docker Engine + Compose. Dùng thư mục `/home/congminh/apps/AutomationNEWS`, Compose project **automationnews**, web **127.0.0.1:8091**, volume **automationnews_hub_data**. BankingPrj và port 8090 giữ nguyên. Không chạy lệnh trong thư mục BankingPrj và không thay service cloudflared đang phục vụ dự án đó.
+Máy đích: Ubuntu Server 24.04 x86_64, Docker Engine + Compose. Dùng thư mục `/opt/automationnews` (hoặc `~/apps/AutomationNEWS`), Compose project **automationnews**, web **127.0.0.1:8091**, volume **automationnews_hub_data**. Các dịch vụ khác trên cùng máy chủ và cấu hình tunnel riêng của chúng được giữ nguyên độc lập.
 
 ## 1. Chuyển source từ Windows
 
@@ -12,18 +12,18 @@ Trong PowerShell tại repository:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/package-home.ps1
-scp -i "$env:USERPROFILE\.ssh\homeserver_ed25519" output/automationnews-home.tar.gz congminh@100.95.33.63:/home/congminh/
-ssh -i "$env:USERPROFILE\.ssh\homeserver_ed25519" congminh@100.95.33.63
+scp -i "$env:USERPROFILE\.ssh\id_ed25519" output/automationnews-home.tar.gz <ssh-user>@<server-tailscale-ip>:~/
+ssh -i "$env:USERPROFILE\.ssh\id_ed25519" <ssh-user>@<server-tailscale-ip>
 ```
 
-Máy chạy các lệnh này phải có Tailscale và khóa SSH được cho phép. Gói source không chứa `.env`, secret, node_modules hoặc dữ liệu database.
+Máy chạy các lệnh này phải có Tailscale (hoặc mạng quản trị riêng) và khóa SSH được cho phép. Gói source không chứa `.env`, secret, node_modules hoặc dữ liệu database.
 
 Các lệnh còn lại chạy trong SSH Ubuntu:
 
 ```bash
-mkdir -p /home/congminh/apps/AutomationNEWS
-cd /home/congminh/apps/AutomationNEWS
-tar -xzf /home/congminh/automationnews-home.tar.gz
+mkdir -p ~/apps/AutomationNEWS
+cd ~/apps/AutomationNEWS
+tar -xzf ~/automationnews-home.tar.gz
 umask 077
 cp -n .env.home.example .env.home
 mkdir -p secrets
@@ -33,7 +33,7 @@ nano .env.home
 
 Đặt `POSTGRES_PASSWORD` ngẫu nhiên chỉ gồm chữ và số, `OWNER_EMAIL` là email quản trị. Có thể tạo mật khẩu database bằng `openssl rand -hex 24`, tự điền vào `.env.home`; không gửi mật khẩu vào chat. Giữ `REGISTRATION_OPEN=false` đến khi quản trị viên đã đăng nhập và kiểm tra xong.
 
-`APP_ORIGIN` là **đúng origin HTTPS người dùng mở**, không có đường dẫn hoặc dấu `/` cuối. Dự kiến `https://news.020407.xyz`. Tên miền hiện Pending nên URL đó chưa được coi là hoạt động. Có thể dùng Quick Tunnel riêng ở bước 3A trong lúc chờ.
+`APP_ORIGIN` là **đúng origin HTTPS người dùng mở**, không có đường dẫn hoặc dấu `/` cuối (ví dụ `https://news.example.com`). Có thể dùng Quick Tunnel riêng ở bước 3A trong lúc chờ DNS hoạt động.
 
 ```bash
 chmod 600 .env.home
@@ -85,13 +85,13 @@ Không restart quick-tunnel khi cập nhật origin. Nếu tunnel restart và UR
 
 Quick Tunnel không có cam kết uptime, giới hạn request đang xử lý và **không hỗ trợ SSE**. Màn hình tiến độ có nút Tải lại; dùng nút này khi thử qua Quick Tunnel. Chỉ dùng tạm để nghiệm thu; production dùng named tunnel. [Tài liệu chính thức](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
-## 3B. Named Tunnel với news.020407.xyz
+## 3B. Named Tunnel với tên miền riêng
 
 Sau khi nhà cung cấp hoàn tất đăng ký:
 
-1. Thêm zone `020407.xyz` vào Cloudflare và làm theo hướng dẫn đổi nameserver tại nhà đăng ký. Chờ zone Active.
+1. Thêm zone tên miền của bạn (ví dụ `example.com`) vào Cloudflare và làm theo hướng dẫn đổi nameserver tại nhà đăng ký. Chờ zone Active.
 2. Trong Cloudflare tạo **Cloudflare Tunnel** dành riêng cho AutomationNEWS. Chọn connector Docker, lấy token; không dán token vào chat hoặc commit.
-3. Thêm published application route: hostname `news.020407.xyz`, service **HTTP `web:80`**. Đây là tên service trong mạng Compose của app, không phải `127.0.0.1:8090` của BankingPrj. Không override HTTP Host Header.
+3. Thêm published application route: hostname `news.example.com`, service **HTTP `web:80`**. Đây là tên service trong mạng Compose của app. Không override HTTP Host Header.
 4. Lưu token trên server bằng lệnh dưới.
 
 ```bash
@@ -101,12 +101,12 @@ unset tunnel_token
 chmod 644 secrets/cloudflare_tunnel_token
 ```
 
-Token chỉ mount vào container tunnel; thư mục cha `secrets` giữ 700. Cập nhật `APP_ORIGIN=https://news.020407.xyz` trong `.env.home` rồi:
+Token chỉ mount vào container tunnel; thư mục cha `secrets` giữ 700. Cập nhật `APP_ORIGIN=https://news.example.com` trong `.env.home` rồi:
 
 ```bash
 docker compose -p automationnews --env-file .env.home -f infra/compose.yaml -f infra/compose.home.yaml up -d --no-deps api scheduler
 docker compose -p automationnews --env-file .env.home -f infra/compose.yaml -f infra/compose.home.yaml --profile tunnel up -d tunnel
-curl --fail https://news.020407.xyz/api/ready
+curl --fail https://news.example.com/api/ready
 ```
 
 Khi named tunnel đã hoạt động, dừng **quick-tunnel của AutomationNEWS**:
@@ -149,24 +149,11 @@ Lưu bản backup mã hóa ở vị trí khác máy chủ theo hệ thống back
 
 Khi nâng cấp: backup → giải nén source mới (không chép đè file môi trường) → stop `web api worker scheduler` của project **automationnews** → `up -d --build --wait db api worker scheduler web`. Giữ tunnel đang chạy để hostname ổn định; người dùng có thể gặp lỗi tạm trong thời gian nâng cấp. Nếu build lỗi, giữ volume và triển khai lại source trước; không down migration và không `down -v`. Migration 010 giữ tương thích các cột legacy, nhưng source trước đây **không có bảo vệ tài khoản**: không rollback API cũ trong khi tunnel vẫn public; dừng tunnel trước nếu buộc rollback.
 
-Xem container bằng `docker compose ... ps`; chỉ chia sẻ log đã bỏ token/email. Không chạy `docker system prune`, không xóa volume và không restart service BankingPrj để xử lý app này.
+Xem container bằng `docker compose ... ps`; chỉ chia sẻ log đã bỏ token/email. Không chạy `docker system prune`, không xóa volume và không can thiệp các dự án khác chạy cùng máy chủ.
 
-## Trạng thái bàn giao
+## Trạng thái nghiệm thu mẫu
 
-Đã triển khai trên HP ngày 15/11/2026 bằng SSH/Tailscale và khóa `C:\Users\ADMIN\.ssh\homeserver_new` qua SSH Agent. Source tại `/home/congminh/apps/AutomationNEWS`, Compose project `automationnews`, web bind `127.0.0.1:8091`. Build, migration, database/API/web healthcheck đã qua; worker và scheduler đang chạy. BankingPrj vẫn trả `ok` sau triển khai.
-
-Quick Tunnel riêng đã chạy. URL tại thời điểm nghiệm thu là `https://vsnet-number-president-promoting.trycloudflare.com`; URL hiện tại được ghi trong `PUBLIC_URL.txt` trên HP. Đã kiểm tra HTTPS từ PC, đăng nhập quản trị qua HTTPS, cookie phiên, quyền admin và logout. Đăng ký đã mở, giới hạn mặc định 100 tài khoản. Đã kiểm tra trang đăng nhập public với viewport điện thoại. Chưa thay DNS hoặc tạo named tunnel; Quick Tunnel vẫn có giới hạn SSE và URL thay đổi khi restart như mô tả ở trên. Chưa xác minh gửi ntfy đến điện thoại thật, lịch buổi sáng hoặc kiểm thử tải trên HP.
-
-Quản trị viên dùng email `congminhnguyen0204@gmail.com`. Mật khẩu khởi tạo ngẫu nhiên chỉ lưu trên HP trong `secrets/owner_password` (file 600, thư mục cha 700), không được in vào log/chat. Trong phiên SSH của chính bạn:
-
-```bash
-cat /home/congminh/apps/AutomationNEWS/secrets/owner_password
-```
-
-Đăng nhập bằng mật khẩu đó, đổi mật khẩu trong mục **Mật khẩu**, rồi xóa file khởi tạo:
-
-```bash
-rm /home/congminh/apps/AutomationNEWS/secrets/owner_password
-```
-
-Đã tạo bản dump database ban đầu và bản sao cấu hình trong thư mục `backups` quyền 700 trên HP. Đã kiểm tra mục lục dump bằng `pg_restore --list`; chưa thử phục hồi trên đích riêng. Backup hiện ở cùng HDD, chưa có lịch backup tự động/offsite cho AutomationNEWS; hệ thống backup và Telegram của BankingPrj chưa được mở rộng sang app này. Dùng quy trình backup/nâng cấp ở mục 5 trước các lần cập nhật tiếp theo. Dừng tunnel của riêng AutomationNEWS nếu cần ngừng public; không dừng BankingPrj.
+Sau khi triển khai qua SSH/Tailscale vào thư mục `~/apps/AutomationNEWS` (Compose project `automationnews`, web bind `127.0.0.1:8091`), kiểm tra các bước:
+- Build, migration, database/API/web healthcheck đạt; worker và scheduler đang chạy.
+- Đăng nhập quản trị bằng `OWNER_EMAIL` đã cấu hình và mật khẩu khởi tạo trong `secrets/owner_password` (xóa file `secrets/owner_password` ngay sau lần đổi mật khẩu đầu tiên).
+- Thiết lập lịch backup tự động/offsite cho thư mục `backups` (quyền 700) và kiểm tra phục hồi thử định kỳ trên database riêng biệt.

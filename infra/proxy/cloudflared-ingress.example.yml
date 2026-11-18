@@ -1,0 +1,18 @@
+# Example Cloudflare Tunnel (cloudflared) ingress rules for AutomationNEWS:
+#
+# Mode A — Shared host-level cloudflared under /home/congminh/apps/_proxy/:
+#   Point hostname -> http://127.0.0.1:8091
+#
+# Mode B — Project-scoped cloudflared container (`--profile tunnel` in infra/compose.home.yaml):
+#   Point hostname in Cloudflare Zero Trust Dashboard -> http://web:80
+#   (Container `web` stays on port 80 inside the `automationnews` Compose network.)
+
+ingress:
+  - hostname: news.example.com
+    service: http://127.0.0.1:8091
+    originRequest:
+      noTLSVerify: false
+      connectTimeout: 10s
+      keepAliveTimeout: 90s
+  # Keep sibling apps isolated on their own ports (e.g. banking-local on 127.0.0.1:8090)
+  - service: http_status:404

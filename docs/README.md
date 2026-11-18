@@ -2,6 +2,11 @@
 
 Các lệnh trong tài liệu chạy từ **thư mục gốc dự án**, trừ khi có chỉ dẫn khác. Báo cáo kiểm chứng và tài liệu portfolio ghi nhận trạng thái tại thời điểm viết.
 
+## Hồ sơ máy chủ & Báo cáo kiểm toán
+
+- [Hồ sơ cấu hình Local Server (SERVER_CONTEXT.md)](../SERVER_CONTEXT.md)
+- [Báo cáo kiểm toán & nâng cấp toàn diện hệ thống](audit/PROJECT_AUDIT_REPORT.md)
+
 ## Hướng dẫn sử dụng và vận hành
 
 - [Chạy cục bộ và kiểm thử](guides/local-development.md)

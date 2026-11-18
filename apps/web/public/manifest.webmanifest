@@ -2,6 +2,7 @@
   "id": "/",
   "name": "Bản tin mỗi sáng",
   "short_name": "Bản tin sáng",
+  "description": "Bản tin cá nhân hóa mỗi sáng: thời tiết, AQI, vàng SJC, USD, xăng dầu, RSS, GitHub và theo dõi thông minh.",
   "lang": "vi",
   "start_url": "/#/digests",
   "scope": "/",
@@ -19,7 +20,13 @@
       "src": "/app-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

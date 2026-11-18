@@ -1,7 +1,8 @@
-import { requestSignal } from "./request-signal";
 import { useEffect, useState } from "react";
 import type { SourceError } from "@hub/contracts";
 import { Icon } from "./Icons";
+import { apiRequest } from "./lib/api-client";
+import { ExternalLink } from "./components/ExternalLink";
 
 type DeadLetter = {
   id: string;
@@ -11,6 +12,7 @@ type DeadLetter = {
   createdAt: string;
   replayRunId: string | null;
 };
+
 type Schedule = {
   nextRunAt: string | null;
   lastCheckedAt: string | null;
@@ -24,8 +26,10 @@ type Schedule = {
     error: SourceError | null;
   }[];
 };
+
 const when = (value: string | null) =>
   value ? new Date(value).toLocaleString("vi-VN") : "Chưa có";
+
 const deliveryLabels: Record<string, string> = {
   pending: "Chờ gửi",
   sending: "Đang gửi",
@@ -33,16 +37,24 @@ const deliveryLabels: Record<string, string> = {
   failed: "Gửi lỗi",
   unknown: "Chưa rõ kết quả",
 };
-async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    signal: init.signal ?? requestSignal(10000),
-  });
-  const body = await response.json();
-  if (!response.ok)
-    throw new Error(body.error?.message ?? "Không xử lý được yêu cầu.");
-  return body as T;
-}
+
+const nodeLabels: Record<string, string> = {
+  start: "Khởi tạo quy trình",
+  fetch_rss: "Lấy tin RSS",
+  fetch_weather: "Lấy thời tiết",
+  fetch_github: "Lấy dự án GitHub",
+  fetch_fuel: "Lấy giá xăng",
+  fetch_air_quality: "Lấy chất lượng không khí",
+  fetch_gold: "Lấy giá vàng SJC",
+  fetch_usd: "Lấy tỷ giá USD/VND",
+  fetch_uv: "Lấy chỉ số UV",
+  fetch_holidays: "Tính ngày lễ sắp tới",
+  fetch_tasks: "Tổng hợp việc cần làm",
+  compose_digest: "Gộp bản tin",
+  persist_digest: "Lưu bản tin",
+  premium_task: "Tác vụ theo dõi tùy chỉnh",
+};
+
 export default function AutomationDashboard() {
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [letters, setLetters] = useState<{
@@ -54,29 +66,38 @@ export default function AutomationDashboard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const cloudWorkflowUrl = (
+    import.meta.env.VITE_CLOUD_WORKFLOW_URL ?? ""
+  ).trim();
+
   useEffect(() => {
     const controller = new AbortController();
     let disposed = false;
     setLoading(true);
     setError("");
     void Promise.all([
-      request<Schedule>("/api/schedule", { signal: controller.signal }),
-      request<{ items: DeadLetter[]; hasMore: boolean }>(
+      apiRequest<Schedule>("/api/schedule", {
+        signal: controller.signal,
+        timeoutMs: 10000,
+      }),
+      apiRequest<{ items: DeadLetter[]; hasMore: boolean }>(
         "/api/dead-letters?page=" + page + "&pageSize=10",
-        { signal: controller.signal },
+        { signal: controller.signal, timeoutMs: 10000 },
       ),
     ])
-      .then(([schedule, letters]) => {
+      .then(([sched, dlq]) => {
         if (!disposed) {
-          setSchedule(schedule);
-          setLetters(letters);
+          setSchedule(sched);
+          setLetters(dlq);
         }
       })
       .catch((cause) => {
-        if (!disposed)
+        if (!disposed) {
           setError(
             cause instanceof Error ? cause.message : "Không tải được dữ liệu.",
           );
+        }
       })
       .finally(() => {
         if (!disposed) setLoading(false);
@@ -86,14 +107,15 @@ export default function AutomationDashboard() {
       controller.abort();
     };
   }, [page, revision]);
+
   async function replay(id: string) {
     if (busy) return;
     setBusy(id);
     setError("");
     try {
-      const result = await request<{ runId: string }>(
-        "/api/dead-letters/" + id + "/replay",
-        { method: "POST" },
+      const result = await apiRequest<{ runId: string }>(
+        "/api/dead-letters/" + encodeURIComponent(id) + "/replay",
+        { method: "POST", body: {}, timeoutMs: 15000 },
       );
       window.location.hash = "/runs/" + result.runId;
     } catch (cause) {
@@ -104,12 +126,13 @@ export default function AutomationDashboard() {
       setBusy(null);
     }
   }
+
   return (
     <div className="runs-dashboard">
       <div className="page-heading">
         <div>
           <h1>Lịch gửi bản tin</h1>
-          <p>Phân biệt lịch trên GitHub và lịch chạy trên máy của bạn.</p>
+          <p>Phân biệt lịch trên GitHub Cloud và lịch chạy trên máy của bạn.</p>
         </div>
       </div>
       <div className="digest-toolbar">
@@ -117,6 +140,7 @@ export default function AutomationDashboard() {
           Cài đặt lịch trên máy
         </a>
         <button
+          type="button"
           disabled={loading}
           onClick={() => setRevision((value) => value + 1)}
         >
@@ -136,21 +160,24 @@ export default function AutomationDashboard() {
         <div>
           <h2>Nhận bản tin khi PC tắt</h2>
           <p>
-            Lịch cloud chạy trên GitHub Actions và kiểm tra hồ sơ gia đình mỗi 30 phút.
-            Quản lý giờ, ngày nhận và người nhận trong mục Gia đình.
+            Lịch cloud chạy trên GitHub Actions và kiểm tra hồ sơ gia đình mỗi
+            30 phút. Quản lý giờ, ngày nhận và người nhận trong mục Gia đình.
           </p>
-          <p><a className="text-link" href="#/family">Quản lý lịch của gia đình</a></p>
-          <a
-            className="text-link"
-            href={
-              import.meta.env.VITE_CLOUD_WORKFLOW_URL ||
-              "https://github.com/CongMinhdesu247/AutomationNEWS/actions/workflows/morning-digest.yml"
-            }
-            target="_blank"
-            rel="noreferrer"
-          >
-            Xem lịch và lần chạy trên GitHub <Icon name="arrow" size={17} />
-          </a>
+          <p>
+            <a className="text-link" href="#/family">
+              Quản lý lịch của gia đình <Icon name="arrow" size={16} />
+            </a>
+          </p>
+          {cloudWorkflowUrl ? (
+            <ExternalLink className="text-link" href={cloudWorkflowUrl}>
+              Xem lịch và lần chạy trên GitHub <Icon name="arrow" size={17} />
+            </ExternalLink>
+          ) : (
+            <small className="muted">
+              Đặt biến <code>VITE_CLOUD_WORKFLOW_URL</code> nếu muốn hiện liên
+              kết trực tiếp tới trang GitHub Actions của kho mã nguồn.
+            </small>
+          )}
         </div>
       </section>
       {schedule && (
@@ -182,15 +209,15 @@ export default function AutomationDashboard() {
             <p>
               Scheduler kiểm tra gần nhất: {when(schedule.lastCheckedAt)}.{" "}
               {schedule.lastRunId && (
-                <a href={"#/runs/" + schedule.lastRunId}>
-                  Xem run theo lịch gần nhất
+                <a href={"#/runs/" + schedule.lastRunId} className="text-link">
+                  Xem lần chạy theo lịch gần nhất
                 </a>
               )}
             </p>
           </details>
           <p className="help-note">
-            Lịch cục bộ cần PC hoạt động. Nếu đã dùng lịch cloud, giữ lịch này
-            tắt để tránh nhận trùng.
+            Lịch cục bộ cần máy chủ đang hoạt động. Nếu đã dùng lịch cloud, giữ
+            lịch này tắt để tránh nhận trùng.
           </p>
           <h3>Lịch sử gửi từ máy</h3>
           {!schedule.deliveries.length && <p>Chưa có lượt gửi tự động.</p>}
@@ -199,7 +226,7 @@ export default function AutomationDashboard() {
               <li key={item.id}>
                 <div>
                   <a href={"#/digests/" + item.digestId}>
-                    Bản tin {when(item.createdAt)}
+                    <strong>Bản tin {when(item.createdAt)}</strong>
                   </a>
                   <p>{deliveryLabels[item.status] ?? item.status}</p>
                   {item.error && (
@@ -215,7 +242,7 @@ export default function AutomationDashboard() {
           </p>
         </section>
       )}
-      <details className="automation-section advanced-section">
+      <details className="automation-section advanced-section" open={Boolean(letters?.items.length)}>
         <summary>
           Tác vụ cần xử lý
           {letters
@@ -223,9 +250,9 @@ export default function AutomationDashboard() {
             : ""}
         </summary>
         <p>
-          Chạy lại tạo toàn bộ workflow mới bằng cấu hình snapshot cũ, giữ
-          nguyên bản tin và lịch sử cũ. Run này không tự gửi ntfy. Bấm lặp lại
-          trên cùng mục trả về cùng run mới.
+          Chạy lại tạo toàn bộ quy trình mới bằng cấu hình đã chụp, giữ nguyên
+          bản tin và lịch sử cũ. Lần chạy lại này không tự gửi ntfy. Bấm lặp lại
+          trên cùng mục trả về cùng lần chạy mới.
         </p>
         {letters && !loading && (
           <>
@@ -233,20 +260,30 @@ export default function AutomationDashboard() {
               {letters.items.map((item) => (
                 <li key={item.id}>
                   <div>
-                    <strong>{item.nodeId}</strong>
+                    <strong>
+                      {nodeLabels[item.nodeId]
+                        ? `${nodeLabels[item.nodeId]} (${item.nodeId})`
+                        : item.nodeId}
+                    </strong>
                     <p>
                       {item.error.code}: {item.error.message}
                     </p>
                     <small>{when(item.createdAt)}</small>
                     <p>
-                      <a href={"#/runs/" + item.runId}>Xem run gốc</a>
+                      <a href={"#/runs/" + item.runId} className="text-link">
+                        Xem lần chạy gốc
+                      </a>
                     </p>
                     {item.replayRunId ? (
-                      <a href={"#/runs/" + item.replayRunId}>
-                        Xem run chạy lại
+                      <a
+                        href={"#/runs/" + item.replayRunId}
+                        className="text-link"
+                      >
+                        Xem lần chạy lại
                       </a>
                     ) : (
                       <button
+                        type="button"
                         disabled={busy !== null}
                         onClick={() => void replay(item.id)}
                       >
@@ -261,6 +298,7 @@ export default function AutomationDashboard() {
             {(page > 1 || letters.hasMore) && (
               <div className="pagination">
                 <button
+                  type="button"
                   disabled={page === 1 || busy !== null}
                   onClick={() => setPage((value) => value - 1)}
                 >
@@ -268,6 +306,7 @@ export default function AutomationDashboard() {
                 </button>
                 <span>Trang {page}</span>
                 <button
+                  type="button"
                   disabled={!letters.hasMore || busy !== null}
                   onClick={() => setPage((value) => value + 1)}
                 >
