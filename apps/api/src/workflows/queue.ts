@@ -426,10 +426,34 @@ export class WorkflowQueue {
           await client.query("ROLLBACK TO SAVEPOINT custom_digest");
         }
         output = { digestId };
-        await client.query(
-          "INSERT INTO scheduled_deliveries(id,digest_id) SELECT $1,$2 FROM workflow_runs WHERE id=$2 AND scheduled_at IS NOT NULL AND settings_snapshot->'notifications'->>'enabled'='true' ON CONFLICT(digest_id) DO NOTHING",
-          [crypto.randomUUID(), digestId],
-        );
+        await client.query("SAVEPOINT schedule_delivery_check");
+        try {
+          await client.query(
+            `INSERT INTO scheduled_deliveries(id, digest_id)
+             SELECT $1, $2 FROM workflow_runs r
+              WHERE r.id = $2
+                AND r.scheduled_at IS NOT NULL
+                AND (
+                  r.settings_snapshot->'notifications'->>'enabled' = 'true'
+                  OR (
+                    r.user_id IS NOT NULL
+                    AND EXISTS (
+                      SELECT 1 FROM user_web_push_subscriptions w
+                       WHERE w.user_id = r.user_id
+                    )
+                  )
+                )
+             ON CONFLICT(digest_id) DO NOTHING`,
+            [crypto.randomUUID(), digestId],
+          );
+          await client.query("RELEASE SAVEPOINT schedule_delivery_check");
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT schedule_delivery_check");
+          await client.query(
+            "INSERT INTO scheduled_deliveries(id,digest_id) SELECT $1,$2 FROM workflow_runs WHERE id=$2 AND scheduled_at IS NOT NULL AND settings_snapshot->'notifications'->>'enabled'='true' ON CONFLICT(digest_id) DO NOTHING",
+            [crypto.randomUUID(), digestId],
+          );
+        }
       }
       await client.query(
         "UPDATE node_runs SET status=$3,output=$4::jsonb,error=$5::jsonb,completed_at=clock_timestamp() WHERE run_id=$1 AND node_id=$2",

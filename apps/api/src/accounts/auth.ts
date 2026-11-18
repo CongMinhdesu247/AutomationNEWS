@@ -142,6 +142,10 @@ export function registerAuth(
     ) {
       return;
     }
+    if (path === "/api/public/today" && request.method === "GET") {
+      await throttle("public-today:" + ipKey(request), 60, 300);
+      return;
+    }
 
     // Capability-token Family Member Portal (/api/member) uses Authorization: Bearer <43-char-token>
     // (never ambient cookies), so phones on LAN/MEMBER_PUBLIC_URL can access their own profile.

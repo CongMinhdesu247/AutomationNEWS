@@ -167,12 +167,16 @@ export class DigestScheduler {
             "DIGEST_NOT_FOUND",
             "Không tìm thấy bản tin.",
           );
-        const scheduledAt: Date | undefined = (
-          await this.queue.pool.query(
-            "SELECT scheduled_at FROM workflow_runs WHERE digest_id=$1",
+        const runMeta = (
+          await this.queue.pool.query<{
+            scheduled_at: Date | null;
+            user_id: string | null;
+          }>(
+            "SELECT scheduled_at, user_id FROM workflow_runs WHERE digest_id=$1",
             [digest.id],
           )
-        ).rows[0]?.scheduled_at;
+        ).rows[0];
+        const scheduledAt = runMeta?.scheduled_at ?? undefined;
         if (
           scheduledAt &&
           Date.now() - scheduledAt.getTime() > 6 * 3600000
@@ -186,6 +190,7 @@ export class DigestScheduler {
           delivery.digest_id,
           delivery.id,
           digest.settings.notifications,
+          runMeta?.user_id ?? undefined,
         );
         status = result.status === "sending" ? "unknown" : result.status;
         error = result.error;

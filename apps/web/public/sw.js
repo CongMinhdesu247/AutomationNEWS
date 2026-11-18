@@ -1,6 +1,6 @@
-// Network-first PWA Service Worker: never caches /api/* responses or private user data,
-// and provides a CSP-compliant Vietnamese offline fallback screen when network is unavailable.
-const CACHE_NAME = "automationnews-shell-v3";
+// Network-first PWA + Web Push Service Worker: never caches /api/* responses or private user data,
+// handles native RFC 8291/8292 Web Push notifications, and provides a CSP-compliant Vietnamese offline screen.
+const CACHE_NAME = "automationnews-shell-v4";
 const OFFLINE_CSP =
   "default-src 'none'; style-src 'unsafe-inline'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 const OFFLINE_HTML = `<!doctype html>
@@ -27,7 +27,7 @@ const OFFLINE_HTML = `<!doctype html>
 <body>
   <main>
     <h1>Thiết bị đang ngoại tuyến</h1>
-    <p>Kiểm tra kết nối Wi-Fi hoặc 4G/5G để đồng bộ bản tin mới nhất. Các thông báo ngắn gần đây vẫn lưu sẵn trong ứng dụng ntfy trên điện thoại của bạn.</p>
+    <p>Kiểm tra kết nối Wi-Fi hoặc 4G/5G để đồng bộ bản tin mới nhất. Các thông báo gần đây vẫn lưu sẵn trong trung tâm thông báo của trình duyệt.</p>
     <a href="">Thử kết nối lại</a>
   </main>
 </body>
@@ -73,4 +73,86 @@ self.addEventListener("fetch", (event) => {
       ),
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Bản tin mỗi sáng",
+    body: "Ấn bản sáng mới của bạn đã sẵn sàng để đọc.",
+    url: "/#/digests",
+    tag: "morning-digest",
+  };
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      if (parsed && typeof parsed === "object") {
+        payload = {
+          title:
+            typeof parsed.title === "string" && parsed.title.trim()
+              ? parsed.title.trim().slice(0, 120)
+              : payload.title,
+          body:
+            typeof parsed.body === "string" && parsed.body.trim()
+              ? parsed.body.trim().slice(0, 320)
+              : payload.body,
+          url:
+            typeof parsed.url === "string" && parsed.url.startsWith("/")
+              ? parsed.url
+              : payload.url,
+          tag:
+            typeof parsed.tag === "string" && parsed.tag.trim()
+              ? parsed.tag.trim().slice(0, 64)
+              : payload.tag,
+        };
+      }
+    } catch {
+      const text = event.data.text();
+      if (text) {
+        payload.body = text.slice(0, 320);
+      }
+    }
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/app-icon-192.png",
+      badge: "/app-icon-192.png",
+      tag: payload.tag,
+      renotify: true,
+      data: { url: payload.url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const rawUrl =
+    event.notification.data && typeof event.notification.data.url === "string"
+      ? event.notification.data.url
+      : "/#/digests";
+  const targetUrl = new URL(
+    rawUrl.startsWith("/") ? rawUrl : "/#/digests",
+    self.location.origin,
+  ).href;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(async (clientList) => {
+        for (const client of clientList) {
+          if (
+            client.url.startsWith(self.location.origin) &&
+            "focus" in client
+          ) {
+            if ("navigate" in client) {
+              await client.navigate(targetUrl).catch(() => {});
+            }
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+      }),
+  );
 });

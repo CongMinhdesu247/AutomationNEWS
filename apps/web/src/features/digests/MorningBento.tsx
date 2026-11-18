@@ -5,6 +5,7 @@ import {
 } from "@hub/contracts";
 import { Icon } from "../../Icons";
 import { weatherVisual } from "../../lib/format";
+import { Sparkline } from "./Sparkline";
 
 function aqiTone(aqi: number | null | undefined): string {
   if (aqi == null) return "neutral";
@@ -22,9 +23,11 @@ function uvTone(uv: number | null | undefined): string {
 
 export function MorningBento({
   sources,
+  sparklines,
   onJump,
 }: {
   sources: DigestSources;
+  sparklines?: { sjc: number[]; usd: number[] } | null;
   onJump?: (sectionId: string) => void;
 }) {
   const weather =
@@ -162,6 +165,13 @@ export function MorningBento({
                     đ/chỉ
                   </small>
                 </div>
+                {sparklines?.sjc && sparklines.sjc.length >= 2 && (
+                  <Sparkline
+                    points={sparklines.sjc}
+                    label="Vàng miếng SJC 30 ngày"
+                    tone="amber"
+                  />
+                )}
                 <div className="bento-market-right">
                   <strong>
                     {goldPricePerChi(goldBar.sell, gold.unit).toLocaleString(
@@ -203,6 +213,13 @@ export function MorningBento({
                     đ
                   </small>
                 </div>
+                {sparklines?.usd && sparklines.usd.length >= 2 && (
+                  <Sparkline
+                    points={sparklines.usd}
+                    label="Tỷ giá USD/VND 30 ngày"
+                    tone="emerald"
+                  />
+                )}
                 <div className="bento-market-right">
                   <strong>
                     {usd.sell?.toLocaleString("vi-VN") ?? "—"} đ

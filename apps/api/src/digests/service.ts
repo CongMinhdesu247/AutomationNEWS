@@ -10,6 +10,11 @@ import { DigestStore } from "./store.js";
 import { safeHttp, type HttpClient } from "../connectors/http.js";
 import { sendNtfy } from "../connectors/ntfy.js";
 import { createVietnameseSummarizer } from "../connectors/vietnamese.js";
+import {
+  buildDigestPushPayload,
+  countUserWebPushDevices,
+  sendWebPushToUser,
+} from "../notifications/web-push.js";
 
 export class RequestError extends Error {
   constructor(
@@ -153,10 +158,11 @@ export class DigestService {
     id: string,
     key: string,
     destination?: Settings["notifications"],
+    userId?: string,
   ) {
     const existing = await this.store.notificationByKey(id, key);
     if (existing) return existing;
-    const digest = await this.store.get(id, !destination);
+    const digest = await this.store.get(id, !destination && !userId);
     if (!digest)
       throw new RequestError(
         404,
@@ -168,11 +174,17 @@ export class DigestService {
     const notifications =
       destination ??
       settingsSchema.parse(await this.store.settings()).notifications;
-    if (!notifications.enabled || !notifications.topic)
+    const ntfyActive = Boolean(notifications.enabled && notifications.topic);
+    const webPushDevices = userId
+      ? await countUserWebPushDevices(this.store.pool, userId)
+      : 0;
+    if (!ntfyActive && webPushDevices === 0)
       throw new RequestError(
         400,
         "NTFY_DISABLED",
-        "Bật ntfy, nhập server và topic rồi lưu cấu hình trước khi gửi.",
+        userId
+          ? "Bật Thông báo trực tiếp trên trình duyệt (hoặc ứng dụng ntfy) trong phần Tùy chọn trước khi gửi."
+          : "Bật ntfy, nhập server và topic rồi lưu cấu hình trước khi gửi.",
       );
     this.enter();
     try {
@@ -187,27 +199,53 @@ export class DigestService {
         ))
       )
         return (await this.store.notificationByKey(id, key))!;
-      const result = await sendNtfy(
-        await this.localize(digest),
-        notifications,
-        {
-          http: this.http,
-          now: this.now,
-          token: this.options.ntfyToken,
-          tokenOrigins: this.options.ntfyTokenOrigins,
-          publicBaseUrl: this.options.publicBaseUrl,
-          allowedOrigins: this.options.ntfyAllowedOrigins,
-          destinationOrigins: this.options.ntfyDestinationOrigins,
-          signal: AbortSignal.timeout(this.options.requestTimeoutMs ?? 6000),
-        },
-      );
-      const error = result.errors[0] ?? null;
-      const status =
-        result.status === "success"
-          ? "success"
-          : error && /^HTTP_/.test(error.code)
-            ? "failed"
-            : "unknown";
+      const localized = await this.localize(digest, {
+        allowExternalFetch: ntfyActive,
+      });
+      const [pushResult, ntfyResult] = await Promise.all([
+        webPushDevices > 0 && userId
+          ? sendWebPushToUser(
+              this.store.pool,
+              userId,
+              buildDigestPushPayload(localized),
+              { http: this.http },
+            )
+          : Promise.resolve(null),
+        ntfyActive
+          ? sendNtfy(localized, notifications, {
+              http: this.http,
+              now: this.now,
+              token: this.options.ntfyToken,
+              tokenOrigins: this.options.ntfyTokenOrigins,
+              publicBaseUrl: this.options.publicBaseUrl,
+              allowedOrigins: this.options.ntfyAllowedOrigins,
+              destinationOrigins: this.options.ntfyDestinationOrigins,
+              signal: AbortSignal.timeout(
+                this.options.requestTimeoutMs ?? 6000,
+              ),
+            })
+          : Promise.resolve(null),
+      ]);
+
+      let status: "success" | "failed" | "unknown";
+      let error: { code: string; message: string } | null = null;
+      if (
+        (pushResult && pushResult.sent > 0) ||
+        ntfyResult?.status === "success"
+      ) {
+        status = "success";
+      } else if (ntfyResult) {
+        const ntfyErr = ntfyResult.errors[0] ?? null;
+        error = ntfyErr;
+        status = ntfyErr && /^HTTP_/.test(ntfyErr.code) ? "failed" : "unknown";
+      } else {
+        status = "failed";
+        error = {
+          code: "WEB_PUSH_FAILED",
+          message:
+            "Không gửi được thông báo tới trình duyệt. Hãy mở phần Tùy chọn và bật lại thông báo trên trình duyệt hiện tại.",
+        };
+      }
       await this.store.finishNotification(attemptId, status, error, this.now());
       return (await this.store.notificationByKey(id, key))!;
     } finally {

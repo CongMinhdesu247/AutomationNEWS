@@ -1912,3 +1912,574 @@ dialog.sample-digest-dialog::backdrop {
     transition: none;
   }
 }
+
+
+/* ==========================================================================
+   Growth & Retention Suite — Public Today, Lunar Calendar, Sparklines,
+   Share Card Modal, Browser Web Push & 3-Step Onboarding Wizard
+   ========================================================================== */
+
+.account-lunar-inline {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.lunar-special-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.lunar-today-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--surface-soft, rgba(20, 105, 84, 0.06));
+  border: 1px solid var(--line);
+}
+
+.lunar-today-callout strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.lunar-today-callout small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* Sparkline inside MorningBento */
+.market-sparkline {
+  flex: none;
+  align-self: center;
+  margin-inline: 8px;
+  overflow: visible;
+}
+
+.theme-dark {
+  --spark-amber: #f0b44c;
+}
+
+/* Digest top action group */
+.digest-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.digest-top-actions button {
+  min-height: 44px;
+}
+
+/* AuthPortal Public Today entry buttons */
+.public-today-header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.public-today-header-link:hover {
+  border-color: var(--accent);
+}
+
+.morning-showcase-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.public-today-entry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast, #ffffff);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.theme-dark .public-today-entry-btn {
+  color: #102a1d;
+}
+
+/* Public Today Standalone & Embedded View */
+.public-standalone-shell {
+  max-width: 980px;
+  padding-top: 24px;
+  padding-bottom: 56px;
+}
+
+.public-header-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.public-today-page {
+  display: grid;
+  gap: 20px;
+}
+
+.public-today-hero {
+  padding: clamp(20px, 3vw, 28px);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.public-today-hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.public-today-hero h1 {
+  margin: 10px 0 8px;
+  font-size: clamp(24px, 3.4vw, 34px);
+  line-height: 1.2;
+}
+
+.public-today-hero h1::first-letter {
+  text-transform: uppercase;
+}
+
+.public-lunar-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+
+.lunar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--surface-soft, rgba(20, 105, 84, 0.08));
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.lunar-canchi {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.public-today-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.city-switch-pills {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--canvas, #f3f7f6);
+  gap: 4px;
+}
+
+.city-switch-pills button {
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.city-switch-pills button.pill-active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.lunar-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 10px;
+}
+
+.lunar-event-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft, rgba(20, 105, 84, 0.04));
+}
+
+.lunar-event-chip strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.lunar-event-chip small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.public-cta-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: clamp(22px, 3vw, 30px);
+  border-radius: 18px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.public-cta-banner h2 {
+  margin: 6px 0 8px;
+  font-size: clamp(20px, 2.5vw, 24px);
+}
+
+.public-cta-banner p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.public-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.public-cta-actions a,
+.public-cta-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 650;
+}
+
+/* Share Card Modal */
+.share-card-sheet {
+  max-width: 540px;
+}
+
+.share-card-preview-frame {
+  margin: 14px 0 18px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--canvas, #f3f7f6);
+  display: grid;
+  place-items: center;
+}
+
+.share-card-preview-img {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.share-card-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+
+.share-card-actions button,
+.share-card-actions .share-download-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+/* Browser Web Push Box inside PreferencesView */
+.web-push-box {
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft, rgba(20, 105, 84, 0.05));
+}
+
+.web-push-recommend-pill {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.web-push-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.web-push-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.web-push-device-list {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.web-push-device-list h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+/* 3-Step Onboarding Wizard */
+.onboarding-wizard-card {
+  display: grid;
+  gap: 20px;
+  padding: clamp(20px, 3vw, 28px);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.onboarding-wizard-header h3 {
+  margin: 6px 0 6px;
+  font-size: clamp(20px, 2.5vw, 24px);
+}
+
+.onboarding-wizard-header p {
+  margin: 0;
+}
+
+.onboarding-step-block {
+  display: grid;
+  gap: 10px;
+}
+
+.onboarding-step-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.onboarding-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.onboarding-choice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--canvas, #f3f7f6);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.onboarding-choice-chip.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+}
+
+.onboarding-pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 10px;
+}
+
+.onboarding-pack-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  gap: 5px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--canvas, #f3f7f6);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.onboarding-pack-card.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+
+.onboarding-pack-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.onboarding-pack-top strong {
+  font-size: 14px;
+}
+
+.onboarding-pack-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  flex: none;
+}
+
+.onboarding-pack-card.active .onboarding-pack-check {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.onboarding-pack-card small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.onboarding-delivery-row {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: start;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding-time-col,
+.onboarding-push-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.onboarding-time-col input[type="time"] {
+  min-height: 44px;
+  max-width: 180px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.onboarding-push-col button {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.push-enabled-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.onboarding-wizard-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.onboarding-wizard-footer .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+}
+
+@media (max-width: 640px) {
+  .public-today-header-link span {
+    display: none;
+  }
+  .market-sparkline {
+    display: none;
+  }
+  .digest-top-actions {
+    width: 100%;
+  }
+  .digest-top-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+  .onboarding-wizard-footer .primary-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

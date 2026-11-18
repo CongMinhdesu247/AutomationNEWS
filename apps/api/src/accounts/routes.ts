@@ -12,6 +12,7 @@ import {
   settingsSchema,
   hasEnabledSources,
   validationIssues,
+  webPushSubscriptionInputSchema,
   type BookmarkItem,
   type Settings,
 } from "@hub/contracts";
@@ -24,6 +25,15 @@ import {
 } from "../digests/service.js";
 import { accountPreferencesSchema } from "./preferences.js";
 import { nextAccountSend } from "./schedule.js";
+import { getMarketSparklines, getPublicTodayEdition } from "./public-today.js";
+import {
+  deleteUserWebPushByEndpoint,
+  deleteUserWebPushDevice,
+  ensureVapidConfig,
+  listUserWebPushDevices,
+  sendWebPushToUser,
+  upsertUserWebPushSubscription,
+} from "../notifications/web-push.js";
 
 // Keep the existing UUID idempotency contract, scoped to the authenticated account.
 export function accountKey(userId: string, key: string) {
@@ -265,9 +275,103 @@ export function registerAccountRoutes(
           )
         ).rows[0]?.config,
       );
-      return service.notify(id, key, settings.notifications);
+      return service.notify(id, key, settings.notifications, userId);
     },
   );
+
+  app.get("/api/public/today", async () => {
+    return getPublicTodayEdition(pool, store, {
+      http: options.http,
+      now: options.now,
+    });
+  });
+
+  app.get("/api/account/market-sparklines", async () => {
+    return getMarketSparklines(pool, store, {
+      http: options.http,
+      now: options.now,
+    });
+  });
+
+  app.get("/api/account/web-push", async (request) => {
+    const userId = request.accountUser!.id;
+    const [vapid, devices] = await Promise.all([
+      ensureVapidConfig(pool),
+      listUserWebPushDevices(pool, userId),
+    ]);
+    return {
+      vapidPublicKey: vapid.publicKey,
+      devices,
+    };
+  });
+
+  app.post("/api/account/web-push/subscribe", async (request, reply) => {
+    const userId = request.accountUser!.id;
+    await throttle("webpush-sub:" + userId, 20, 3600);
+    const input = parse(webPushSubscriptionInputSchema, request.body);
+    const device = await upsertUserWebPushSubscription(pool, userId, input);
+    return reply.code(201).send({ subscribed: true, device });
+  });
+
+  app.post("/api/account/web-push/unsubscribe", async (request) => {
+    const userId = request.accountUser!.id;
+    const body = parse(
+      z
+        .object({
+          endpoint: z.string().trim().min(16).max(2048),
+        })
+        .strict(),
+      request.body,
+    );
+    const removed = await deleteUserWebPushByEndpoint(
+      pool,
+      userId,
+      body.endpoint,
+    );
+    return { unsubscribed: removed };
+  });
+
+  app.delete<{ Params: { id: string } }>(
+    "/api/account/web-push/devices/:id",
+    async (request) => {
+      const userId = request.accountUser!.id;
+      const id = parse(digestIdSchema, request.params.id);
+      const removed = await deleteUserWebPushDevice(pool, userId, id);
+      if (!removed)
+        throw new RequestError(
+          404,
+          "DEVICE_NOT_FOUND",
+          "Không tìm thấy trình duyệt nhận thông báo này.",
+        );
+      return { deleted: true };
+    },
+  );
+
+  app.post("/api/account/web-push/test", async (request) => {
+    const userId = request.accountUser!.id;
+    parse(z.object({}).strict(), request.body ?? {});
+    await throttle("webpush-test:" + userId, 5, 3600);
+    const res = await sendWebPushToUser(
+      pool,
+      userId,
+      {
+        title: "Bản tin Sáng · Kết nối thành công",
+        body: "Trình duyệt của bạn đã sẵn sàng nhận thông báo bản tin sáng & cảnh báo giá chạm đáy 30 ngày!",
+        url: "/#/digests",
+        tag: "webpush-test",
+        urgent: true,
+      },
+      { http: options.http },
+    );
+    if (res.total === 0) {
+      throw new RequestError(
+        400,
+        "NO_PUSH_DEVICE",
+        "Bạn chưa bật thông báo trên trình duyệt nào. Hãy bấm 'Bật thông báo trên trình duyệt này' trước.",
+      );
+    }
+    return res;
+  });
 
   app.get("/api/admin/users", async () => ({
     users: (

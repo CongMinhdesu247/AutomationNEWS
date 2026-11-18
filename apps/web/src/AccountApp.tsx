@@ -1,9 +1,11 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  calendarDate,
   formatDateTime,
   hasEnabledSources,
   normalizeUrl,
   safeExternalHref,
+  solarToLunarVi,
   type BookmarkItem,
   type Settings,
 } from "@hub/contracts";
@@ -23,6 +25,7 @@ import { PreferencesView } from "./components/PreferencesView";
 import { PasswordView } from "./components/PasswordView";
 import { UsersAdminView } from "./components/UsersAdminView";
 import { BookmarksView } from "./features/bookmarks/BookmarksView";
+import { PublicTodayView } from "./features/public/PublicTodayView";
 
 const AdminApp = lazyWithRetry(() => import("./App"));
 const PremiumPortal = lazyWithRetry(() => import("./PremiumPortal"));
@@ -37,6 +40,7 @@ function isLegacyAdminHash(hash: string): boolean {
 }
 
 function pageTitleForHash(hash: string, authenticated: boolean): string {
+  if (hash === "#/today") return "Ấn bản Sáng nay · Bản tin mỗi sáng";
   if (!authenticated) return "Đăng nhập · Bản tin mỗi sáng";
   if (hash === "#/bookmarks") return "Danh sách đọc sau · Bản tin mỗi sáng";
   if (hash === "#/custom") return "Gói & theo dõi · Bản tin mỗi sáng";
@@ -343,6 +347,14 @@ export default function AccountApp() {
   }
 
   if (!account) {
+    if (hash === "#/today") {
+      return (
+        <PublicTodayView
+          authenticated={false}
+          registrationOpen={config.registrationOpen}
+        />
+      );
+    }
     return <AuthPortal config={config} onLogin={setAccount} />;
   }
 
@@ -424,6 +436,15 @@ export default function AccountApp() {
             <div className="account-menu-panel">
               <strong>{account.user.name}</strong>
               <span>{account.user.email}</span>
+              <a
+                className="menu-panel-link"
+                href="#/today"
+                onClick={() => {
+                  if (menuRef.current) menuRef.current.open = false;
+                }}
+              >
+                <Icon name="share" size={16} /> Ấn bản Sáng nay (Công khai)
+              </a>
               <a
                 className="menu-panel-link"
                 href="#/bookmarks"
@@ -582,6 +603,12 @@ export default function AccountApp() {
             <Suspense fallback={<p role="status">Đang tải…</p>}>
               <AdminApp embedded />
             </Suspense>
+          ) : hash === "#/today" ? (
+            <PublicTodayView
+              authenticated={true}
+              registrationOpen={config.registrationOpen}
+              initialTheme={account.theme}
+            />
           ) : hash === "#/bookmarks" ? (
             <BookmarksView
               items={bookmarks}
@@ -621,14 +648,35 @@ export default function AccountApp() {
               {!hash.startsWith("#/digests/") && (
                 <section className="account-welcome">
                   <div>
-                    <p className="account-date">
-                      {new Date().toLocaleDateString("vi-VN", {
-                        weekday: "long",
-                        day: "numeric",
-                        month: "long",
-                        timeZone: account.settings.newsletter.timezone,
-                      })}
-                    </p>
+                    {(() => {
+                      const lunar = solarToLunarVi(
+                        calendarDate(
+                          new Date(),
+                          account.settings.newsletter.timezone,
+                        ),
+                      );
+                      return (
+                        <p className="account-date">
+                          <span>
+                            {new Date().toLocaleDateString("vi-VN", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                              timeZone: account.settings.newsletter.timezone,
+                            })}
+                          </span>
+                          <span className="account-lunar-inline">
+                            {" · "}
+                            {lunar.labelShort} ({lunar.canChiYear})
+                          </span>
+                          {lunar.specialBadge && (
+                            <span className="lunar-special-pill">
+                              {lunar.specialBadge}
+                            </span>
+                          )}
+                        </p>
+                      );
+                    })()}
                     {isAdmin ? (
                       <h2>Chào {account.user.name}.</h2>
                     ) : (
@@ -684,6 +732,8 @@ export default function AccountApp() {
                 hash={hash}
                 apiBase="/api/account"
                 accountId={account.user.id}
+                account={account}
+                onAccountUpdated={setAccount}
                 canCreate={hasEnabledSources(account.settings)}
                 timezone={account.settings.newsletter.timezone}
                 bookmarkedUrls={bookmarkedUrls}

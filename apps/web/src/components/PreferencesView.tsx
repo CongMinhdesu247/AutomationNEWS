@@ -16,9 +16,20 @@ import {
   safeHttpUrlSchema,
   settingsSchema,
   type Settings,
+  type WebPushDevice,
 } from "@hub/contracts";
 import { Icon } from "../Icons";
 import { apiRequest, type Account } from "../lib/api-client";
+import {
+  fetchWebPushStatus,
+  getCurrentBrowserEndpoint,
+  getNotificationPermission,
+  isWebPushSupported,
+  removeWebPushDevice,
+  sendTestWebPush,
+  subscribeThisBrowser,
+  unsubscribeThisBrowser,
+} from "../lib/web-push-client";
 import { ExternalLink } from "./ExternalLink";
 
 type PreferenceCategory =
@@ -38,7 +49,7 @@ const CATEGORY_TABS: ReadonlyArray<{
   { id: "environment", label: "Khu vực & Thị trường" },
   { id: "news", label: "Nguồn tin & GitHub" },
   { id: "personal", label: "Việc làm & Kỷ niệm" },
-  { id: "delivery", label: "Thông báo điện thoại" },
+  { id: "delivery", label: "Thông báo nhận tin" },
 ];
 
 function PreferenceCheckbox({
@@ -105,6 +116,108 @@ export function PreferencesView({
   const [notice, setNotice] = useState("");
   const [showTopic, setShowTopic] = useState(false);
   const [copiedTopic, setCopiedTopic] = useState(false);
+
+  // Browser Web Push state
+  const [pushDevices, setPushDevices] = useState<WebPushDevice[]>([]);
+  const [thisBrowserSubscribed, setThisBrowserSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
+  const [pushError, setPushError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([fetchWebPushStatus(), getCurrentBrowserEndpoint()])
+      .then(([status, endpoint]) => {
+        if (!active) return;
+        setPushDevices(status.devices);
+        setThisBrowserSubscribed(
+          Boolean(endpoint && status.devices.length > 0),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [account.user.id]);
+
+  async function handleEnablePush() {
+    setPushBusy(true);
+    setPushError("");
+    setPushMessage("");
+    try {
+      const { device } = await subscribeThisBrowser();
+      setThisBrowserSubscribed(true);
+      setPushDevices((curr) => [
+        device,
+        ...curr.filter((d) => d.id !== device.id),
+      ]);
+      setPushMessage(
+        "Đã bật thông báo trực tiếp trên trình duyệt này! Bạn có thể bấm Gửi thông báo thử ngay bên dưới.",
+      );
+    } catch (err) {
+      setPushError(
+        err instanceof Error
+          ? err.message
+          : "Không thể bật thông báo trình duyệt.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    setPushBusy(true);
+    setPushError("");
+    setPushMessage("");
+    try {
+      await unsubscribeThisBrowser();
+      setThisBrowserSubscribed(false);
+      const status = await fetchWebPushStatus();
+      setPushDevices(status.devices);
+      setPushMessage("Đã tắt thông báo trên trình duyệt hiện tại.");
+    } catch (err) {
+      setPushError(
+        err instanceof Error ? err.message : "Không thể hủy đăng ký thông báo.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleTestPush() {
+    setPushBusy(true);
+    setPushError("");
+    setPushMessage("");
+    try {
+      const res = await sendTestWebPush();
+      setPushMessage(
+        res.sent > 0
+          ? `Đã gửi thông báo thử tới ${res.sent}/${res.total} trình duyệt đăng ký!`
+          : "Chưa có trình duyệt nào phản hồi. Hãy bấm Bật lại trên trình duyệt này.",
+      );
+    } catch (err) {
+      setPushError(
+        err instanceof Error ? err.message : "Không gửi được thông báo thử.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDeleteDevice(id: string) {
+    setPushBusy(true);
+    setPushError("");
+    try {
+      await removeWebPushDevice(id);
+      setPushDevices((curr) => curr.filter((d) => d.id !== id));
+    } catch (err) {
+      setPushError(
+        err instanceof Error ? err.message : "Không xóa được thiết bị.",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   // Task draft inputs
   const [taskTitle, setTaskTitle] = useState("");
@@ -1049,70 +1162,182 @@ export function PreferencesView({
             hidden={!showSection("delivery")}
           >
             <h2>
-              <Icon name="send" />
-              Thông báo trên điện thoại
+              <Icon name="bell" />
+              Thông báo trực tiếp trên trình duyệt
             </h2>
-            <PreferenceCheckbox
-              label="Gửi thông báo qua ntfy sau bản tin theo lịch"
-              checked={s.notifications.enabled}
-              onChange={(enabled) =>
-                patch({ notifications: { ...s.notifications, enabled } })
-              }
-            >
-              <p>
-                Bật lịch bản tin rồi lưu lựa chọn. Cài ứng dụng{" "}
-                <strong>ntfy</strong> trên iOS/Android, đăng ký máy chủ{" "}
-                <strong>{s.notifications.serverUrl}</strong> với mã topic riêng bên
-                dưới. Giữ kín mã topic để bảo mật kênh nhận tin của bạn.
-              </p>
-              <p>
-                Để thử ngay, mở một bản tin đã tạo và bấm{" "}
-                <strong>Gửi đến điện thoại</strong>.
-              </p>
-            </PreferenceCheckbox>
-            <div className="secret-topic-box">
-              <label htmlFor="account-ntfy-topic">Topic riêng (giữ bí mật)</label>
-              <div className="secret-topic-controls">
-                <input
-                  id="account-ntfy-topic"
-                  type={showTopic ? "text" : "password"}
-                  readOnly
-                  value={s.notifications.topic}
-                  onFocus={(e) => {
-                    if (showTopic) e.target.select();
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowTopic((v) => !v)}
-                  aria-label={showTopic ? "Ẩn mã topic" : "Hiện mã topic"}
-                >
-                  <Icon name={showTopic ? "eyeOff" : "eye"} size={17} />
-                  {showTopic ? "Ẩn" : "Hiện"}
-                </button>
-                <button type="button" onClick={() => void copyTopic()}>
-                  <Icon name={copiedTopic ? "check" : "copy"} size={17} />
-                  {copiedTopic ? "Đã chép" : "Sao chép"}
-                </button>
-                <button
-                  type="button"
-                  disabled={rotatingTopic}
-                  onClick={() => void rotateTopic()}
-                  title="Tạo mã topic bí mật mới nếu nghi ngờ lộ kênh nhận tin"
-                >
-                  <Icon name="refresh" size={16} />
-                  {rotatingTopic ? "Đang đổi…" : "Đổi mã topic mới"}
-                </button>
+            <div className="web-push-box">
+              <div className="web-push-header">
+                <div>
+                  <span className="web-push-recommend-pill">
+                    Khuyên dùng · Không cần cài app
+                  </span>
+                  <p className="muted">
+                    Nhận thông báo bản tin sáng theo lịch và cảnh báo giá Vàng SJC /
+                    USD chạm đáy 30 ngày ngay trên trình duyệt Chrome, Edge, Cốc Cốc,
+                    Firefox hoặc Safari (trên iPhone/iPad: chọn Chia sẻ → Thêm vào Màn
+                    hình chính).
+                  </p>
+                </div>
               </div>
-              {s.notifications.topic && (
-                <small className="account-input-hint">
-                  Hoặc mở nhanh trên trình duyệt:{" "}
-                  <ExternalLink href={ntfyTopicWebUrl} className="text-link">
-                    Mở kênh ntfy của bạn
-                  </ExternalLink>
-                </small>
+
+              {!isWebPushSupported() ? (
+                <p className="status">
+                  Trình duyệt này chưa hỗ trợ Web Push trực tiếp. Hãy mở trang bằng
+                  Chrome, Edge, Firefox hoặc thêm ứng dụng vào Màn hình chính trên
+                  iOS 16.4+.
+                </p>
+              ) : (
+                <div className="web-push-controls">
+                  {thisBrowserSubscribed ? (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={pushBusy}
+                      onClick={() => void handleDisablePush()}
+                    >
+                      Tắt trên trình duyệt này
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={pushBusy}
+                      onClick={() => void handleEnablePush()}
+                    >
+                      <Icon name="bell" size={16} />
+                      {pushBusy
+                        ? "Đang kết nối…"
+                        : "Bật thông báo trên trình duyệt này"}
+                    </button>
+                  )}
+                  {pushDevices.length > 0 && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={pushBusy}
+                      onClick={() => void handleTestPush()}
+                    >
+                      <Icon name="send" size={16} />
+                      Gửi thông báo thử
+                    </button>
+                  )}
+                  {getNotificationPermission() === "denied" && (
+                    <small className="field-error">
+                      Quyền thông báo đang bị chặn trên trình duyệt. Hãy bấm biểu tượng
+                      ổ khóa cạnh thanh địa chỉ và chuyển Thông báo sang Cho phép.
+                    </small>
+                  )}
+                </div>
+              )}
+
+              {pushError && (
+                <p className="status error" role="alert">
+                  {pushError}
+                </p>
+              )}
+              {pushMessage && (
+                <p className="status success" role="status">
+                  {pushMessage}
+                </p>
+              )}
+
+              {pushDevices.length > 0 && (
+                <div className="web-push-device-list">
+                  <h3>Trình duyệt đang nhận thông báo ({pushDevices.length}/5)</h3>
+                  <ul className="account-task-list">
+                    {pushDevices.map((dev) => (
+                      <li key={dev.id}>
+                        <span>
+                          <strong>{dev.userAgent || "Trình duyệt Web"}</strong>
+                          <small>
+                            {dev.endpointHost} · Đăng ký{" "}
+                            {formatDateTime(
+                              dev.createdAt,
+                              account.settings.newsletter.timezone,
+                            )}
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={pushBusy}
+                          aria-label={`Gỡ ${dev.userAgent || "trình duyệt"}`}
+                          onClick={() => void handleDeleteDevice(dev.id)}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
+
+            <details
+              className="custom-rss-Accordion"
+              open={s.notifications.enabled}
+            >
+              <summary>
+                Tùy chọn nâng cao: Nhận thêm qua ứng dụng ntfy
+              </summary>
+              <div className="account-task-editor">
+                <PreferenceCheckbox
+                  label="Gửi thông báo qua ntfy sau bản tin theo lịch"
+                  checked={s.notifications.enabled}
+                  onChange={(enabled) =>
+                    patch({ notifications: { ...s.notifications, enabled } })
+                  }
+                >
+                  <p>
+                    Dành cho người dùng kỹ thuật muốn nhận song song qua ứng dụng{" "}
+                    <strong>ntfy</strong> trên iOS/Android với máy chủ{" "}
+                    <strong>{s.notifications.serverUrl}</strong>.
+                  </p>
+                </PreferenceCheckbox>
+                <div className="secret-topic-box">
+                  <label htmlFor="account-ntfy-topic">Topic riêng (giữ bí mật)</label>
+                  <div className="secret-topic-controls">
+                    <input
+                      id="account-ntfy-topic"
+                      type={showTopic ? "text" : "password"}
+                      readOnly
+                      value={s.notifications.topic}
+                      onFocus={(e) => {
+                        if (showTopic) e.target.select();
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTopic((v) => !v)}
+                      aria-label={showTopic ? "Ẩn mã topic" : "Hiện mã topic"}
+                    >
+                      <Icon name={showTopic ? "eyeOff" : "eye"} size={17} />
+                      {showTopic ? "Ẩn" : "Hiện"}
+                    </button>
+                    <button type="button" onClick={() => void copyTopic()}>
+                      <Icon name={copiedTopic ? "check" : "copy"} size={17} />
+                      {copiedTopic ? "Đã chép" : "Sao chép"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={rotatingTopic}
+                      onClick={() => void rotateTopic()}
+                      title="Tạo mã topic bí mật mới nếu nghi ngờ lộ kênh nhận tin"
+                    >
+                      <Icon name="refresh" size={16} />
+                      {rotatingTopic ? "Đang đổi…" : "Đổi mã topic mới"}
+                    </button>
+                  </div>
+                  {s.notifications.topic && (
+                    <small className="account-input-hint">
+                      Hoặc mở nhanh trên trình duyệt:{" "}
+                      <ExternalLink href={ntfyTopicWebUrl} className="text-link">
+                        Mở kênh ntfy của bạn
+                      </ExternalLink>
+                    </small>
+                  )}
+                </div>
+              </div>
+            </details>
           </section>
 
           {error && (

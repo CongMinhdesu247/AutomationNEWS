@@ -18,11 +18,16 @@ import {
 } from "@hub/contracts";
 import { Icon } from "./Icons";
 import { isSampleUrl } from "./sample-url";
-import { apiRequest } from "./lib/api-client";
+import { apiRequest, type Account } from "./lib/api-client";
 import { ExternalLink } from "./components/ExternalLink";
 import { MorningBento } from "./features/digests/MorningBento";
 import { QuickUtilitiesGrid } from "./features/digests/QuickTasksCard";
 import { BookmarkButton } from "./features/digests/BookmarkButton";
+import { OnboardingWizard } from "./features/onboarding/OnboardingWizard";
+import {
+  buildSharePayloadFromDigest,
+  ShareCardModal,
+} from "./features/share/ShareCardModal";
 
 const statusText: Record<string, string> = {
   success: "Thành công",
@@ -249,6 +254,8 @@ export default function DigestDashboard({
   hash,
   apiBase = "/api",
   accountId = "legacy",
+  account,
+  onAccountUpdated,
   canCreate = true,
   timezone,
   bookmarkedUrls,
@@ -259,6 +266,8 @@ export default function DigestDashboard({
   hash: string;
   apiBase?: string;
   accountId?: string;
+  account?: Account;
+  onAccountUpdated?: (updated: Account) => void;
   canCreate?: boolean;
   timezone?: string;
   bookmarkedUrls?: ReadonlyMap<string, string>;
@@ -286,6 +295,11 @@ export default function DigestDashboard({
   const [filterText, setFilterText] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [sparklines, setSparklines] = useState<{
+    sjc: number[];
+    usd: number[];
+  } | null>(null);
   const [comfortableFont, setComfortableFont] = useState(() => {
     try {
       return localStorage.getItem("hub-reader-comfortable") === "1";
@@ -314,7 +328,24 @@ export default function DigestDashboard({
     setFilterText("");
     setSourceFilter("all");
     setCopiedSummary(false);
+    setShareOpen(false);
   }, [id]);
+
+  useEffect(() => {
+    if (!accountDashboard) return;
+    let active = true;
+    void apiRequest<{ sjc: number[]; usd: number[] }>(
+      "/api/account/market-sparklines",
+      { timeoutMs: 12000 },
+    )
+      .then((res) => {
+        if (active) setSparklines(res);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [accountDashboard, reload]);
 
   // Keyboard shortcut: "/" focuses search input inside a digest, Escape clears filter.
   useEffect(() => {
@@ -499,11 +530,11 @@ export default function DigestDashboard({
       sessionStorage.removeItem(storage);
       setNotice(
         attempt.status === "success"
-          ? "Đã gửi thông báo qua ntfy."
+          ? "Đã gửi thông báo bản tin tới thiết bị đã đăng ký của bạn."
           : attempt.status === "sending"
             ? "Lần gửi này đang xử lý hoặc đã gián đoạn; không tự gửi lại."
             : attempt.status === "unknown"
-              ? "Chưa xác định ntfy đã nhận hay chưa. Gửi lại có thể tạo thông báo trùng."
+              ? "Chưa xác định thiết bị đã nhận hay chưa. Gửi lại có thể tạo thông báo trùng."
               : (attempt.error?.message ?? "Gửi thông báo thất bại."),
       );
       setReload((v) => v + 1);
@@ -694,15 +725,27 @@ export default function DigestDashboard({
           </h1>
         </div>
         {id ? (
-          <button
-            type="button"
-            className="primary-button"
-            disabled={sending || !digest || digest.status === "running"}
-            onClick={() => void send()}
-          >
-            <Icon name="send" size={17} />
-            {sending ? "Đang gửi…" : "Gửi đến điện thoại"}
-          </button>
+          <div className="digest-top-actions">
+            {digest?.sources && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShareOpen(true)}
+              >
+                <Icon name="share" size={16} />
+                Chia sẻ thẻ
+              </button>
+            )}
+            <button
+              type="button"
+              className="primary-button"
+              disabled={sending || !digest || digest.status === "running"}
+              onClick={() => void send()}
+            >
+              <Icon name="bell" size={17} />
+              {sending ? "Đang gửi…" : "Gửi thông báo"}
+            </button>
+          </div>
         ) : (
           canCreate && (
             <button
@@ -782,7 +825,10 @@ export default function DigestDashboard({
               </div>
               {latestSources ? (
                 <div className="latest-bento-wrap">
-                  <MorningBento sources={latestSources} />
+                  <MorningBento
+                    sources={latestSources}
+                    sparklines={sparklines}
+                  />
                 </div>
               ) : latestSummary.highlights ? (
                 <div className="brief-overview">
@@ -820,28 +866,36 @@ export default function DigestDashboard({
             )}
           </div>
           {list.items.length === 0 ? (
-            <div className="empty-state onboarding-empty-state">
-              <span className="account-empty-icon">
-                <Icon name="brief" size={32} />
-              </span>
-              <strong>Bắt đầu với những điều bạn quan tâm</strong>
-              <p>
-                {canCreate
-                  ? "Bấm Tạo bản tin để tổng hợp ngay tin tức, thị trường và thời tiết đầu tiên."
-                  : "Mở Tùy chọn bản tin để chọn nguồn tin và khu vực thời tiết bạn muốn nhận."}
-              </p>
-              <ol className="onboarding-steps">
-                <li>1. Chọn chủ đề &amp; khu vực</li>
-                <li>2. Đặt giờ nhận mỗi sáng</li>
-                <li>3. Đọc gọn trong 2 phút</li>
-              </ol>
-              <a
-                className="account-empty-action"
-                href={accountDashboard ? "#/preferences" : "#/settings/rss"}
-              >
-                Chọn nội dung bản tin <Icon name="arrow" size={17} />
-              </a>
-            </div>
+            accountDashboard && account && onAccountUpdated ? (
+              <OnboardingWizard
+                account={account}
+                onCompleted={onAccountUpdated}
+                onCreateDigestNow={create}
+              />
+            ) : (
+              <div className="empty-state onboarding-empty-state">
+                <span className="account-empty-icon">
+                  <Icon name="brief" size={32} />
+                </span>
+                <strong>Bắt đầu với những điều bạn quan tâm</strong>
+                <p>
+                  {canCreate
+                    ? "Bấm Tạo bản tin để tổng hợp ngay tin tức, thị trường và thời tiết đầu tiên."
+                    : "Mở Tùy chọn bản tin để chọn nguồn tin và khu vực thời tiết bạn muốn nhận."}
+                </p>
+                <ol className="onboarding-steps">
+                  <li>1. Chọn chủ đề &amp; khu vực</li>
+                  <li>2. Đặt giờ nhận mỗi sáng</li>
+                  <li>3. Đọc gọn trong 2 phút</li>
+                </ol>
+                <a
+                  className="account-empty-action"
+                  href={accountDashboard ? "#/preferences" : "#/settings/rss"}
+                >
+                  Chọn nội dung bản tin <Icon name="arrow" size={17} />
+                </a>
+              </div>
+            )
           ) : (
             <ul className="digest-history">
               {list.items.map((item) => {
@@ -1025,6 +1079,7 @@ export default function DigestDashboard({
             <>
               <MorningBento
                 sources={digest.sources}
+                sparklines={sparklines}
                 onJump={jumpToSection}
               />
 
@@ -1598,7 +1653,7 @@ export default function DigestDashboard({
 
           <details className="delivery-details">
             <summary>
-              Lịch sử gửi đến điện thoại ({digest.notifications.length})
+              Lịch sử gửi thông báo ({digest.notifications.length})
             </summary>
             {digest.notifications.length === 0 ? (
               <p>Chưa có lần gửi nào.</p>
@@ -1622,6 +1677,16 @@ export default function DigestDashboard({
               </ul>
             )}
           </details>
+
+          <ShareCardModal
+            open={shareOpen}
+            payload={
+              digest
+                ? buildSharePayloadFromDigest(digest, effectiveTz)
+                : null
+            }
+            onClose={() => setShareOpen(false)}
+          />
         </>
       )}
     </div>

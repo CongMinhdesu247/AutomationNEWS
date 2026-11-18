@@ -28,6 +28,7 @@ export type HttpOptions = {
   method?: "GET" | "POST";
   headers?: Record<string, string>;
   body?: string;
+  rawBody?: Buffer;
   allowedOrigins?: string[];
 };
 
@@ -163,6 +164,14 @@ function singleAttempt(
   signal: AbortSignal,
 ): Promise<HttpResponse> {
   return new Promise<HttpResponse>((resolve, reject) => {
+    const payload = options.rawBody ?? options.body;
+    const bodyLength =
+      payload !== undefined ? Buffer.byteLength(payload) : undefined;
+    const hasContentLength =
+      options.headers !== undefined &&
+      Object.keys(options.headers).some(
+        (key) => key.toLowerCase() === "content-length",
+      );
     const req = (url.protocol === "https:" ? https : http).request(
       url,
       {
@@ -173,6 +182,9 @@ function singleAttempt(
         headers: {
           "Accept-Encoding": "gzip, deflate, br",
           "User-Agent": "PersonalAutomationHub/1.1.0",
+          ...(bodyLength !== undefined && !hasContentLength
+            ? { "Content-Length": String(bodyLength) }
+            : {}),
           ...options.headers,
         },
         // Pin the validated IP for this connection; never resolve again in the socket.
@@ -257,7 +269,7 @@ function singleAttempt(
       },
     );
     req.on("error", reject);
-    if (options.body) req.write(options.body);
+    if (payload !== undefined && bodyLength! > 0) req.write(payload);
     req.end();
   });
 }

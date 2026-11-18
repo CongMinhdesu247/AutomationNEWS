@@ -18,6 +18,11 @@ import { ExternalLink } from "./components/ExternalLink";
 import placeholderQr from "./assets/payment-placeholder-qr.svg";
 import PremiumAdmin from "./premium/PremiumAdmin";
 import {
+  buildWatchDraftFromTemplate,
+  WATCH_TEMPLATES,
+  type WatchTemplate,
+} from "./premium/watch-templates";
+import {
   cancelCustomJob,
   frequency,
   friendlyAiError,
@@ -404,6 +409,35 @@ function WatchPortal({ email }: { email: string }) {
     setInterpretKey(null);
   };
 
+  const applyTemplate = (template: WatchTemplate) => {
+    setError("");
+    setSourceSent(false);
+    if (!plan.premium) {
+      setView("plan");
+      setNotice(
+        `Mẫu “${template.name}” thuộc tính năng Theo dõi riêng của gói Premium.`,
+      );
+      return;
+    }
+    setView("watches");
+    setEditing(null);
+    setManualInterval(false);
+    setDraft(
+      buildWatchDraftFromTemplate(
+        template,
+        sources,
+        plan.min_interval_minutes,
+      ),
+    );
+    setPreview(false);
+    setConfirmed(false);
+    setJob(null);
+    setInterpretKey(null);
+    setNotice(
+      `Đã điền sẵn mẫu “${template.name}”. Bạn có thể bấm Xem trước rồi Lưu để kích hoạt ngay!`,
+    );
+  };
+
   function change(patch: Partial<WatchInput>) {
     setDraft((d) => (d ? { ...d, ...patch } : d));
     setPreview(false);
@@ -747,6 +781,43 @@ function WatchPortal({ email }: { email: string }) {
             </li>
           ))}
         </ul>
+
+        <div className="watch-template-gallery">
+          <div className="watch-template-gallery-head">
+            <div>
+              <span className="section-kicker">Kho mẫu 1 chạm cho người Việt</span>
+              <h3>Chọn nhanh chủ đề theo dõi phổ biến</h3>
+            </div>
+            <small className="muted">
+              Tự động điền sẵn bộ từ khóa tiếng Việt &amp; nguồn báo uy tín
+            </small>
+          </div>
+          <div className="watch-template-grid">
+            {WATCH_TEMPLATES.map((tpl) => (
+              <article key={tpl.id} className="watch-template-card">
+                <div className="watch-template-card-top">
+                  <span className="watch-template-tag">{tpl.tag}</span>
+                  <Icon name={tpl.icon} size={17} />
+                </div>
+                <h4>{tpl.name}</h4>
+                <p>{tpl.summary}</p>
+                <div className="watch-template-keywords">
+                  {tpl.anyKeywords.slice(0, 3).map((kw) => (
+                    <span key={kw}>{kw}</span>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => applyTemplate(tpl)}
+                >
+                  <Icon name="plus" size={15} />
+                  {plan.premium ? "Dùng mẫu này" : "Mở khóa mẫu"}
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
 
       {draft && (

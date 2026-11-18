@@ -189,6 +189,10 @@ export function AuthPortal({
           <AccountBrand />
         </a>
         <div className="account-login-header-actions">
+          <a href="#/today" className="public-today-header-link">
+            <Icon name="sun" size={16} />
+            <span>Ấn bản Sáng nay</span>
+          </a>
           <span className="account-login-tagline">
             Khoảng lặng thông tin mỗi 7 giờ sáng
           </span>
@@ -292,13 +296,17 @@ export function AuthPortal({
                 ))}
               </ul>
               <div className="morning-showcase-footer">
+                <a href="#/today" className="public-today-entry-btn">
+                  <Icon name="sun" size={16} />
+                  <span>Đọc Ấn bản Sáng nay (Không cần đăng nhập)</span>
+                </a>
                 <button
                   type="button"
                   className="sample-reader-trigger"
                   onClick={() => sampleDialogRef.current?.showModal()}
                 >
                   <Icon name="eye" size={16} />
-                  <span>Đọc thử trọn bản tin mẫu</span>
+                  <span>Xem cấu trúc mẫu</span>
                 </button>
               </div>
             </div>
@@ -310,8 +318,8 @@ export function AuthPortal({
               Không quảng cáo &amp; thuật toán gây xao nhãng
             </span>
             <span>
-              <Icon name="check" size={17} />
-              Thông báo tức thì qua ntfy
+              <Icon name="bell" size={17} />
+              Thông báo trực tiếp ngay trên trình duyệt
             </span>
             <span>
               <Icon name="shield" size={17} />
