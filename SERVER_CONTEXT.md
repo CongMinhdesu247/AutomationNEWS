@@ -6,13 +6,15 @@
 
 ## 1. Thông tin hệ thống & Kết nối SSH
 
-- **Hệ điều hành (OS):** `Ubuntu Server 24.04 LTS`
+- **Hệ điều hành (OS):** `Ubuntu Server 24.04.5 LTS (noble)` — Hostname: `homeserver`
 - **Kiến trúc CPU:** `x86_64 (amd64)`
-- **Phần cứng:** `HP EliteDesk Home Server (x86_64, SSD)`
-- **SSH Alias (khuyến nghị cấu hình trên PC trong ~/.ssh/config):** `ssh hp-server` (hoặc `ssh congminh@<IP-LAN-hoặc-Tailscale>`)
-- **Địa chỉ IP LAN / Tailscale:** `<Điền IP tĩnh LAN hoặc Tailscale của máy HP trong ~/.ssh/config>`
-- **User deploy:** `congminh` (thuộc nhóm `docker`, chạy `docker compose` không cần `sudo`)
-- **Quyền sudo:** `Có (yêu cầu mật khẩu khi tác động cấu hình hệ thống / UFW)`
+- **Phần cứng:** `HP EliteDesk 800 G4 SFF (Intel Core i7-8700 6 nhân/12 luồng, 8 GB RAM + 4 GiB Swap, 500 GB WDC HDD /dev/sda2, Ethernet eno1)`
+- **Địa chỉ IP Tailscale (ưu tiên cho SSH & backup):** `100.95.33.63` (PC quản trị: `100.79.91.52`)
+- **Địa chỉ IP LAN (DHCP):** `192.168.100.186` (Gateway: `192.168.100.1`)
+- **Khóa SSH trên PC Windows:** `C:\Users\Dung\.ssh\homeserver_ed25519` (có passphrase, không sao chép vào repo/container)
+- **Lệnh SSH chuẩn từ PC Windows:** `ssh -i "$env:USERPROFILE\.ssh\homeserver_ed25519" congminh@100.95.33.63`
+- **User deploy:** `congminh` (sử dụng `sudo` khi cần thao tác hệ thống / UFW)
+- **Múi giờ:** `Asia/Ho_Chi_Minh (UTC+7)`
 
 ---
 
@@ -27,8 +29,8 @@ Hệ thống tuân thủ chuẩn tách biệt hoàn toàn từng dự án dướ
 │   └── sites/                        # Vhost / route riêng từng dự án (mẫu sẵn trong infra/proxy/)
 │       ├── automationnews.nginx.conf
 │       └── automationnews.caddy
-├── banking-local/                    # Ứng dụng anh em đang chạy độc lập (127.0.0.1:8090) — TUYỆT ĐỐI KHÔNG CHẠM
-└── AutomationNEWS/                   # Không gian riêng của dự án Bản tin mỗi sáng
+├── BankingPrj/                       # Ứng dụng anh em (project banking-local, 127.0.0.1:8090) — TUYỆT ĐỐI KHÔNG CHẠM
+└── AutomationNEWS/                   # Không gian riêng của dự án Bản tin mỗi sáng (project automationnews, 127.0.0.1:8091)
     ├── infra/                        # Dockerfile, compose.yaml, compose.home.yaml, nginx.conf, proxy/
     ├── apps/ & packages/ & db/       # Source code (hoặc đặt trong ./source/ nếu tách thư mục code)
     ├── docker-compose.server.yml     # File chạy chuẩn ở thư mục gốc dự án
@@ -91,31 +93,35 @@ Dự án **đã tồn tại sẵn trên server** tại `/home/congminh/apps/Auto
 
 ### Cách 1: Cập nhật tự động 1 lệnh từ Windows PowerShell (Khuyên dùng)
 
+Script `scripts\update-local-server.ps1` đã được cấu hình mặc định trỏ tới `congminh@100.95.33.63` (Tailscale IP của máy HP `homeserver`) kèm khóa `$env:USERPROFILE\.ssh\homeserver_ed25519` và truyền gói cập nhật qua **1 phiên SSH duy nhất** (chỉ cần nhập passphrase của khóa SSH đúng 1 lần):
+
 ```powershell
-# Chạy tại thư mục gốc c:\Users\ADMIN\AutomationNEWS trên PC:
-powershell -ExecutionPolicy Bypass -File .\scripts\update-local-server.ps1 -SshTarget "congminh@<IP-SERVER-HOAC-SSH-ALIAS>"
+# Chạy tại thư mục gốc C:\Users\Dung\Downloads\AutomationNEWS trên PC:
+powershell -ExecutionPolicy Bypass -File .\scripts\update-local-server.ps1
 ```
 *(Thêm cờ `-SyncPremiumEnv` nếu muốn đồng bộ luôn tệp khóa AI `secrets\.env.premium` từ PC sang `/home/congminh/apps/AutomationNEWS/.env.premium` với quyền `600`.)*
 
-### Cách 2: Chuyển gói nén thủ công (nếu chưa mở SSH key từ PC)
+### Cách 2: Chuyển gói nén thủ công (2 bước rõ ràng từ PC sang HP)
 
-1. Đóng gói mã nguồn sạch trên PC (tự tạo `output/automationnews-home.tar.gz` + `output/SHA256SUMS`):
+1. **Trên PC Windows** (tại `C:\Users\Dung\Downloads\AutomationNEWS`), đóng gói mã nguồn sạch (tạo `output/automationnews-home.tar.gz` + `output/SHA256SUMS`):
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\scripts\package-home.ps1
+   scp -i "$env:USERPROFILE\.ssh\homeserver_ed25519" .\output\automationnews-home.tar.gz .\output\SHA256SUMS .\scripts\server-update.sh congminh@100.95.33.63:/tmp/
    ```
-2. Chép `output/automationnews-home.tar.gz`, `output/SHA256SUMS` và `scripts/server-update.sh` sang `/tmp/automationnews-update/` trên máy chủ HP, sau đó chạy trên HP:
+2. **Trên máy chủ HP** (`ssh -i "$env:USERPROFILE\.ssh\homeserver_ed25519" congminh@100.95.33.63`):
    ```bash
-   cd /tmp/automationnews-update
+   cd /tmp
    sha256sum -c SHA256SUMS
-   bash server-update.sh --archive /tmp/automationnews-update/automationnews-home.tar.gz
+   sed -i 's/\r$//' server-update.sh
+   bash server-update.sh --app-dir /home/congminh/apps/AutomationNEWS --archive /tmp/automationnews-home.tar.gz
    ```
 
 ### Những bước an toàn mà `scripts/server-update.sh` tự động thực hiện
-1. Kiểm tra nguyên vẹn gói nguồn, giữ nguyên `.env.home`, `.env.premium`, `secrets/` và volume `automationnews_hub_data`.
+1. Kiểm tra nguyên vẹn gói nguồn, giữ nguyên `.env.home`, `.env.premium`, `secrets/` và volume `automationnews_hub_data` (tuyệt đối không chạm vào `BankingPrj` / `banking-local` trên cổng `127.0.0.1:8090`).
 2. Build image mới **trước khi** dừng dịch vụ cũ để giảm thời gian ngưng xuống chỉ vài giây.
 3. Gắn thẻ rollback cho cả 4 image đang chạy (`api`, `worker`, `scheduler`, `web`) và tạo `data/backups/<timestamp>/compose.rollback.yaml`.
 4. Tạm dừng `scheduler` -> `worker` -> `api`, sao lưu `pg_dump` ra `./data/backups/<timestamp>/database.dump` kèm mã băm `SHA256`.
-5. Khôi phục thử vào database tạm `hub_restore_*`, đối chiếu khớp số dòng toàn bộ bảng bằng `verify-restore.ts`, chạy thử migration `001`–`018` trên bản tạm rồi **tự động dọn sạch database tạm** (`DROP DATABASE`).
+5. Khôi phục thử vào database tạm `hub_restore_*`, đối chiếu khớp số dòng toàn bộ bảng bằng `verify-restore.ts`, chạy thử migration `001`–`019` trên bản tạm rồi **tự động dọn sạch database tạm** (`DROP DATABASE`).
 6. Chạy migration chính thức, khởi động lại `api`, `worker`, `scheduler`, `web`, kiểm tra `http://127.0.0.1:8091/api/ready` — nếu bất kỳ bước nào lỗi, **tự động rollback** về phiên bản trước đó.
 
 ---

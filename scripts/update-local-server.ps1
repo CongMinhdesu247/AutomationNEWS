@@ -1,5 +1,6 @@
 param(
-    [string]$SshTarget = $env:AUTOMATIONNEWS_SSH,
+    [string]$SshTarget = $(if ($env:AUTOMATIONNEWS_SSH) { $env:AUTOMATIONNEWS_SSH } else { 'congminh@100.95.33.63' }),
+    [string]$IdentityFile = $(if (Test-Path "$env:USERPROFILE\.ssh\homeserver_ed25519") { "$env:USERPROFILE\.ssh\homeserver_ed25519" } else { '' }),
     [string]$RemoteAppDir = '/home/congminh/apps/AutomationNEWS',
     [switch]$SyncPremiumEnv,
     [switch]$PackageOnly
@@ -9,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $projectRoot
 try {
-    Write-Host '[1/3] Packaging clean AutomationNEWS source archive...' -ForegroundColor Cyan
+    Write-Host '[1/2] Packaging clean AutomationNEWS source archive...' -ForegroundColor Cyan
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'package-home.ps1') -OutputDirectory 'output'
     if ($LASTEXITCODE -ne 0) { throw 'Packaging failed.' }
 
@@ -20,45 +21,68 @@ try {
     if ($PackageOnly -or [string]::IsNullOrWhiteSpace($SshTarget)) {
         Write-Host "`nArchive ready at: $archivePath" -ForegroundColor Green
         Write-Host "SHA256SUMS ready at: $shaPath" -ForegroundColor Green
-        if ([string]::IsNullOrWhiteSpace($SshTarget) -and -not $PackageOnly) {
-            Write-Host "`nTip: Pass -SshTarget 'congminh@<SERVER_IP>' (or set `$env:AUTOMATIONNEWS_SSH) to push & update automatically over SSH." -ForegroundColor Yellow
-        }
         return
     }
 
-    Write-Host "[2/3] Checking SSH connection to $SshTarget..." -ForegroundColor Cyan
-    & ssh -o BatchMode=yes -o ConnectTimeout=8 $SshTarget 'echo SSH_OK' | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Cannot connect to '$SshTarget' over non-interactive SSH. Ensure your SSH public key is authorized on the server, or copy output\automationnews-home.tar.gz + scripts\server-update.sh manually."
-    }
+    # Build a single transfer bundle so SSH only prompts for the key passphrase once
+    $bundleStage = Join-Path $projectRoot 'output\deploy-stage'
+    if (Test-Path -LiteralPath $bundleStage) { Remove-Item -LiteralPath $bundleStage -Recurse -Force }
+    New-Item -ItemType Directory -Path $bundleStage -Force | Out-Null
+    Copy-Item -LiteralPath $archivePath -Destination (Join-Path $bundleStage 'automationnews-home.tar.gz')
+    Copy-Item -LiteralPath $shaPath -Destination (Join-Path $bundleStage 'SHA256SUMS')
+    Copy-Item -LiteralPath $updateScriptPath -Destination (Join-Path $bundleStage 'server-update.sh')
 
-    $stageDir = "/tmp/automationnews-release-$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))"
-    & ssh $SshTarget "umask 077 && mkdir -p '$stageDir'"
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to create staging directory on server.' }
-
-    $scpItems = @($archivePath, $shaPath, $updateScriptPath)
     $localPremiumEnv = Join-Path $projectRoot 'secrets\.env.premium'
     if ($SyncPremiumEnv) {
         if (-not (Test-Path -LiteralPath $localPremiumEnv -PathType Leaf)) {
             throw "secrets\.env.premium not found on PC, cannot use -SyncPremiumEnv."
         }
-        $scpItems += $localPremiumEnv
+        Copy-Item -LiteralPath $localPremiumEnv -Destination (Join-Path $bundleStage '.env.premium')
     }
 
-    Write-Host "[3/3] Uploading package to $SshTarget`:$stageDir and running incremental server update..." -ForegroundColor Cyan
-    & scp @scpItems "${SshTarget}:${stageDir}/"
-    if ($LASTEXITCODE -ne 0) { throw 'SCP upload failed.' }
+    $bundlePath = Join-Path $projectRoot 'output\automationnews-deploy-bundle.tar.gz'
+    & "$env:SystemRoot\System32\tar.exe" -czf $bundlePath -C $bundleStage .
+    Remove-Item -LiteralPath $bundleStage -Recurse -Force
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to create deployment transfer bundle.' }
 
-    $remoteCmd = "set -euo pipefail; cd '$stageDir'; sha256sum -c SHA256SUMS"
+    $bashLines = @(
+        'set -euo pipefail'
+        'umask 077'
+        'stage="$(mktemp -d /tmp/automationnews-release.XXXXXX)"'
+        'trap ''rm -rf "$stage"'' EXIT'
+        'tar -xzf - -C "$stage"'
+        'cd "$stage"'
+        'sha256sum -c SHA256SUMS'
+    )
     if ($SyncPremiumEnv) {
-        $remoteCmd += "; install -m 600 .env.premium '$RemoteAppDir/.env.premium'"
+        $escapedAppDir = $RemoteAppDir.Replace("'", "'\''")
+        $bashLines += "install -m 600 .env.premium '$escapedAppDir/.env.premium'"
     }
-    $remoteCmd += "; bash server-update.sh --app-dir '$RemoteAppDir' --archive '$stageDir/automationnews-home.tar.gz'; rm -rf '$stageDir'"
+    $escapedAppDir = $RemoteAppDir.Replace("'", "'\''")
+    $bashLines += @(
+        'sed -i ''s/\r$//'' server-update.sh'
+        "bash server-update.sh --app-dir '$escapedAppDir' --archive ""`$stage/automationnews-home.tar.gz"""
+    )
+    $bashScript = ($bashLines -join "`n")
+    $bashB64 = [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($bashScript))
 
-    & ssh $SshTarget $remoteCmd
-    if ($LASTEXITCODE -ne 0) { throw 'Remote server update failed (auto-rollback triggered if services were paused).' }
+    $sshParts = @('ssh', '-o', 'ConnectTimeout=15')
+    if (-not [string]::IsNullOrWhiteSpace($IdentityFile)) {
+        if (-not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)) {
+            throw "SSH identity file not found: $IdentityFile"
+        }
+        $sshParts += @('-i', "`"$IdentityFile`"")
+    }
+    $sshParts += @($SshTarget, "`"umask 077 && echo $bashB64 | base64 -d > /tmp/.an_upd.sh && bash /tmp/.an_upd.sh; rc=`$?; rm -f /tmp/.an_upd.sh; exit `$rc`"")
+    $cmdLine = ($sshParts -join ' ') + " < `"$bundlePath`""
 
-    Write-Host "`nLocal Server updated successfully with zero data loss!" -ForegroundColor Green
+    Write-Host "[2/2] Streaming package to $SshTarget and running zero-data-loss server update (1 passphrase prompt)..." -ForegroundColor Cyan
+    & cmd.exe /c $cmdLine
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Remote server update failed (auto-rollback triggered if services were paused).'
+    }
+
+    Write-Host "`nLocal Server ($SshTarget) updated successfully with zero data loss!" -ForegroundColor Green
 } finally {
     Pop-Location
 }

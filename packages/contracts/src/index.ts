@@ -278,4 +278,78 @@ export * from "./runs.js";
 
 export * from "./telemetry.js";
 export * from "./premium.js";
-export * from "./lunar.js";
+
+import type {
+  AirQualityData,
+  FuelData,
+  GoldData,
+  NewsItem,
+  UsdData,
+  WeatherData,
+} from "./digests.js";
+
+export const webPushSubscriptionInputSchema = z
+  .object({
+    endpoint: z
+      .string()
+      .trim()
+      .min(16)
+      .max(2048)
+      .refine((v) => {
+        try {
+          const u = new URL(v);
+          return u.protocol === "https:" && !u.username && !u.password;
+        } catch {
+          return false;
+        }
+      }, "Endpoint Web Push phải là HTTPS hợp lệ."),
+    keys: z
+      .object({
+        p256dh: z
+          .string()
+          .trim()
+          .regex(/^[A-Za-z0-9_-]{60,140}=*$/, "Khóa p256dh không hợp lệ."),
+        auth: z
+          .string()
+          .trim()
+          .regex(/^[A-Za-z0-9_-]{16,64}=*$/, "Khóa auth không hợp lệ."),
+      })
+      .strict(),
+    userAgent: z.string().trim().max(240).default(""),
+  })
+  .strict();
+
+export type WebPushSubscriptionInput = z.infer<
+  typeof webPushSubscriptionInputSchema
+>;
+
+export type WebPushDevice = {
+  id: string;
+  endpointHost: string;
+  userAgent: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+};
+
+export type PublicTodayCity = {
+  key: "hanoi" | "hcmc";
+  name: string;
+  weather: WeatherData | null;
+  airQuality: AirQualityData | null;
+};
+
+export type PublicTodayEdition = {
+  generatedAt: string;
+  solarDate: string;
+  cities: PublicTodayCity[];
+  markets: {
+    gold: GoldData | null;
+    usd: UsdData | null;
+    fuel: FuelData | null;
+    sparklines: {
+      sjc: number[];
+      usd: number[];
+    };
+  };
+  articles: NewsItem[];
+};

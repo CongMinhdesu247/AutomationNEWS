@@ -5,7 +5,11 @@ import {
   type PublicTodayEdition,
 } from "@hub/contracts";
 import { Icon } from "../../Icons";
-import { apiRequest } from "../../lib/api-client";
+import {
+  apiRequest,
+  readStoredTheme,
+  writeStoredTheme,
+} from "../../lib/api-client";
 import { AccountBrand } from "../../components/AuthPortal";
 import { ExternalLink } from "../../components/ExternalLink";
 import { MorningBento } from "../digests/MorningBento";
@@ -97,6 +101,8 @@ export function PublicTodayView({
   const [reloadTick, setReloadTick] = useState(0);
   const [dark, setDark] = useState(() => {
     if (initialTheme) return initialTheme === "dark";
+    const stored = readStoredTheme();
+    if (stored) return stored === "dark";
     try {
       return window.matchMedia("(prefers-color-scheme: dark)").matches;
     } catch {
@@ -156,8 +162,8 @@ export function PublicTodayView({
         <div className="public-today-hero-top">
           <div>
             <span className="account-eyebrow-pill">
-              <Icon name="sun" size={15} />
-              <span>Ấn bản Sáng nay Công khai · Đọc tự do không quảng cáo</span>
+              <Icon name="brief" size={14} />
+              <span>Bản tin sáng nay</span>
             </span>
             <h1>
               {edition
@@ -172,22 +178,6 @@ export function PublicTodayView({
                   })
                 : "Ấn bản Buổi sáng Việt Nam"}
             </h1>
-            {edition && (
-              <div className="public-lunar-strip">
-                <span className="lunar-pill">
-                  <Icon name="calendar" size={15} />
-                  <span>{edition.lunar.labelFull}</span>
-                </span>
-                <span className="lunar-canchi">
-                  Ngày {edition.lunar.canChiDay}
-                </span>
-                {edition.lunar.specialBadge && (
-                  <span className="lunar-special-pill">
-                    {edition.lunar.specialBadge}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="public-today-controls">
@@ -259,30 +249,6 @@ export function PublicTodayView({
             sparklines={edition.markets.sparklines}
           />
 
-          {edition.upcomingLunar.length > 0 && (
-            <section
-              className="digest-section public-lunar-events"
-              aria-label="Mốc Âm lịch sắp tới"
-            >
-              <div className="digest-section-heading">
-                <h2>Nhịp Âm lịch &amp; Mùng 1 · Ngày Rằm sắp tới</h2>
-              </div>
-              <div className="lunar-events-grid">
-                {edition.upcomingLunar.map((ev) => (
-                  <div key={ev.date + ev.name} className="lunar-event-chip">
-                    <strong>{ev.name}</strong>
-                    <small>
-                      {ev.date.split("-").reverse().join("/")} ({ev.lunarLabel}) ·{" "}
-                      {ev.daysAway === 0
-                        ? "Hôm nay"
-                        : `Còn ${ev.daysAway} ngày`}
-                    </small>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           <section className="digest-section" aria-label="Điểm tin sáng nay">
             <div className="digest-section-heading">
               <h2>Điểm tin chọn lọc sáng nay</h2>
@@ -312,16 +278,15 @@ export function PublicTodayView({
 
           <section className="public-cta-banner" aria-label="Cá nhân hóa bản tin">
             <div>
-              <span className="section-kicker">Hoàn toàn miễn phí · Không quảng cáo</span>
+              <span className="section-kicker">Miễn phí · Không quảng cáo</span>
               <h2>
                 {authenticated
-                  ? "Tùy chỉnh thêm nguồn RSS, thành phố và lịch nhận thông báo của riêng bạn"
-                  : "Nhận bản tin riêng theo thành phố của bạn vào 07:00 mỗi sáng"}
+                  ? "Tùy chỉnh nguồn tin, thành phố và lịch nhận thông báo"
+                  : "Nhận bản tin riêng lúc 07:00 mỗi sáng"}
               </h2>
               <p>
-                Tự chọn tỉnh thành, thêm nguồn RSS yêu thích, theo dõi dự án GitHub tiếng
-                Việt, nhắc việc cá nhân và nhận thông báo trực tiếp ngay trên trình duyệt
-                điện thoại hoặc máy tính — không cần cài thêm ứng dụng.
+                Chọn tỉnh thành, chủ đề yêu thích và nhận thông báo trực tiếp
+                trên điện thoại hoặc máy tính.
               </p>
             </div>
             <div className="public-cta-actions">
@@ -331,16 +296,14 @@ export function PublicTodayView({
                     Mở Bản tin của tôi <Icon name="arrow" size={16} />
                   </a>
                   <a href="#/preferences" className="secondary-button">
-                    Cài đặt thông báo trình duyệt
+                    Cài đặt thông báo
                   </a>
                 </>
               ) : (
                 <>
                   <a href="#/login" className="primary-button">
                     <Icon name="bell" size={17} />
-                    {registrationOpen
-                      ? "Tạo bản tin riêng trong 30 giây"
-                      : "Đăng nhập tài khoản"}
+                    {registrationOpen ? "Tạo bản tin riêng" : "Đăng nhập"}
                   </a>
                   <button
                     type="button"
@@ -348,7 +311,7 @@ export function PublicTodayView({
                     onClick={() => setShareOpen(true)}
                   >
                     <Icon name="share" size={16} />
-                    Chia sẻ cho bạn bè
+                    Chia sẻ
                   </button>
                 </>
               )}
@@ -376,19 +339,26 @@ export function PublicTodayView({
           <AccountBrand />
         </a>
         <div className="account-header-controls">
+          <a href="#/login" className="primary-button public-header-cta">
+            Đăng nhập
+          </a>
           <button
             type="button"
-            className="theme-icon-button"
+            className="theme-toggle-pill"
             aria-label={
               dark ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"
             }
-            onClick={() => setDark((v) => !v)}
+            onClick={() =>
+              setDark((v) => {
+                const next = !v;
+                writeStoredTheme(next ? "dark" : "light");
+                return next;
+              })
+            }
           >
-            <Icon name={dark ? "sun" : "moon"} size={18} />
+            <Icon name={dark ? "sun" : "moon"} size={17} />
+            <span>{dark ? "Sáng" : "Tối"}</span>
           </button>
-          <a href="#/login" className="primary-button public-header-cta">
-            {registrationOpen ? "Đăng ký / Đăng nhập" : "Đăng nhập"}
-          </a>
         </div>
       </header>
       <main className="account-shell public-standalone-shell">{content}</main>

@@ -146,3 +146,22 @@ export function clearAccountSessionStorage() {
     // Ignore storage access errors in restricted modes.
   }
 }
+
+const THEME_STORAGE_KEY = "hub-preferred-theme";
+
+export function readStoredTheme(): "light" | "dark" | null {
+  try {
+    const value = localStorage.getItem(THEME_STORAGE_KEY);
+    return value === "light" || value === "dark" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredTheme(theme: "light" | "dark"): void {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Ignore storage access errors in restricted modes.
+  }
+}

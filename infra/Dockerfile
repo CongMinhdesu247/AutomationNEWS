@@ -22,6 +22,7 @@ RUN pnpm --filter @hub/contracts build && pnpm --filter @hub/engine build && pnp
 RUN pnpm prune --prod
 
 FROM backend-check AS runtime-base
+RUN chmod -R a+rX /app
 USER node
 
 FROM runtime-base AS api

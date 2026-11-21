@@ -1,11 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  calendarDate,
   formatDateTime,
   hasEnabledSources,
   normalizeUrl,
   safeExternalHref,
-  solarToLunarVi,
   type BookmarkItem,
   type Settings,
 } from "@hub/contracts";
@@ -16,6 +14,7 @@ import {
   apiRequest,
   clearAccountSessionStorage,
   HttpClientError,
+  writeStoredTheme,
   type Account,
   type AuthConfig,
 } from "./lib/api-client";
@@ -158,6 +157,7 @@ export default function AccountApp() {
     document.title = pageTitleForHash(hash, Boolean(account));
     if (account) {
       const isDark = account.theme === "dark";
+      writeStoredTheme(account.theme);
       document.documentElement.style.backgroundColor = isDark
         ? "#12211c"
         : "#f3f7f6";
@@ -384,6 +384,7 @@ export default function AccountApp() {
     if (!account) return;
     const prevTheme = account.theme;
     const nextTheme = prevTheme === "dark" ? "light" : "dark";
+    writeStoredTheme(nextTheme);
     setAccount((curr) => (curr ? { ...curr, theme: nextTheme } : curr));
     try {
       await apiRequest<{ theme: "light" | "dark" }>("/api/account/theme", {
@@ -407,7 +408,7 @@ export default function AccountApp() {
         <div className="account-header-controls">
           <button
             type="button"
-            className="theme-icon-button"
+            className="theme-toggle-pill"
             aria-label={
               account.theme === "dark"
                 ? "Chuyển sang giao diện sáng"
@@ -418,7 +419,8 @@ export default function AccountApp() {
             }
             onClick={() => void toggleQuickTheme()}
           >
-            <Icon name={account.theme === "dark" ? "sun" : "moon"} size={18} />
+            <Icon name={account.theme === "dark" ? "sun" : "moon"} size={17} />
+            <span>{account.theme === "dark" ? "Sáng" : "Tối"}</span>
           </button>
           <details className="account-menu" ref={menuRef}>
             <summary aria-label={"Tài khoản của " + account.user.name}>
@@ -648,35 +650,16 @@ export default function AccountApp() {
               {!hash.startsWith("#/digests/") && (
                 <section className="account-welcome">
                   <div>
-                    {(() => {
-                      const lunar = solarToLunarVi(
-                        calendarDate(
-                          new Date(),
-                          account.settings.newsletter.timezone,
-                        ),
-                      );
-                      return (
-                        <p className="account-date">
-                          <span>
-                            {new Date().toLocaleDateString("vi-VN", {
-                              weekday: "long",
-                              day: "numeric",
-                              month: "long",
-                              timeZone: account.settings.newsletter.timezone,
-                            })}
-                          </span>
-                          <span className="account-lunar-inline">
-                            {" · "}
-                            {lunar.labelShort} ({lunar.canChiYear})
-                          </span>
-                          {lunar.specialBadge && (
-                            <span className="lunar-special-pill">
-                              {lunar.specialBadge}
-                            </span>
-                          )}
-                        </p>
-                      );
-                    })()}
+                    <p className="account-date">
+                      <span>
+                        {new Date().toLocaleDateString("vi-VN", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          timeZone: account.settings.newsletter.timezone,
+                        })}
+                      </span>
+                    </p>
                     {isAdmin ? (
                       <h2>Chào {account.user.name}.</h2>
                     ) : (

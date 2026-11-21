@@ -2,8 +2,6 @@ import type { Pool } from "pg";
 import {
   goldBarItems,
   goldPricePerChi,
-  solarToLunarVi,
-  upcomingLunarEvents,
   type DigestSources,
   type FuelData,
   type GoldData,
@@ -158,8 +156,6 @@ export async function getPublicTodayEdition(
   const flight = (async (): Promise<PublicTodayEdition> => {
     try {
       const solarDate = dateInZone(now, "Asia/Ho_Chi_Minh");
-      const lunar = solarToLunarVi(solarDate);
-      const upcomingLunar = upcomingLunarEvents(solarDate, 35, 4);
 
       const citySpecs = [
         {
@@ -380,8 +376,6 @@ export async function getPublicTodayEdition(
       const edition: PublicTodayEdition = {
         generatedAt: now.toISOString(),
         solarDate,
-        lunar,
-        upcomingLunar,
         cities,
         markets: {
           gold: goldData,

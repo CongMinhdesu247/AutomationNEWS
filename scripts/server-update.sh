@@ -158,7 +158,7 @@ cleanup() {
   if [[ $exit_code -ne 0 ]]; then
     printf 'ERROR: Update failed (exit %d). Restoring previous source & services...\n' "$exit_code" >&2
     if [[ "$SOURCE_EXTRACTED" == true && -f "$BACKUP_DIR/source.before.tar.gz" ]]; then
-      tar -xzf "$BACKUP_DIR/source.before.tar.gz" -C "$SRC_DIR" || true
+      (umask 022 && tar --no-same-permissions -xzf "$BACKUP_DIR/source.before.tar.gz" -C "$SRC_DIR") || true
     fi
     if [[ "$STOPPED" == true && "$HAVE_ROLLBACK_IMAGES" == true ]]; then
       local rb_args=(docker compose -p "$PROJECT" --env-file "$MAIN_ENV")
@@ -175,10 +175,32 @@ trap cleanup EXIT
 
 if [[ -n "$ARCHIVE_PATH" ]]; then
   printf '[2/7] Extracting updated source archive into %s\n' "$SRC_DIR"
-  tar -xzf "$ARCHIVE_PATH" -C "$SRC_DIR"
+  (umask 022 && tar --no-same-permissions -xzf "$ARCHIVE_PATH" -C "$SRC_DIR")
+  chmod -R a+rX \
+    "$SRC_DIR/package.json" \
+    "$SRC_DIR/pnpm-lock.yaml" \
+    "$SRC_DIR/pnpm-workspace.yaml" \
+    "$SRC_DIR/tsconfig.base.json" \
+    "$SRC_DIR/apps" \
+    "$SRC_DIR/packages" \
+    "$SRC_DIR/db" \
+    "$SRC_DIR/infra"
+  chmod 600 "$MAIN_ENV"
+  if [[ -n "$PREMIUM_ENV" ]]; then
+    chmod 600 "$PREMIUM_ENV"
+  fi
   SOURCE_EXTRACTED=true
 else
   printf '[2/7] Using existing source tree at %s\n' "$SRC_DIR"
+  chmod -R a+rX \
+    "$SRC_DIR/package.json" \
+    "$SRC_DIR/pnpm-lock.yaml" \
+    "$SRC_DIR/pnpm-workspace.yaml" \
+    "$SRC_DIR/tsconfig.base.json" \
+    "$SRC_DIR/apps" \
+    "$SRC_DIR/packages" \
+    "$SRC_DIR/db" \
+    "$SRC_DIR/infra"
 fi
 
 compose_cmd config --quiet

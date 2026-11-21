@@ -4,6 +4,7 @@ export type IconName =
   | "activity"
   | "settings"
   | "sun"
+  | "sunrise"
   | "moon"
   | "arrow"
   | "send"
@@ -97,6 +98,12 @@ export function Icon({
       </>
     ),
     sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+      </>
+    ),
+    sunrise: (
       <>
         <path d="M3 18h18M6 21h12M2 13h3M19 13h3M12 2v3M4.9 5.9 7 8M19.1 5.9 17 8" />
         <path d="M7 15a5 5 0 0 1 10 0" />

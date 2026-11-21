@@ -46,8 +46,8 @@ const INTEREST_PACKS: ReadonlyArray<{
   },
   {
     key: "lunar_tasks",
-    label: "Âm lịch, Lễ Tết & Nhắc việc",
-    desc: "Mùng 1, Ngày Rằm & danh sách việc hôm nay",
+    label: "Ngày lễ & Nhắc việc",
+    desc: "Ngày kỷ niệm & danh sách việc cần làm hôm nay",
   },
 ];
 

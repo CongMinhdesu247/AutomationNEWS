@@ -1,9 +1,6 @@
 import { useState } from "react";
 import {
-  calendarDate,
   formatDateTime,
-  solarToLunarVi,
-  upcomingLunarEvents,
   type DigestSources,
   type SourceResult,
 } from "@hub/contracts";
@@ -116,55 +113,26 @@ export function QuickUtilitiesGrid({
       {holidays && holidays.status !== "disabled" && (
         <section className="daily-utility-card">
           <div className="digest-section-heading">
-            <h2>Ngày lễ, Âm lịch &amp; kỷ niệm</h2>
+            <h2>Ngày lễ &amp; kỷ niệm</h2>
             <UtilityStatusBadge result={holidays} />
           </div>
-          {(() => {
-            const todayIso = calendarDate(
-              new Date(),
-              timezone ?? "Asia/Ho_Chi_Minh",
-            );
-            const lunarToday = solarToLunarVi(todayIso);
-            const lunarUpcoming = upcomingLunarEvents(todayIso, 20, 2);
-            return (
-              <>
-                <div className="lunar-today-callout">
-                  <strong>{lunarToday.labelFull}</strong>
+          {holidays.data?.events.length ? (
+            <ul>
+              {holidays.data.events.map((event) => (
+                <li key={event.date + event.name}>
+                  <strong>{event.name}</strong>
                   <small>
-                    Ngày {lunarToday.canChiDay}
-                    {lunarToday.specialBadge
-                      ? ` · ${lunarToday.specialBadge}`
-                      : ""}
+                    {event.date.split("-").reverse().join("/")} ·{" "}
+                    {event.daysAway === 0
+                      ? "Diễn ra hôm nay"
+                      : `Còn ${event.daysAway} ngày`}
                   </small>
-                </div>
-                <ul>
-                  {lunarUpcoming.map((ev) => (
-                    <li key={"lunar-" + ev.date + ev.name}>
-                      <strong>{ev.name}</strong>
-                      <small>
-                        {ev.date.split("-").reverse().join("/")} ({ev.lunarLabel}) ·{" "}
-                        {ev.daysAway === 0
-                          ? "Hôm nay"
-                          : `Còn ${ev.daysAway} ngày`}
-                      </small>
-                    </li>
-                  ))}
-                  {holidays.data?.events.map((event) => (
-                    <li key={event.date + event.name}>
-                      <strong>{event.name}</strong>
-                      <small>
-                        {event.date.split("-").reverse().join("/")} ·{" "}
-                        {event.daysAway === 0
-                          ? "Diễn ra hôm nay"
-                          : `Còn ${event.daysAway} ngày`}
-                      </small>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            );
-          })()}
-          <p className="muted">Âm lịch Việt Nam, Dương lịch &amp; kỷ niệm cá nhân.</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Chưa có ngày lễ hoặc kỷ niệm sắp tới.</p>
+          )}
         </section>
       )}
 

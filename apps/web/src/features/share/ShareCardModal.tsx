@@ -3,7 +3,6 @@ import {
   calendarDate,
   goldBarItems,
   goldPricePerChi,
-  solarToLunarVi,
   type Digest,
   type PublicTodayEdition,
 } from "@hub/contracts";
@@ -11,8 +10,6 @@ import { Icon } from "../../Icons";
 
 export type ShareCardPayload = {
   solarLabel: string;
-  lunarLabel: string;
-  specialBadge: string | null;
   weatherLine: string | null;
   aqiLine: string | null;
   sjcValue: string | null;
@@ -28,7 +25,6 @@ export function buildSharePayloadFromDigest(
 ): ShareCardPayload {
   const created = new Date(digest.createdAt);
   const isoDate = calendarDate(created, timezone);
-  const lunar = solarToLunarVi(isoDate);
   const solarLabel = created.toLocaleDateString("vi-VN", {
     weekday: "long",
     day: "2-digit",
@@ -81,8 +77,6 @@ export function buildSharePayloadFromDigest(
 
   return {
     solarLabel,
-    lunarLabel: `${lunar.labelShort} · Năm ${lunar.canChiYear}`,
-    specialBadge: lunar.specialBadge,
     weatherLine,
     aqiLine,
     sjcValue,
@@ -136,8 +130,6 @@ export function buildSharePayloadFromPublicToday(
 
   return {
     solarLabel,
-    lunarLabel: `${edition.lunar.labelShort} · Năm ${edition.lunar.canChiYear}`,
-    specialBadge: edition.lunar.specialBadge,
     weatherLine,
     aqiLine,
     sjcValue,
@@ -255,14 +247,7 @@ function renderMorningCardCanvas(
   ctx.font = `700 44px ${fontStack}`;
   const capSolar =
     payload.solarLabel.charAt(0).toUpperCase() + payload.solarLabel.slice(1);
-  ctx.fillText(capSolar, 124, 210);
-
-  const lunarLine = payload.specialBadge
-    ? `Âm lịch: ${payload.lunarLabel}  •  ${payload.specialBadge}`
-    : `Âm lịch: ${payload.lunarLabel}`;
-  ctx.fillStyle = "#c7f2dc";
-  ctx.font = `600 26px ${fontStack}`;
-  ctx.fillText(lunarLine, 124, 264);
+  ctx.fillText(capSolar, 124, 224);
 
   let cursorY = 348;
 
@@ -414,7 +399,7 @@ export function ShareCardModal({
   if (!payload) return null;
 
   const plainShareText = [
-    `Bản tin sáng · ${payload.solarLabel} (${payload.lunarLabel})`,
+    `Bản tin sáng · ${payload.solarLabel}`,
     payload.weatherLine,
     [
       payload.sjcValue ? `Vàng SJC: ${payload.sjcValue}` : null,
