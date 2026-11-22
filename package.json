@@ -11,7 +11,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run --exclude \"**/*.integration.test.ts\"",
-    "test:integration": "vitest run \"**/*.integration.test.ts\"",
+    "test:integration": "vitest run .integration.test.ts",
     "migrate": "pnpm --filter @hub/api migrate",
     "test:accounts": "vitest run apps/api/src/accounts/accounts.integration.test.ts",
     "test:premium": "vitest run apps/api/src/premium",
